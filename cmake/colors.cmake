@@ -1,0 +1,11 @@
+option (FORCE_COLORED_OUTPUT "Always produce ANSI-colored output (GNU/Clang only)." TRUE)
+
+if (${FORCE_COLORED_OUTPUT})
+    message(${CMAKE_CXX_COMPILER_ID})
+    if ("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU")
+      set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -fdiagnostics-color")
+      set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -fdiagnostics-color")
+    elseif ("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang")
+      set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fcolor-diagnostics")
+    endif ()
+endif ()

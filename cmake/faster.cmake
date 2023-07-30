@@ -1,0 +1,23 @@
+find_program(MOLD_FOUND "mold")
+find_program(LLD_FOUND "lld")
+find_program(CCACHE_FOUND "ccache")
+
+if(MOLD_FOUND)
+  message("Found mold")
+  set(CMAKE_LINKER mold)
+elseif (LLD_FOUND)
+  message("Found lld!")
+  set(CMAKE_EXE_LINKER_FLAGS_INIT "-fuse-ld=lld")
+  set(CMAKE_MODULE_LINKER_FLAGS_INIT "-fuse-ld=lld")
+  set(CMAKE_SHARED_LINKER_FLAGS_INIT "-fuse-ld=lld")
+else ()
+  message("No custom linker found, using GNU ld.")
+endif(MOLD_FOUND)
+
+
+if(CCACHE_FOUND)
+  message("Found ccache!")
+  set_property(GLOBAL PROPERTY RULE_LAUNCH_COMPILE ccache)
+else ()
+  message("No ccache found.")
+endif(CCACHE_FOUND)

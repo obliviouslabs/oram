@@ -1,0 +1,61 @@
+# Prerequisites
+*.d
+
+# Compiled Object files
+*.slo
+*.lo
+*.o
+*.obj
+*.gch
+*.pch
+*.so
+*.dylib
+*.dll
+*.lai
+*.la
+*.a
+*.lib
+*.exe
+*.out
+*.app
+*.bin
+*.elf
+
+# pycache
+__pycache__/
+
+# CmakeFolders
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+build/
+codebuild/
+
+# tex stuff:
+*.log
+*.synctex.gz
+*.dvi
+*.aux
+*.blg
+*.bbl
+*.fdb_latexmk
+*.fls
+*/.ipynb_checkpoints/
+*/*.synctex
+*/*.synctex(busy)
+
+# vscode stuff
+.vscode/
+
+# perf data
+perf.data*
+
+# SGX enclave stuff
+Enclave_t.h
+Enclave_t.c
+Enclave_u.h
+Enclave_u.c
+.config_HW_PRERELEASE_x64
+.config_SIM_DEBUG_x64
+.config_SIM_RELEASE_x64
+*.pem
