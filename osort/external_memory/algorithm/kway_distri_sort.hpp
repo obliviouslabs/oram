@@ -477,7 +477,7 @@ class KWayDistriSorter {
   size_t getBucketSize() { return Z; }
 };
 
-template <class Iterator, bool preshuffled = false>
+template <class Iterator, bool preshuffled>
 void KWayDistriSort(Iterator begin, Iterator end, uint32_t inAuth,
                     uint64_t heapSize) {
   using T = typename std::iterator_traits<Iterator>::value_type;
