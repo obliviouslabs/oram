@@ -184,7 +184,7 @@ std::vector<Block<T>> sampleForPivots(IOIterator begin, IOIterator end,
   Assert(slackSampling * alpha < 1);
   Assert(slackSampling > 1);
   Assert(begin < end);
-  using IOVector =
+  using IOVector = typename
       std::remove_reference<decltype(*(IOIterator::getNullVector()))>::type;
   size_t N = end - begin;
   size_t expectedSampleSize = alpha * (double)N;
@@ -263,7 +263,7 @@ class KWayDistriSorter {
  private:
   using T = typename std::iterator_traits<IOIterator>::value_type;
   using WrappedT = Block<T>;
-  using IOVector =
+  using IOVector = typename
       std::remove_reference<decltype(*(IOIterator::getNullVector()))>::type;
   uint64_t Z;                 // bucket size
   uint64_t numTotalBucket;    // total number of buckets

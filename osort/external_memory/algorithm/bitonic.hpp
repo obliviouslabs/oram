@@ -109,7 +109,7 @@ void BitonicShuffle(Iterator begin, Iterator end) {
       *it = taggedIt->v;
     }
   } else {
-    using IOVector =
+    using IOVector = typename
         std::remove_reference<decltype(*(Iterator::getNullVector()))>::type;
     constexpr size_t CachePageSize =
         IOVector::item_per_page * sizeof(TaggedT<T>);

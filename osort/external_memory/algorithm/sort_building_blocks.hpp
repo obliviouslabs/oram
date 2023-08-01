@@ -615,10 +615,10 @@ void ExtMergeSort(IOIterator begin, IOIterator end,
                   const std::vector<std::pair<Iterator, Iterator>>& mergeRanges,
                   uint32_t outAuth = 0, uint64_t maxWay = 2048) {
   using T = typename std::iterator_traits<Iterator>::value_type;
-  using Vector =
+  using Vector = typename
       std::remove_reference<decltype(*(Iterator::getNullVector()))>::type;
   using Reader = typename Vector::LazyPrefetchReader;
-  using IOVector =
+  using IOVector = typename
       std::remove_reference<decltype(*(IOIterator::getNullVector()))>::type;
   typename IOVector::Writer outputWriter(begin, end, outAuth);
   // for merge sort
@@ -696,7 +696,7 @@ void ExtMergeSort(IOIterator begin, IOIterator end,
   using EM::NonCachedVector::Vector;
   using T = typename std::iterator_traits<IOIterator>::value_type;
 
-  using IOVector =
+  using IOVector = typename
       std::remove_reference<decltype(*(IOIterator::getNullVector()))>::type;
   using Reader = typename Vector<T>::LazyPrefetchReader;
   using Iterator = typename Vector<T>::Iterator;
