@@ -86,7 +86,7 @@ void butterflyRouting(Iterator begin, Iterator end, Iterator outputBegin,
 
 template <typename IOIterator,
           typename T = typename std::iterator_traits<IOIterator>::value_type,
-          typename IOVector = std::remove_reference<
+          typename IOVector = typename std::remove_reference<
               decltype(*(IOIterator::getNullVector()))>::type>
 Vector<TaggedT<T>, 4096> tagAndPad(IOIterator begin, IOIterator end,
                                    uint64_t Z) {
@@ -166,7 +166,7 @@ template <class IOIterator>
 void CABucketShuffle(IOIterator begin, IOIterator end,
                      uint64_t heapSize = DEFAULT_HEAP_SIZE) {
   using T = typename std::iterator_traits<IOIterator>::value_type;
-  using IOVector =
+  using IOVector = typename
       std::remove_reference<decltype(*(IOIterator::getNullVector()))>::type;
   const uint64_t Z = 512;
   Vector<TaggedT<T>, 4096> tv = tagAndPad(begin, end, Z);

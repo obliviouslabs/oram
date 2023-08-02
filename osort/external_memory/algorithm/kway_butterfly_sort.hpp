@@ -49,7 +49,7 @@ class ButterflySorter {
  private:
   using T = typename std::iterator_traits<IOIterator>::value_type;
   using WrappedT = TaggedT<T>;
-  using IOVector =
+  using IOVector = typename
       std::remove_reference<decltype(*(IOIterator::getNullVector()))>::type;
   uint64_t Z;                 // bucket size
   uint64_t numTotalBucket;    // total number of buckets
