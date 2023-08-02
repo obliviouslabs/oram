@@ -1,27 +1,23 @@
 # Oblivious Sorting
 An implementation of external memory efficient, cpu instruction and memory access trace oblivious sorting algorithms.
 
-# Prerequisites:
+# Prerequisites
 Install cmake, ninja and intel sgx sdk, or use the cppbuilder docker image.
 
-## How to build the builder docker image:
+## How to build the builder docker image
 ```bash
-cd ./tools/docker/cppbuilder
-docker build -t cppbuilder:latest .
+docker build -t cppbuilder:latest ./tools/docker/cppbuilder
 ```
 
-## How to enter the docker environment to build under the builder:
+## How to enter the docker environment to run unit tests
 ```bash
 docker run -it --rm -v $PWD:/builder -u $(id -u) cppbuilder
 ```
 
-## An example for SGX
+## How to enter the docker environment to run algorithms in enclave
 ```bash
-docker run --device=/dev/sgx_enclave -v /tmp/bucketfile:/ssdmount -it --rm -v $PWD:/builder cppbuilder
+docker run --device=/dev/sgx_enclave -v /tmp/sortbackend:/ssdmount -it --rm -v $PWD:/builder cppbuilder
 ```
-
-## How to enter the docker environment to build under the builder and run in SGX:
-docker run --device=/dev/sgx_enclave -it --rm -v $PWD:/builder cppbuilder
 
 ## How to run the unit tests
 ```bash
@@ -32,7 +28,7 @@ ninja -C build test
 ninja -C build cppcheck
 ```
 
-## How to do a release compilation:
+## How to run the unit tests in release mode
 
 ```bash
 rm -rf build # Needed after the CC/CXX export or after changing the CMAKE_BUILD_TYPE
@@ -63,7 +59,7 @@ applications - Enclaves example of osort
 tools - tools used to generate graphs or test sets
 tools/docker - dockerfiles used for reproducible builds
 
-### OSort folder structure:
+### OSort folder structure
 
 common - common c++ utilies, cpu abstractions, cryptography abstractions and tracing code
 external_memory - external memory abstraction and sorting algorithms
