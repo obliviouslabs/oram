@@ -16,7 +16,7 @@ docker run -it --rm -v $PWD:/builder -u $(id -u) cppbuilder
 
 ## How to enter the docker environment to run algorithms in enclave
 ```bash
-docker run --device=/dev/sgx_enclave -v /tmp/sortbackend:/ssdmount -it --rm -v $PWD:/builder cppbuilder
+docker run -v /tmp/sortbackend:/ssdmount --privileged -it --rm -v $PWD:/builder cppbuilder
 ```
 
 ## How to run the unit tests
@@ -25,7 +25,6 @@ rm -rf build
 cmake -B build -G Ninja
 ninja -C build
 ninja -C build test
-ninja -C build cppcheck
 ```
 
 ## How to run the unit tests in release mode
@@ -38,14 +37,21 @@ cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
 ninja -C build
 ```
 
-## Build the sorting example enclave
+## Build the sorting example enclave (hardware mode)
 ```bash
 source /startsgxenv.sh
 cd applications/sorting
 make
 ```
 
-## Run sorting examples
+## Build the sorting example enclave (simulation mode)
+```bash
+source /startsgxenv.sh
+cd applications/sorting
+make SGX_MODE=SIM
+```
+
+## Run a sample script to test runtime of sorting algorithms
 ```bash
 cd applications/sorting
 ./algo_runner.sh
