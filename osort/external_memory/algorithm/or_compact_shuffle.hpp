@@ -120,8 +120,8 @@ void OrShuffle(Iterator begin, Iterator end) {
     return;
   }
   using T = typename std::iterator_traits<Iterator>::value_type;
-  if constexpr (std::is_same<Iterator,
-                             typename std::vector<T>::iterator>::value) {
+  using Vec = typename Iterator::vector_type;
+  if constexpr (std::is_same<Vec, StdVector<T>>::value) {
     std::vector<size_t> marks(n + 1);
     OrShuffle(begin, end, marks.begin());
   } else {

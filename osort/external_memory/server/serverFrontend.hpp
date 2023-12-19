@@ -69,6 +69,10 @@ struct NonCachedServerFrontendInstance {
   NonCachedServerFrontendInstance(BackendType& _backend, uint64_t initialSize,
                                   const T& _defaultVal)
       : backend(_backend) {
+    if (initialSize == 0) {
+      slot.base = -1;
+      return;
+    }
     IndexType requiredSize = initialSize * sizeOfT;
     slot = backend.Allocate(requiredSize);
     // std::cout << "Alloc: " << slot.base << "--" << slot.base + slot.size <<
@@ -89,6 +93,10 @@ struct NonCachedServerFrontendInstance {
 
   NonCachedServerFrontendInstance(BackendType& _backend, uint64_t initialSize)
       : backend(_backend) {
+    if (initialSize == 0) {
+      slot.base = -1;
+      return;
+    }
     IndexType requiredSize = initialSize * sizeOfT;
     slot = backend.Allocate(requiredSize);
     if constexpr (AUTH) {

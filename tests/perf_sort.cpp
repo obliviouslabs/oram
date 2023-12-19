@@ -6,15 +6,19 @@
 #include "external_memory/algorithm/ca_bucket_sort.hpp"
 #include "external_memory/algorithm/kway_butterfly_sort.hpp"
 #include "external_memory/algorithm/kway_distri_sort.hpp"
+#include "external_memory/algorithm/randomized_shell_sort.hpp"
 #include "testutils.hpp"
 
 #define PAGE_SIZE 4096
 
-#define test_sort(n, f, ...)                  \
-  _test_sort<Vector<SortElement, PAGE_SIZE>>( \
+#define test_sort(n, f, ...)                         \
+  _test_sort<Vector<SortElement, PAGE_SIZE>, false>( \
       n, #f, [](auto&& arr) { f(arr); } __VA_OPT__(, ) __VA_ARGS__)
-#define test_sort_cache(n, f, Vec, ...)                  \
-  _test_sort<Vec<SortElement, 16320, true, true, 1024>>( \
+#define test_sort_cache(n, f, Vec, ...)                         \
+  _test_sort<Vec<SortElement, 16320, true, true, 1024>, false>( \
+      n, #f, [](auto&& arr) { f(arr); } __VA_OPT__(, ) __VA_ARGS__)
+#define test_sort_internal(n, f, ...)       \
+  _test_sort<StdVector<SortElement>, true>( \
       n, #f, [](auto&& arr) { f(arr); } __VA_OPT__(, ) __VA_ARGS__)
 #define ENABLE_PROFILING
 
@@ -29,7 +33,7 @@ void printProfile(uint64_t N, ostream& ofs, auto& diff) {
   ofs << "time (s): " << setw(9) << diff.count() << std::endl;
 }
 
-template <typename Vec, typename F>
+template <typename Vec, const bool isInternal, typename F>
 void _test_sort(size_t size, string funcname, F&& sortFunc,
                 bool isPermutation = false) {
   delete EM::Backend::g_DefaultBackend;
@@ -38,36 +42,44 @@ void _test_sort(size_t size, string funcname, F&& sortFunc,
   srand(time(NULL));
   const uint64_t N = size;
   cout << "test " << funcname << " perf on input size " << N << endl;
-  SortElement defaultval;
-  vector<SortElement> v(N, defaultval);
+  StdVector<SortElement> v(N);
   unordered_map<uint64_t, int> value_count;
   for (uint64_t i = 0; i < N; i++) {
     v[i].key = UniformRandom();
     memset(v[i].payload, (char)v[i].key, sizeof(SortElement::payload));
     ++value_count[v[i].key];
   }
-  Vec vExt(N);
-  if constexpr (std::is_same<Vec, Vector<SortElement, PAGE_SIZE>>::value) {
-    CopyOut(v.begin(), v.end(), vExt.begin());
-  } else {
-    std::copy(v.begin(), v.end(), vExt.begin());
-  }
-
   auto cmp = [](const SortElement& ele1, const SortElement& ele2) {
     return ele1.key < ele2.key;
   };
+  if constexpr (!isInternal) {
+    Vec vExt(N);
+    if constexpr (!Vec::useStdCopy) {
+      CopyOut(v.begin(), v.end(), vExt.begin());
+    } else {
+      std::copy(v.begin(), v.end(), vExt.begin());
+    }
 
-  PERFCTR_RESET();
-  auto start = std::chrono::system_clock::now();
-  sortFunc(vExt);
+    PERFCTR_RESET();
+    auto start = std::chrono::system_clock::now();
+    sortFunc(vExt);
 
-  auto end = std::chrono::system_clock::now();
-  std::chrono::duration<double> diff = end - start;
-  printProfile(N, cout, diff);
-  if constexpr (std::is_same<Vec, Vector<SortElement, PAGE_SIZE>>::value) {
-    CopyIn(vExt.begin(), vExt.end(), v.begin(), 1);
+    auto end = std::chrono::system_clock::now();
+    std::chrono::duration<double> diff = end - start;
+    printProfile(N, cout, diff);
+    if constexpr (!Vec::useStdCopy) {
+      CopyIn(vExt.begin(), vExt.end(), v.begin(), 1);
+    } else {
+      std::copy(vExt.begin(), vExt.end(), v.begin());
+    }
   } else {
-    std::copy(vExt.begin(), vExt.end(), v.begin());
+    PERFCTR_RESET();
+    auto start = std::chrono::system_clock::now();
+    sortFunc(v);
+
+    auto end = std::chrono::system_clock::now();
+    std::chrono::duration<double> diff = end - start;
+    printProfile(N, cout, diff);
   }
 
   // check it's a permutation
@@ -98,10 +110,24 @@ TEST(TestSort, TestKWayButterflySortPerf) {
   }
 }
 
+TEST(TestSortInternal, TestKWayButterflySortPerf) {
+  // RELEASE_ONLY_TEST();
+  for (double N = 1; N < 100000000; N *= 5) {
+    test_sort_internal((size_t)N, KWayButterflySortInternal, false);
+  }
+}
+
 TEST(TestSort, TestKWayButterflyOShufflePerf) {
   // RELEASE_ONLY_TEST();
   for (double N = 1; N < 10000000; N *= 5) {
     test_sort((size_t)N, KWayButterflyOShuffle, true);
+  }
+}
+
+TEST(TestSortInternal, TestKWayButterflyOShufflePerf) {
+  // RELEASE_ONLY_TEST();
+  for (double N = 1; N < 100000000; N *= 5) {
+    test_sort_internal((size_t)N, KWayButterflyOShuffleInternal, true);
   }
 }
 
@@ -136,7 +162,23 @@ TEST(TestSort, TestCacheObliviouBucketPermutationPerf) {
 
 TEST(TestSort, TestBitonicObliviousSortPerf) {
   // RELEASE_ONLY_TEST();
-  test_sort_cache(200000, BitonicSort, EM::ExtVector::Vector);
+  for (double N = 1; N < 10000000; N *= 5) {
+    test_sort_cache(N, BitonicSort, EM::ExtVector::Vector);
+  }
+}
+
+TEST(TestSortInternal, TestRandomizedShellSort) {
+  // RELEASE_ONLY_TEST();
+  for (double N = 1; N < 100000000; N *= 2) {
+    test_sort_internal((size_t)N, RandomizedShellSort);
+  }
+}
+
+TEST(TestSortInternal, TestBitonicObliviousSortPerf) {
+  // RELEASE_ONLY_TEST();
+  for (double N = 1; N < 100000000; N *= 5) {
+    test_sort_internal(N, BitonicSort, false);
+  }
 }
 
 TEST(TestSort, TestOrShufflePerf) {
@@ -233,7 +275,8 @@ TEST(TestSort, TestKWayMergeSplitPerf) {
 
 TEST(TestSort, TestKWayInterleaveSepMarksPerf) {
   RELEASE_ONLY_TEST();
-  PERFCTR_RESET();
+  // PERFCTR_RESET();
+  PROFILER_SET(false);
   for (uint64_t Z = 256; Z <= 16384; Z *= 2) {
     for (size_t k = 3; k <= 8; ++k) {
       auto start = std::chrono::system_clock::now();

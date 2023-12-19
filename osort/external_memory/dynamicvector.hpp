@@ -13,6 +13,7 @@ template <typename T, bool ENCRYPTED = true, bool AUTH = true>
 struct Vector {
   static constexpr bool encrypted = ENCRYPTED;  // whether to use encryption
   static constexpr bool auth = AUTH;  // whether to use authenticated encryption
+  constexpr static bool useStdCopy = false;
 
   uint64_t referenceCount;
   uint64_t item_per_page;
@@ -39,11 +40,14 @@ struct Vector {
     using page_offset_type = uint64_t;
     using reference = T&;
     using const_reference = const T&;
-
+    using vector_type = Vector;
+    constexpr static bool random_access = false;
     // Iterator constructors here...
     explicit Iterator(pointer ptr, Vector& vec) : m_ptr(ptr), vec_ptr(&vec) {}
 
     Iterator() : m_ptr(0), vec_ptr(NULL) {}
+
+    Iterator(pointer ptr) : m_ptr(ptr), vec_ptr(NULL) {}
 
     // should not be called unless absolutely necessary
     T operator*() {

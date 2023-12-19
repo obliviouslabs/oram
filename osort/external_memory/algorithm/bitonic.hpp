@@ -2,6 +2,7 @@
 #include <vector>
 
 #include "external_memory/extemvector.hpp"
+#include "external_memory/stdvector.hpp"
 #include "sort_def.hpp"
 
 namespace EM::Algorithm {
@@ -96,7 +97,7 @@ void BitonicShuffle(Iterator begin, Iterator end) {
     return a.tag < b.tag;
   };
   if constexpr (std::is_same<Iterator,
-                             typename std::vector<T>::iterator>::value) {
+                             typename StdVector<T>::Iterator>::value) {
     std::vector<TaggedT<T>> taggedData(end - begin);
     size_t idx = 0;
     for (auto it = begin; it != end; ++it, ++idx) {
@@ -109,10 +110,8 @@ void BitonicShuffle(Iterator begin, Iterator end) {
       *it = taggedIt->v;
     }
   } else {
-    using IOVector = typename
-        std::remove_reference<decltype(*(Iterator::getNullVector()))>::type;
     constexpr size_t CachePageSize =
-        IOVector::item_per_page * sizeof(TaggedT<T>);
+        4096 / sizeof(TaggedT<T>) * sizeof(TaggedT<T>);
     constexpr size_t CacheSize = DEFAULT_HEAP_SIZE / CachePageSize - 1;
     EM::ExtVector::Vector<TaggedT<T>, CachePageSize, true, true, CacheSize>
         taggedData(end - begin);

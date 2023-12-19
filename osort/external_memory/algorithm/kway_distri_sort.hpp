@@ -20,7 +20,7 @@ using EM::NonCachedVector::Vector;
 /// @param end the end iterator of the input array
 /// @param inAuth the authentication counter of the input array
 /// @param heapSize the size of available memory in bytes
-template <class Iterator, bool preshuffled = false>
+template <class Iterator, bool preshuffled = true>
 void KWayDistriSort(Iterator begin, Iterator end, uint32_t inAuth,
                     uint64_t heapSize);
 
@@ -184,12 +184,13 @@ std::vector<Block<T>> sampleForPivots(IOIterator begin, IOIterator end,
   Assert(slackSampling * alpha < 1);
   Assert(slackSampling > 1);
   Assert(begin < end);
-  using IOVector = typename
-      std::remove_reference<decltype(*(IOIterator::getNullVector()))>::type;
+  using IOVector = typename IOIterator::vector_type;
   size_t N = end - begin;
   size_t expectedSampleSize = alpha * (double)N;
-  size_t sampleSize = 0;
   std::vector<Block<T>> pivots(p - 1);
+  size_t sampleSize = 0;
+  auto isMarked = [](const Block<T>& element) { return !element.isDummy(); };
+
   using SampleVector =
       Vector<Block<T>, std::max((1UL << 14) - 32, 4 * sizeof(T)), true, true,
              true>;
@@ -210,7 +211,7 @@ std::vector<Block<T>> sampleForPivots(IOIterator begin, IOIterator end,
   size_t np = expectedSampleSize;
   size_t count = 0;
   typename IOVector::PrefetchReader inputReader(begin, end);
-  auto isMarked = [](const Block<T>& element) { return !element.isDummy(); };
+
   for (size_t i = 0; i < numBatch; ++i) {
     size_t batchSize = std::min(M, N - i * M);
     for (size_t j = 0; j < batchSize; ++j, ++count) {
@@ -263,8 +264,9 @@ class KWayDistriSorter {
  private:
   using T = typename std::iterator_traits<IOIterator>::value_type;
   using WrappedT = Block<T>;
-  using IOVector = typename
-      std::remove_reference<decltype(*(IOIterator::getNullVector()))>::type;
+  using IOVector = typename IOIterator::vector_type;
+  static_assert(!std::is_same<IOVector, StdVector<T>>::value,
+                "Distribution sort only works for external memory input.");
   uint64_t Z;                 // bucket size
   uint64_t numTotalBucket;    // total number of buckets
   uint64_t numPartition;      // number of partitions
@@ -305,7 +307,10 @@ class KWayDistriSorter {
     numPartition = distriParams.totalPartition;
     partitionSize = numTotalBucket / numPartition;
     numRealPerBucket = 1 + (size - 1) / numTotalBucket;
-
+    printf(
+        "Z: %lu, numTotalBucket: %lu, numPartition: %lu, partitionSize: "
+        "%lu, numRealPerBucket: %lu\n",
+        Z, numTotalBucket, numPartition, partitionSize, numRealPerBucket);
     Assert(numTotalBucket % numPartition == 0);
     Assert(numTotalBucket / numPartition * Z <= numElementFit);
 
@@ -313,6 +318,7 @@ class KWayDistriSorter {
         inputBeginIt, inputEndIt,
         numElementFit * sizeof(WrappedT) / (sizeof(WrappedT) + 4),
         distriParams.samplingRatio, distriParams.slackSampling, numPartition);
+    printf("pivot done\n");
     temp = new WrappedT[8 * Z];  // temporary array for mergesplit
     marks = new uint8_t[8 * Z];  // temporary array for marks in mergesplit
     // orcompact has 4 byte memory overhead per element
@@ -321,7 +327,9 @@ class KWayDistriSorter {
         numPartition;  // subtract the 8 buckets for mergesplit and pivots
     numRealPerBucket = 1 + (size - 1) / numTotalBucket;
     // increment authentication counter when writing back
+    printf("init writer\n");
     outputWriter.init(inputBeginIt, inputEndIt, inAuth + 1);
+    printf("sorter init done\n");
   }
 
   ~KWayDistriSorter() {
@@ -449,10 +457,12 @@ class KWayDistriSorter {
         }
 
       } else {
+        printf("run basic\n");
         KWayDistriSortBasic(batchBegin, batchEnd, ioLayer,
                             distriParams.ways[ioLayer].size() - 1,
                             stride / partitionSize,
                             strideCount * numInternalWay);
+        printf("finish basic\n");
         for (uint64_t bucketIdx = 0; bucketIdx < numInternalWay; ++bucketIdx) {
           auto extBeginIt = strideBegin + bucketIdx * stride * Z;
           auto intBeginIt = batchBegin + bucketIdx * Z;
@@ -483,10 +493,14 @@ void KWayDistriSort(Iterator begin, Iterator end, uint32_t inAuth,
   using T = typename std::iterator_traits<Iterator>::value_type;
   size_t N = end - begin;
   if (N <= heapSize / sizeof(T)) {
-    std::vector<T> Mem(N);
-    CopyIn(begin, end, Mem.begin(), inAuth);
-    BitonicSort(Mem);
-    CopyOut(Mem.begin(), Mem.end(), begin, inAuth + 1);
+    if constexpr (Iterator::random_access) {
+      BitonicSort(begin, end);
+    } else {
+      std::vector<T> Mem(N);
+      CopyIn(begin, end, Mem.begin(), inAuth);
+      BitonicSort(Mem);
+      CopyOut(Mem.begin(), Mem.end(), begin, inAuth + 1);
+    }
     return;
   }
   KWayDistriSorter<Iterator, preshuffled> sorter(begin, end, inAuth, heapSize);

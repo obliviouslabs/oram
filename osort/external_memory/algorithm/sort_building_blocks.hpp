@@ -4,6 +4,7 @@
 #include "bitonic.hpp"
 #include "edge_rec.hpp"
 #include "external_memory/noncachedvector.hpp"
+#include "external_memory/stdvector.hpp"
 #include "or_compact_shuffle.hpp"
 #include "sort_def.hpp"
 #include "static_sort.hpp"
@@ -615,11 +616,9 @@ void ExtMergeSort(IOIterator begin, IOIterator end,
                   const std::vector<std::pair<Iterator, Iterator>>& mergeRanges,
                   uint32_t outAuth = 0, uint64_t maxWay = 2048) {
   using T = typename std::iterator_traits<Iterator>::value_type;
-  using Vector = typename
-      std::remove_reference<decltype(*(Iterator::getNullVector()))>::type;
+  using Vector = typename Iterator::vector_type;
   using Reader = typename Vector::LazyPrefetchReader;
-  using IOVector = typename
-      std::remove_reference<decltype(*(IOIterator::getNullVector()))>::type;
+  using IOVector = typename IOIterator::vector_type;
   typename IOVector::Writer outputWriter(begin, end, outAuth);
   // for merge sort
   const auto* mergeRangesPtr = &mergeRanges;
@@ -696,8 +695,7 @@ void ExtMergeSort(IOIterator begin, IOIterator end,
   using EM::NonCachedVector::Vector;
   using T = typename std::iterator_traits<IOIterator>::value_type;
 
-  using IOVector = typename
-      std::remove_reference<decltype(*(IOIterator::getNullVector()))>::type;
+  using IOVector = typename IOIterator::vector_type;
   using Reader = typename Vector<T>::LazyPrefetchReader;
   using Iterator = typename Vector<T>::Iterator;
   size_t size = end - begin;

@@ -22,7 +22,7 @@ struct Vector {
   static constexpr bool auth = AUTH;
   static constexpr uint64_t item_per_page =
       GetNextPowerOfTwo(page_size / sizeof(T) / 2 + 1);
-
+  constexpr static bool useStdCopy = false;
   uint64_t referenceCount;
 
   struct Page {
@@ -60,6 +60,8 @@ struct Vector {
     using page_offset_type = uint64_t;
     using reference = T&;
     using const_reference = const T&;
+    using vector_type = Vector;
+    constexpr static bool random_access = false;
 
     // Iterator constructors here...
     explicit Iterator(pointer ptr, Vector& vec) : m_ptr(ptr), vec_ptr(&vec) {}
@@ -457,7 +459,7 @@ struct Vector {
   // default:
   explicit Vector(uint64_t N_ = 0, typename Server::BackendType& _backend =
                                        *Backend::g_DefaultBackend)
-      : N(N_), server(_backend, N_ / item_per_page + 1) {}
+      : N(N_), server(_backend, divRoundUp(N_, item_per_page)) {}
 
   Page makeDefaultPage(const T& defaultVal) {
     Page defaultPage;
@@ -467,7 +469,8 @@ struct Vector {
   Vector(uint64_t N_, const T& defaultVal,
          typename Server::BackendType& _backend = *Backend::g_DefaultBackend)
       : N(N_),
-        server(_backend, N_ / item_per_page + 1, makeDefaultPage(defaultVal)) {}
+        server(_backend, divRoundUp(N_, item_per_page),
+               makeDefaultPage(defaultVal)) {}
 
   Vector(Vector&& vec)
       : server(vec.server), referenceCount(vec.referenceCount), N(vec.N) {
@@ -480,7 +483,7 @@ struct Vector {
   Vector(InputIterator inputBegin, InputIterator inputEnd,
          typename Server::BackendType& _backend = *Backend::g_DefaultBackend)
       : N(inputEnd - inputBegin),
-        server(_backend, (inputEnd - inputBegin) / item_per_page + 1) {
+        server(_backend, divRoundUp(inputEnd - inputBegin, item_per_page)) {
     CopyOut(inputBegin, inputEnd, begin());
   }
 

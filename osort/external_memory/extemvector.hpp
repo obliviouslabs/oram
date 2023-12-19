@@ -13,7 +13,7 @@ template <typename T,
           uint64_t cache_size = SERVER__CACHE_SIZE>
 struct Vector {
   static constexpr uint64_t item_per_page = page_size / sizeof(T);
-
+  constexpr static bool useStdCopy = true;
   struct Page {
     T pages[item_per_page];
     using Encrypted_t = std::conditional_t<
@@ -44,6 +44,8 @@ struct Vector {
     using page_offset_type = uint64_t;
     using reference = T&;
     using const_reference = const T&;
+    using vector_type = Vector;
+    constexpr static bool random_access = true;
 
     // Iterator constructors here...
     explicit Iterator(pointer ptr, Vector& vec) : m_ptr(ptr), vec_ptr(&vec) {}
