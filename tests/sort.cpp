@@ -5,6 +5,7 @@
 #include "external_memory/algorithm/ca_bucket_sort.hpp"
 #include "external_memory/algorithm/kway_butterfly_sort.hpp"
 #include "external_memory/algorithm/kway_distri_sort.hpp"
+#include "external_memory/algorithm/waks_on_off.hpp"
 #include "testutils.hpp"
 
 using namespace EM::Algorithm;
@@ -446,5 +447,56 @@ TEST(TestSort, MergePermute) {
       marks.clear();
       data.clear();
     }
+  }
+}
+
+TEST(TestUtil, TestPrp) {
+  PRP<uint64_t> prp;
+  for (int i = 0; i < 100; ++i) {
+    uint64_t x = UniformRandom();
+    uint64_t y = prp.prp(x);
+    ASSERT_EQ(y, prp.prp(x));  // test deterministic
+    printf("%lu %lu\n", x, y);
+  }
+}
+
+TEST(TestSort, TestWaksOnOffControl) {
+  std::vector<uint64_t> P = {1, 0, 3, 2};
+  // std::vector<uint64_t> P = {6, 2, 3, 7, 5, 1, 8, 0, 4};
+  const WaksOnOff::ControlCircuit* circuit =
+      WaksOnOff::WaksShuffleOffline(P.begin(), P.end());
+  WaksOnOff::printCircuit(circuit);
+  delete circuit;
+}
+
+TEST(TestSort, TestWaksOnOffCorrectness) {
+  // std::vector<uint64_t> P = {2, 0, 1, 3};
+  for (double ndb = 1; ndb < 10000; ndb = ndb * 1.2 + 1) {
+    size_t n = (size_t)ndb;
+    std::vector<uint64_t> P(n);
+    std::vector<uint64_t> Q;
+    for (size_t i = 0; i < n; ++i) {
+      P[i] = i;
+    }
+    fisherYatesShuffle(P.begin(), P.end());
+    // printf("permutation: ");
+    // for (size_t i = 0; i < n; ++i) {
+    //   printf("%lu ", P[i]);
+    // }
+    // printf("\n");
+    Q = P;
+    const WaksOnOff::ControlCircuit* circuit =
+        WaksOnOff::WaksShuffleOffline(P.begin(), P.end());
+    // printf("\n Circuit: \n");
+    // WaksOnOff::printCircuit(circuit);
+    WaksOnOff::WaksShuffleOnline(Q.begin(), Q.end(), circuit);
+    // printf("\nAfter permutation:\n");
+    // for (size_t i = 0; i < n; ++i) {
+    //   printf("%lu ", Q[i]);
+    // }
+    for (size_t i = 0; i < n; ++i) {
+      ASSERT_EQ(Q[i], i);
+    }
+    delete circuit;
   }
 }

@@ -127,7 +127,6 @@ struct Block {
 /// @brief Wrapper for flex-way butterfly o-sort
 /// @tparam T type of elements
 template <typename T>
-  requires(IS_POD<T>())
 struct TaggedT {
 #if defined(__AVX512VL__) || defined(__AVX2__)
   static constexpr size_t paddingSize = sizeof(T) % 32 == 16 ? 8 : 0;

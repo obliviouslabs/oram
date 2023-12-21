@@ -21,6 +21,9 @@ concept Encryptable = requires(typename T::Encrypted_t et) {
 }
 
 template <typename T>
+T prp(T val);
+
+template <typename T>
 // requires (IS_POD<T>())
 struct Encrypted {
   static_assert(IS_POD<T>());

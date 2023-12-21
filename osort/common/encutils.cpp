@@ -68,7 +68,8 @@ bool aes_256_gcm_decrypt(uint64_t ciphertextSize, uint8_t *ciphertext,
   return ok == 1;
 }
 
-RandGen::RandGen() : engine(rd()) {}
+RandGen::RandGen() { new (this) RandGen(rd()); }
+RandGen::RandGen(uint64_t seed) : engine(seed) {}
 uint64_t RandGen::rand64() {
   std::uniform_int_distribution<uint64_t> d;
   return d(engine);
@@ -199,21 +200,23 @@ sgx_status_t sgxsd_aes_ctr_run(bool encrypt,
 
 void aes_256_ctr_encrypt(uint64_t plaintextSize, uint8_t *plaintext,
                          const uint8_t key[AES_BLOCK_SIZE],
-                         uint8_t iv[AES_BLOCK_SIZE], uint8_t *ciphertext) {
+                         const uint8_t iv[AES_BLOCK_SIZE],
+                         uint8_t *ciphertext) {
   aes_init();
   sgxsd_aes_ctr_run(true, key, plaintext, plaintextSize, ciphertext, iv);
 }
 
 bool aes_256_ctr_decrypt(uint64_t ciphertextSize, uint8_t *ciphertext,
                          const uint8_t key[AES_BLOCK_SIZE],
-                         uint8_t iv[AES_BLOCK_SIZE], uint8_t *plaintext) {
+                         const uint8_t iv[AES_BLOCK_SIZE], uint8_t *plaintext) {
   aes_init();
   return 0 == sgxsd_aes_ctr_run(false, key, ciphertext, ciphertextSize,
                                 plaintext, iv);
 }
 
-RandGen::RandGen() {
-  uint64_t random_seed = rd();
+RandGen::RandGen() { new (this) RandGen(rd()); }
+
+RandGen::RandGen(uint64_t seed) {
   const br_block_ctr_class *aes_vtable =
       &br_aes_x86ni_ctr_vtable;  // in theory we should use
                                  // br_aes_x86ni_ctr_get_vtable() here, but it
@@ -223,10 +226,8 @@ RandGen::RandGen() {
   //   printf("vtable fail\n");
   //   throw 1;
   // }
-  br_aesctr_drbg_init(&ctx, aes_vtable, &random_seed, 8);
+  br_aesctr_drbg_init(&ctx, aes_vtable, &seed, 8);
   br_aesctr_drbg_generate(&ctx, buffer, 4096);
-  // printf("digest length = %ld bytes\n", (br_sha256_vtable.desc >> 8) &
-  // 0x7FUL);
 }
 
 uint64_t RandGen::rand64() {

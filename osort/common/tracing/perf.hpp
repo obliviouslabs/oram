@@ -2,30 +2,30 @@
 #include <iostream>
 
 #ifndef ENCLAVE_MODE
-#define ENABLE_PERF_COUNTERS 1
+// #define ENABLE_PERF_COUNTERS 1
 #endif
 
 struct PerfCounters {
 #ifdef ENABLE_PERF_COUNTERS
-  #define F(_,name,...) uint64_t name=0;
-  #include "common/tracing/perf_counters.hxx"
+#define F(_, name, ...) uint64_t name = 0;
+#include "common/tracing/perf_counters.hxx"
 
   void Reset() {
-    #define F(_,name,...) this->name = 0;
-    #include "common/tracing/perf_counters.hxx"
+#define F(_, name, ...) this->name = 0;
+#include "common/tracing/perf_counters.hxx"
   }
 
   void Log(std::ostream& ofs) {
-    #define F(iscomputed, name, description, expression) if constexpr (iscomputed) {\
-      ofs << description << ": " << (expression) << std::endl;\
-    } else {\
-      ofs << description << ": " << (name) << std::endl;\
-    }
-    #include "common/tracing/perf_counters.hxx"
+#define F(iscomputed, name, description, expression)         \
+  if constexpr (iscomputed) {                                \
+    ofs << description << ": " << (expression) << std::endl; \
+  } else {                                                   \
+    ofs << description << ": " << (name) << std::endl;       \
   }
-#endif  
+#include "common/tracing/perf_counters.hxx"
+  }
+#endif
 };
-
 
 #ifdef ENABLE_PERF_COUNTERS
 #define PERFCTR_RESET() g_PerfCounters.Reset()
@@ -34,11 +34,11 @@ struct PerfCounters {
 #define PERFCTR_INCREMENT(name) g_PerfCounters.name++;
 #define PERFCTR_INCREMENT_BY(name, by) g_PerfCounters.name += (by);
 #else
-#define PERFCTR_RESET() 
-#define PERFCTR_LOG() 
-#define PERFCTR_LOG_TO(...) 
-#define PERFCTR_INCREMENT(...) 
-#define PERFCTR_INCREMENT_BY(...) 
+#define PERFCTR_RESET()
+#define PERFCTR_LOG()
+#define PERFCTR_LOG_TO(...)
+#define PERFCTR_INCREMENT(...)
+#define PERFCTR_INCREMENT_BY(...)
 #endif
 
 extern PerfCounters g_PerfCounters;
