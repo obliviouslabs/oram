@@ -1,5 +1,6 @@
 #pragma once
 #include "external_memory/noncachedvector.hpp"
+#include "external_memory/stdvector.hpp"
 #include "sort_building_blocks.hpp"
 /// This file implements the multi-way bucket osort
 /// (https://arxiv.org/pdf/2008.00332.pdf) using single core.
@@ -62,7 +63,7 @@ void butterflyRouting(Iterator begin, Iterator end, Iterator outputBegin,
   size_t numBucketPerBatch = 1UL << half_num_layer;
   size_t batchSize = Z * numBucketPerBatch;
   size_t batchCount = size / batchSize;
-  std::vector<TaggedT<T>> nextLayer(size);
+  StdVector<TaggedT<T>> nextLayer(size);
   for (size_t batchIdx = 0; batchIdx < batchCount; ++batchIdx) {
     auto batchBegin = begin + batchIdx * batchSize;
     auto batchEnd = begin + (batchIdx + 1) * batchSize;
@@ -114,6 +115,35 @@ Vector<TaggedT<T>, 4096> tagAndPad(IOIterator begin, IOIterator end,
   return tv;
 }
 
+template <typename IOIterator,
+          typename T = typename std::iterator_traits<IOIterator>::value_type,
+          typename IOVector = typename IOIterator::vector_type>
+StdVector<TaggedT<T>> tagAndPadInternal(IOIterator begin, IOIterator end,
+                                        uint64_t Z) {
+  size_t inputSize = end - begin;
+  uint64_t intermidiateSize = std::max(GetNextPowerOfTwo(2 * (end - begin)), Z);
+  StdVector<TaggedT<T>> tv(intermidiateSize);
+  uint64_t numBucket = intermidiateSize / Z;
+  uint64_t numRealPerBucket = divRoundUp(inputSize, numBucket);
+  typename IOVector::PrefetchReader inputReader(begin, end);
+  typename StdVector<TaggedT<T>>::Writer taggedTWriter(tv.begin(), tv.end());
+
+  for (uint64_t bucketIdx = 0; bucketIdx < numBucket; ++bucketIdx) {
+    for (uint64_t offset = 0; offset < Z; ++offset) {
+      TaggedT<T> tt;
+      tt.tag = UniformRandom() &
+               -2UL;  // dummy flag is set at the least significant bit
+      if (offset < numRealPerBucket && !inputReader.eof()) {
+        tt.v = inputReader.read();
+      } else {
+        tt.tag |= 1UL;
+      }
+      taggedTWriter.write(tt);
+    }
+  }
+  return tv;
+}
+
 template <typename T>
 void externalButterflyRouting(
     typename Vector<TaggedT<T>, 4096>::Iterator begin,
@@ -123,7 +153,7 @@ void externalButterflyRouting(
   size_t size = end - begin;
   const size_t gamma = GetLogBaseTwo(size);
   if ((size * 2 + gamma * Z) * sizeof(TaggedT<T>) <= heapSize) {
-    std::vector<TaggedT<T>> mem(size);
+    StdVector<TaggedT<T>> mem(size);
     CopyIn(begin, end, mem.begin());
     butterflyRouting<T>(mem.begin(), mem.end(), mem.begin(), Z, bitMask, gamma);
     CopyOut(mem.begin(), mem.end(), outputBegin);
@@ -158,6 +188,31 @@ void externalButterflyRouting(
         nextLayer.begin() + (batchIdx + 1) * nextLayerBatchSize,
         outputBegin + batchIdx * nextLayerBatchSize, Z,
         bitMask >> half_num_layer, heapSize);
+  }
+}
+
+template <class IOIterator>
+void CABucketShuffleInternal(IOIterator begin, IOIterator end) {
+  using T = typename std::iterator_traits<IOIterator>::value_type;
+  using IOVector = typename IOIterator::vector_type;
+  const uint64_t Z = 512;
+  StdVector<TaggedT<T>> tv = tagAndPadInternal(begin, end, Z);
+  butterflyRouting<T>(tv.begin(), tv.end(), tv.begin(), Z, 1UL << 63,
+                      GetLogBaseTwo(tv.size()));
+  typename IOVector::Writer outputWriter(begin, end, 1);
+  uint64_t prev = 0;
+  for (size_t bucketIdx = 0; bucketIdx < tv.size() / Z; ++bucketIdx) {
+    BitonicSort(
+        tv.begin() + bucketIdx * Z, tv.begin() + (bucketIdx + 1) * Z,
+        [](const TaggedT<T>& a, const TaggedT<T>& b) { return a.tag < b.tag; });
+    for (auto it = tv.begin() + bucketIdx * Z;
+         it != tv.begin() + (bucketIdx + 1) * Z; ++it) {
+      const TaggedT<T>& element = *it;
+      if (!(element.tag & 1UL)) {
+        outputWriter.write(element.v);
+        Assert(element.tag >= prev && (prev = element.tag || true));
+      }
+    }
   }
 }
 
@@ -197,6 +252,12 @@ void CABucketSort(IOIterator begin, IOIterator end,
   // baseline algorithm, does not update counter for authentication here
 }
 
+template <class IOIterator>
+void CABucketSortInternal(IOIterator begin, IOIterator end) {
+  CABucketShuffleInternal(begin, end);
+  std::sort(begin, end);
+}
+
 // due to other overhead, cannot utilize the full capacity of the heap
 template <typename Vec>
 void CABucketSort(Vec& vec, uint64_t heapSize = DEFAULT_HEAP_SIZE * 14 / 15) {
@@ -207,5 +268,15 @@ template <typename Vec>
 void CABucketShuffle(Vec& vec,
                      uint64_t heapSize = DEFAULT_HEAP_SIZE * 14 / 15) {
   CABucketShuffle(vec.begin(), vec.end(), heapSize);
+}
+
+template <typename Vec>
+void CABucketSortInternal(Vec& vec) {
+  CABucketSortInternal(vec.begin(), vec.end());
+}
+
+template <typename Vec>
+void CABucketShuffleInternal(Vec& vec) {
+  CABucketShuffleInternal(vec.begin(), vec.end());
 }
 }  // namespace EM::Algorithm

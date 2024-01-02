@@ -175,14 +175,26 @@ TEST(TestSort, TestBitonicObliviousSortPerf) {
 
 TEST(TestSortInternal, TestRandomizedShellSort) {
   RELEASE_ONLY_TEST();
-  for (double N = 1; N < 100000000; N *= 2) {
+  for (double N = 67108864 * 2; N < 200000000; N *= 2) {
     test_sort_internal((size_t)N, RandomizedShellSort, false, false);
+  }
+}
+
+template <typename Vec>
+void StdSort(Vec& v) {
+  std::sort(v.begin(), v.end());
+}
+
+TEST(TestSortInternal, TestStdSort) {
+  RELEASE_ONLY_TEST();
+  for (double N = 10000; N < 1000000000; N *= 1.2) {
+    test_sort_internal((size_t)N, StdSort, false, false);
   }
 }
 
 TEST(TestSortInternal, TestWaksOnOffSort) {
   // RELEASE_ONLY_TEST();
-  for (double N = 10000; N < 10000000; N *= 1.2) {
+  for (double N = 10206746; N < 40000000; N *= 1.2) {
     test_sort_internal((size_t)N, WaksOnOffShuffle, true, false);
   }
 }
@@ -191,6 +203,13 @@ TEST(TestSortInternal, TestBitonicObliviousSortPerf) {
   RELEASE_ONLY_TEST();
   for (double N = 10000; N < 1000000000; N *= 1.2) {
     test_sort_internal(N, BitonicSort, false, false);
+  }
+}
+
+TEST(TestSortInternal, TestCABucketSortPerf) {
+  RELEASE_ONLY_TEST();
+  for (double N = 10000; N < 1000000000; N *= 1.2) {
+    test_sort_internal(N, CABucketSortInternal, false, false);
   }
 }
 
@@ -209,6 +228,67 @@ TEST(TestSort, TestOrShufflePerf) {
 TEST(TestSort, TestBitonicShufflePerf) {
   // RELEASE_ONLY_TEST();
   test_sort_cache(20000, BitonicShuffle, EM::ExtVector::Vector, true);
+}
+
+TEST(TestSortInternal1e8, TestStdSort) {
+  RELEASE_ONLY_TEST();
+  test_sort_internal((size_t)1e8, StdSort, false, false);
+}
+
+TEST(TestSortInternal1e8, TestKWayButterflySort) {
+  RELEASE_ONLY_TEST();
+  test_sort_internal((size_t)1e8, KWayButterflySortInternal, false, false);
+}
+
+TEST(TestSortInternal1e8, TestCABucketSort) {
+  RELEASE_ONLY_TEST();
+  test_sort_internal((size_t)1e8, CABucketSortInternal, false, false);
+}
+
+TEST(TestSortInternal1e8, TestKWayButterflyOShuffle) {
+  RELEASE_ONLY_TEST();
+  test_sort_internal((size_t)1e8, KWayButterflyOShuffleInternal, true, false);
+}
+
+TEST(TestSortInternal1e8, TestBitonicObliviousSortPerf) {
+  RELEASE_ONLY_TEST();
+  test_sort_internal((size_t)1e8, BitonicSort, false, false);
+}
+
+TEST(TestSortInternal1e8, TestOrShuffle) {
+  RELEASE_ONLY_TEST();
+  test_sort_internal((size_t)1e8, OrShuffle, true, false);
+}
+
+TEST(TestSortInternal1e8, TestRandomizedShellSort) {
+  RELEASE_ONLY_TEST();
+  test_sort_internal((size_t)134217728, RandomizedShellSort, false, false);
+}
+
+TEST(TestSortInternal1e8, TestWaksOnOffShuffle) {
+  RELEASE_ONLY_TEST();
+  test_sort_internal((size_t)1e8, WaksOnOffShuffle, true, false);
+}
+
+void testWaksOnOffShuffleOnline(uint64_t N) {
+  cout << "test "
+       << "WaksShuffleOnline"
+       << " perf on input size " << N << endl;
+  const WaksOnOff::ControlCircuit* cc = WaksOnOff::WaksShuffleMockOffline(N);
+  std::vector<SortElement> v(N);
+  PERFCTR_RESET();
+  auto start = std::chrono::system_clock::now();
+  WaksOnOff::WaksShuffleOnline(v.begin(), v.end(), cc);
+  auto end = std::chrono::system_clock::now();
+  std::chrono::duration<double> diff = end - start;
+  printProfile(N, cout, diff);
+
+  delete cc;
+}
+
+TEST(TestSortInternal1e8, TestWaksOnOffShuffleOnline) {
+  RELEASE_ONLY_TEST();
+  testWaksOnOffShuffleOnline(1e8);
 }
 
 TEST(TestSort, TestSequentialPassPerf) {

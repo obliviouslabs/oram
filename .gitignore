@@ -59,3 +59,5 @@ Enclave_u.c
 .config_SIM_DEBUG_x64
 .config_SIM_RELEASE_x64
 *.pem
+
+scripts/

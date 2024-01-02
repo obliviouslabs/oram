@@ -3,6 +3,7 @@
 #include "common/dummy.hpp"
 #include "common/encrypted.hpp"
 #include "common/mov_intrinsics.hpp"
+#include "defs_for_test.hpp"
 
 /// This file defines some macros and data structures for sorting and shuffling
 /// algorithms.

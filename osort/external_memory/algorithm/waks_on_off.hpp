@@ -41,6 +41,11 @@ class WaksOnOff {
     return C;
   }
 
+  static const ControlCircuit* WaksShuffleMockOffline(uint64_t n) {
+    const ControlCircuit* C = MockControlBits(n);
+    return C;
+  }
+
   template <typename Iterator>
   static void WaksShuffleOnline(Iterator begin, Iterator end,
                                 const ControlCircuit* C) {
@@ -141,6 +146,27 @@ class WaksOnOff {
       bool b = (*(PBegin + i) & 1);
       *(PBegin + i) = (*(PBegin + i) >> 1) + (OSelect(b, 0, k) << d);
     }
+    return circuit;
+  }
+
+  static const ControlCircuit* MockControlBits(uint64_t n) {
+    uint64_t k = divRoundUp(n, 2);
+    if (n < 2) {
+      return NULL;
+    }
+    ControlCircuit* circuit = new ControlCircuit();
+    // Compute control bits for input-layer switches
+    circuit->in.resize(k - 1);
+    // Apply input-layer switches to P
+    // Reduce P values modulo k, storing bits to undo later
+    // Compute control bits for top and bottom subnetworks
+    if (n > 2) {
+      circuit->top = MockControlBits(k);
+      circuit->bot = MockControlBits(n - k);
+    }
+    circuit->out.resize(n - k);
+    // Compute control bits for output-layer switches. Create array Cout of
+    // length n − k. Apply output-layer switches to P.
     return circuit;
   }
 
