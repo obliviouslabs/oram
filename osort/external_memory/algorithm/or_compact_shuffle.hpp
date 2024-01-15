@@ -55,6 +55,57 @@ void OrCompactSeparateMark(Iterator begin, Iterator end,
   }
 }
 
+template <class Iterator, class MarkIterator>
+void OrOffDistributeSeparateMark(Iterator begin, Iterator end,
+                                 const MarkIterator markBegin, size_t z) {
+  size_t n = end - begin;
+  Iterator mid = begin + n / 2;
+  const MarkIterator markMid = markBegin + n / 2;
+  size_t valMarkMid = *markMid;
+  size_t m = valMarkMid - *markBegin;
+  if (n == 2) {
+    const MarkIterator markEnd = markMid + 1;
+    bool swapFlag = (((!m) & (*markEnd - valMarkMid)) != z);
+    condSwap(swapFlag, *begin, *mid);
+    return;
+  }
+  size_t zLeft = z % (n / 2);
+  size_t zRight = (z + m) % (n / 2);
+  bool s = ((zLeft + m >= n / 2) != (z >= n / 2));
+  Iterator leftIt = begin, rightIt = mid;
+  for (size_t i = 0; i != n / 2; ++i, ++leftIt, ++rightIt) {
+    bool b = (s != (i >= zRight));
+    condSwap(b, *leftIt, *rightIt);
+  }
+  OrOffDistributeSeparateMark(begin, mid, markBegin, zLeft);
+  OrOffDistributeSeparateMark(mid, end, markMid, zRight);
+}
+
+template <class Iterator, class MarkIterator>
+void OrDistributeSeparateMark(Iterator begin, Iterator end,
+                              const MarkIterator markBegin) {
+  size_t n = end - begin;
+  if (n <= 1) {
+    return;
+  }
+  size_t n1 = 1UL << GetLogBaseTwo(n);
+  size_t n2 = n - n1;
+  if (n2 == 0) {
+    OrOffDistributeSeparateMark(begin, end, markBegin, 0);
+    return;
+  }
+  Iterator n2It = begin + n2;
+  const MarkIterator markMid = markBegin + n2;
+  size_t m = *markMid - *markBegin;  // prefix sum
+  Iterator leftIt = begin;
+  Iterator rightIt = begin + n1;
+  for (size_t i = 0; i != n2; ++i, ++leftIt, ++rightIt) {
+    condSwap(i >= m, *leftIt, *rightIt);
+  }
+  OrDistributeSeparateMark(begin, n2It, markBegin);
+  OrOffDistributeSeparateMark(n2It, end, markMid, (n1 - n2 + m) % n1);
+}
+
 template <typename MarkType = uint32_t, class Iterator, class Check>
 void OrCompact(Iterator begin, Iterator end, const Check& isMarked) {
   size_t n = end - begin;

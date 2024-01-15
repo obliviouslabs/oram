@@ -189,8 +189,8 @@ INLINE void CXCHG_internal(const bool cond, void* vec1, void* vec2) {
 #endif
   }
   if constexpr (sz % 32 >= 16) {
-#if defined(__AVX512VL__)
     constexpr uint64_t offset = 4 * (sz / 32);
+#if defined(__AVX512VL__)
     __m128d vec1_temp, vec2_temp;
     std::memcpy(&vec1_temp, (uint64_t*)vec1 + offset, 16);
     std::memcpy(&vec2_temp, (uint64_t*)vec2 + offset, 16);
@@ -203,18 +203,19 @@ INLINE void CXCHG_internal(const bool cond, void* vec1, void* vec2) {
 #elif defined(__SSE2__)
     __m128i vec1_temp, vec2_temp;
     __m128i temp;
-    std::memcpy(&vec1_temp, vec1, 16);
-    std::memcpy(&vec2_temp, vec2, 16);
+    std::memcpy(&vec1_temp, (uint64_t*)vec1 + offset, 16);
+    std::memcpy(&vec2_temp, (uint64_t*)vec2 + offset, 16);
     __m128i mask = _mm_set1_epi16(-cond);  // Create a mask based on cond
     temp = _mm_xor_si128(vec1_temp, vec2_temp);
     temp = _mm_and_si128(temp, mask);
     vec1_temp = _mm_xor_si128(vec1_temp, temp);
     vec2_temp = _mm_xor_si128(vec2_temp, temp);
-    std::memcpy(vec1, &vec1_temp, 16);
-    std::memcpy(vec2, &vec2_temp, 16);
+    std::memcpy((uint64_t*)vec1 + offset, &vec1_temp, 16);
+    std::memcpy((uint64_t*)vec2 + offset, &vec2_temp, 16);
 #else
-    CXCHG_internal<8>(cond, vec1, vec2);
-    CXCHG_internal<8>(cond, (char*)vec1 + 8, (char*)vec2 + 8);
+    CXCHG_internal<8>(cond, (uint64_t*)vec1 + offset, (uint64_t*)vec2 + offset);
+    CXCHG_internal<8>(cond, (char*)vec1 + 8 * offset + 8,
+                      (char*)vec2 + 8 * offset + 8);
 #endif
   }
 
@@ -244,6 +245,83 @@ INLINE void CXCHG_internal(const bool cond, void* vec1, void* vec2) {
   }
 }
 
+template <const uint64_t sz>
+INLINE void CMOV_internal(const bool cond, void* dest, const void* src) {
+  static_assert(sz <= 64);
+  if constexpr (sz == 64) {
+#if defined(__AVX512VL__)
+
+    const __mmask8 mask = (__mmask8)(!cond) - 1;
+    // Create a mask based on cond
+    __m512i srcVec = _mm512_loadu_si512(src);
+    __m512i destVec =
+        _mm512_mask_mov_epi64(_mm512_loadu_si512(dest), mask, srcVec);
+    _mm512_storeu_si512(dest, destVec);
+
+    // on skylake, it's faster to run 256bit instructions two times
+#else
+    CMOV_internal<32>(cond, dest, src);
+    CMOV_internal<32>(cond, (char*)dest + 32, (char*)src + 32);
+#endif
+    return;
+  }
+  if constexpr (sz >= 32) {
+#if defined(__AVX2__)
+    const __m256i mask =
+        _mm256_set1_epi64x(-(!!cond));  // Create a mask based on cond
+    __m256i srcVec = _mm256_loadu_si256((__m256i*)src);
+    __m256i destVec =
+        _mm256_blendv_epi8(_mm256_loadu_si256((__m256i*)dest), srcVec, mask);
+    _mm256_storeu_si256((__m256i*)dest, destVec);
+#else
+    CMOV_internal<16>(cond, dest, src);
+    CMOV_internal<16>(cond, (char*)dest + 16, (char*)src + 16);
+#endif
+  }
+  if constexpr (sz % 32 >= 16) {
+    constexpr uint64_t offset = 4 * (sz / 32);
+    uint64_t* src8 = (uint64_t*)src + offset;
+    uint64_t* dest8 = (uint64_t*)dest + offset;
+#if defined(__SSE2__)
+    const __m128i mask =
+        _mm_set1_epi64x(-(!!cond));  // Create a mask based on cond
+    __m128i srcVec = _mm_loadu_si128((__m128i*)src8);
+    __m128i destVec = _mm_loadu_si128((__m128i*)dest8);
+    __m128i blended = _mm_or_si128(_mm_and_si128(mask, srcVec),
+                                   _mm_andnot_si128(mask, destVec));
+    _mm_storeu_si128((__m128i*)dest8, blended);
+#else
+    CMOV_internal<8>(cond, dest8, src8);
+    CMOV_internal<8>(cond, (char*)dest8 + 8, (char*)src8 + 8);
+#endif
+  }
+
+  if constexpr (sz % 16 >= 8) {
+    constexpr uint64_t offset = 2 * (sz / 16);
+    uint64_t* curr1_64 = (uint64_t*)dest + offset;
+    uint64_t* curr2_64 = (uint64_t*)src + offset;
+    CMOV(cond, *curr1_64, *curr2_64);
+  }
+  if constexpr (sz % 8 >= 4) {
+    constexpr uint64_t offset = 2 * (sz / 8);
+    uint32_t* curr1_32 = (uint32_t*)dest + offset;
+    uint32_t* curr2_32 = (uint32_t*)src + offset;
+    CMOV(cond, *curr1_32, *curr2_32);
+  }
+  if constexpr (sz % 4 >= 2) {
+    constexpr uint64_t offset = 2 * (sz / 4);
+    uint16_t* curr1_16 = (uint16_t*)dest + offset;
+    uint16_t* curr2_16 = (uint16_t*)src + offset;
+    CMOV(cond, *curr1_16, *curr2_16);
+  }
+  if constexpr (sz % 2 >= 1) {
+    constexpr uint64_t offset = 2 * (sz / 2);
+    uint8_t* curr1_8 = (uint8_t*)dest + offset;
+    uint8_t* curr2_8 = (uint8_t*)src + offset;
+    CMOV(cond, *curr1_8, *curr2_8);
+  }
+}
+
 template <typename T>
 INLINE void obliSwap(const bool mov, T& guy1, T& guy2) {
   // static_assert(sizeof(T)%8 == 0);
@@ -258,6 +336,23 @@ INLINE void obliSwap(const bool mov, T& guy1, T& guy2) {
   if constexpr (rem_size > 0) {
     CXCHG_internal<rem_size>(mov, curr1, curr2);
   }
+}
+
+// copy src to dst if mov is true, return mov
+template <typename T>
+INLINE bool obliMove(const bool mov, T& dest, const T& src) {
+  __m512i* curr1 = (__m512i*)&dest;
+  const __m512i* curr2 = (__m512i*)&src;
+  for (uint64_t i = 0; i < sizeof(T) / 64; ++i) {
+    CMOV_internal<64>(mov, curr1, curr2);
+    curr1++;
+    curr2++;
+  }
+  constexpr uint64_t rem_size = sizeof(T) % 64;
+  if constexpr (rem_size > 0) {
+    CMOV_internal<rem_size>(mov, curr1, curr2);
+  }
+  return mov;
 }
 
 // Some CMOV specializations:

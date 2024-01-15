@@ -94,7 +94,7 @@ struct EdgeRec {
     for (uint16_t r = 0; r != numEdge; ++r) {
       // clear bits for less than v0
       uint64_t choices = edges & ((-1UL) << v8);
-      uint16_t trailingZeros = std::countl_zero(choices);
+      uint16_t trailingZeros = std::countr_zero(choices);
       // case 1: there's an edge v0->next
       // case 2: next is a vertex connected to the smallest uncovered vertex
       // case 3: all is done and next = 0

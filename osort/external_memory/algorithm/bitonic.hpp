@@ -4,6 +4,7 @@
 #include "external_memory/extemvector.hpp"
 #include "external_memory/stdvector.hpp"
 #include "sort_def.hpp"
+#include "static_sort.hpp"
 
 namespace EM::Algorithm {
 
@@ -131,6 +132,70 @@ void BitonicShuffle(Iterator begin, Iterator end) {
 template <typename Vec>
 void BitonicShuffle(Vec& v) {
   BitonicShuffle(v.begin(), v.end());
+}
+
+template <class KeyIterator, class PayloadIterator>
+void BitonicMergePow2SepPayload(KeyIterator keyBegin, KeyIterator keyEnd,
+                                PayloadIterator payloadBegin, bool dire) {
+  size_t size = keyEnd - keyBegin;
+  if (size > 1) {
+    size_t halfSize = size / 2;
+    KeyIterator leftKeyIt = keyBegin;
+    KeyIterator rightKeyIt = keyBegin + halfSize;
+    PayloadIterator leftPayloadIt = payloadBegin;
+    PayloadIterator rightPayloadIt = payloadBegin + halfSize;
+    for (size_t i = 0; i < halfSize;
+         ++i, ++leftKeyIt, ++rightKeyIt, ++leftPayloadIt, ++rightPayloadIt) {
+      bool swapFlag = dire != (*leftKeyIt < *rightKeyIt);
+      condSwap(swapFlag, *leftKeyIt, *rightKeyIt);
+      condSwap(swapFlag, *leftPayloadIt, *rightPayloadIt);
+    }
+    BitonicMergePow2SepPayload(keyBegin, leftKeyIt, payloadBegin, dire);
+    BitonicMergePow2SepPayload(leftKeyIt, keyEnd, leftPayloadIt, dire);
+  }
+}
+
+template <class KeyIterator, class PayloadIterator>
+void BitonicMergeSepPayload(KeyIterator keyBegin, KeyIterator keyEnd,
+                            PayloadIterator payloadBegin, bool dire) {
+  size_t size = keyEnd - keyBegin;
+  if (size > 1) {
+    size_t halfSize = GetNextPowerOfTwo(size) / 2;
+    KeyIterator leftKeyIt = keyBegin;
+    KeyIterator rightKeyIt = keyBegin + halfSize;
+    PayloadIterator leftPayloadIt = payloadBegin;
+    PayloadIterator rightPayloadIt = payloadBegin + halfSize;
+    for (size_t i = 0; i < size - halfSize;
+         ++i, ++leftKeyIt, ++rightKeyIt, ++leftPayloadIt, ++rightPayloadIt) {
+      bool swapFlag = dire != (*leftKeyIt < *rightKeyIt);
+      condSwap(swapFlag, *leftKeyIt, *rightKeyIt);
+      condSwap(swapFlag, *leftPayloadIt, *rightPayloadIt);
+    }
+    KeyIterator midKeyIt = keyBegin + halfSize;
+    PayloadIterator midPayloadIt = payloadBegin + halfSize;
+    BitonicMergePow2SepPayload(keyBegin, midKeyIt, payloadBegin, dire);
+    BitonicMergeSepPayload(midKeyIt, keyEnd, midPayloadIt, dire);
+  }
+}
+
+template <class KeyIterator, class PayloadIterator>
+void BitonicSortSepPayload(KeyIterator keyBegin, KeyIterator keyEnd,
+                           PayloadIterator payloadBegin, bool dire) {
+  size_t size = keyEnd - keyBegin;
+  if (size > 1) {
+    size_t halfSize = size / 2;
+    KeyIterator keyMid = keyBegin + halfSize;
+    PayloadIterator payloadMid = payloadBegin + halfSize;
+    BitonicSortSepPayload(keyBegin, keyMid, payloadBegin, !dire);
+    BitonicSortSepPayload(keyMid, keyEnd, payloadMid, dire);
+    BitonicMergeSepPayload(keyBegin, keyEnd, payloadBegin, dire);
+  }
+}
+
+template <class KeyIterator, class PayloadIterator>
+void BitonicSortSepPayload(KeyIterator keyBegin, KeyIterator keyEnd,
+                           PayloadIterator payloadBegin) {
+  BitonicSortSepPayload(keyBegin, keyEnd, payloadBegin, true);
 }
 
 }  // namespace EM::Algorithm
