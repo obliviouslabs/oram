@@ -1,4 +1,5 @@
 #pragma once
+#include <functional>
 #include <vector>
 
 #include "external_memory/algorithm/bitonic.hpp"
@@ -73,6 +74,33 @@ struct PathORAM {
     //   printf("%lu ", path[i].uid);
     // }
     // printf("\n");
+    WriteBackPath(path, pos);
+    return newPos;
+  }
+
+  PositionType Update(PositionType pos, const UidType& uid,
+                      std::function<T(T)> updateFunc) {
+    T out;
+    return Update(pos, uid, updateFunc, out);
+  }
+
+  PositionType Update(PositionType pos, const UidType& uid,
+                      std::function<T(T)> updateFunc, T& out) {
+    return Update(pos, uid, updateFunc, out, uid);  // does not change uid
+  }
+
+  PositionType Update(PositionType pos, const UidType& uid,
+                      std::function<T(T)> updateFunc, T& out,
+                      const UidType& updatedUid) {
+    PositionType newPos = UniformRandom(size - 1);
+    std::vector<Block_> path = ReadPath(pos);
+
+    ReadElementAndRemoveFromPath(path, uid, out);
+    out = updateFunc(out);
+    Block_ newBlock(out, newPos, updatedUid);
+    WriteNewBlockToPath(path, newBlock);
+    EvictPath(path, pos);
+
     WriteBackPath(path, pos);
     return newPos;
   }

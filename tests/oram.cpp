@@ -87,7 +87,7 @@ TEST(PathORAM, CommonSuffixLen) {
   ASSERT_EQ(PathORAM<int>::commonSuffixLength(a, b), 1);
 }
 
-TEST(PathORAM, WithoutPositionMap) {
+TEST(PathORAM, WithoutPositionMap1) {
   int memSize = 1024;
   PathORAM<uint64_t, 5, 63> oram;
   oram.Init(memSize);
@@ -108,6 +108,74 @@ TEST(PathORAM, WithoutPositionMap) {
       posMap[i] = pos;
       ASSERT_EQ(val, valMap[i]);
       // printf("read %lu %lu\n", i, val);
+    }
+  }
+  for (uint64_t i = 0; i < memSize; i++) {
+    uint64_t val;
+    uint64_t pos = oram.Update(
+        posMap[i], i, [](uint64_t x) { return x + 1; }, val);
+    posMap[i] = pos;
+    ++valMap[i];
+    ASSERT_EQ(val, valMap[i]);
+    // printf("write %lu %lu\n", i, val);
+  }
+  for (int r = 0; r < 7; ++r) {
+    for (uint64_t i = 0; i < memSize; i++) {
+      uint64_t val;
+      uint64_t pos = oram.Read(posMap[i], i, val);
+      posMap[i] = pos;
+      ASSERT_EQ(val, valMap[i]);
+      // printf("read %lu %lu\n", i, val);
+    }
+  }
+}
+
+TEST(PathORAM, WithoutPositionMapMixed) {
+  int memSize = 4000;
+  PathORAM<uint64_t, 5, 63> oram;
+  oram.Init(memSize);
+  std::vector<uint64_t> posMap(memSize, -1);
+  std::vector<uint64_t> valMap(memSize);
+  int opCount = 1e5;
+  for (int i = 0; i < opCount; ++i) {
+    int rd = UniformRandom() % 3;
+    uint64_t uid = UniformRandom() % memSize;
+    switch (rd) {
+      case 0: {  // write
+        if (posMap[uid] != -1) {
+          --i;
+          continue;
+        }
+        uint64_t val = UniformRandom();
+        uint64_t pos = oram.Write(uid, val);
+        posMap[uid] = pos;
+        valMap[uid] = val;
+      } break;
+      case 1: {  // read
+        if (posMap[uid] == -1) {
+          --i;
+          continue;
+        }
+        uint64_t val;
+        uint64_t pos = oram.Read(posMap[uid], uid, val);
+        posMap[uid] = pos;
+        ASSERT_EQ(val, valMap[uid]);
+      } break;
+      case 2: {  // update
+        if (posMap[uid] == -1) {
+          --i;
+          continue;
+        }
+        uint64_t val;
+        uint64_t pos = oram.Update(
+            posMap[uid], uid, [](uint64_t x) { return x + 1; }, val);
+        posMap[uid] = pos;
+        ++valMap[uid];
+        ASSERT_EQ(val, valMap[uid]);
+      } break;
+
+      default:
+        break;
     }
   }
 }
