@@ -86,6 +86,11 @@ struct PathORAM {
     for (Node_* curr = root; curr; ++level) {
       memcpy(&path[0] + stashSize + Z * level, curr->bucket.blocks,
              Z * sizeof(Block_));
+      // printf("read level %lu: ", level);
+      // for (int i = 0; i < Z; ++i) {
+      //   printf("%ld ", (int64_t)curr->bucket.blocks[i].uid);
+      // }
+      // printf("\n");
       if (pos & 1) {
         curr = curr->right;
       } else {
@@ -93,6 +98,7 @@ struct PathORAM {
       }
       pos >>= 1;
     }
+    path.resize(stashSize + Z * level);
     return path;
   }
 
