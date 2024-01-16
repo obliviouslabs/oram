@@ -139,22 +139,18 @@ TEST(PathORAM, NonPowerOfTwo) {
   }
 }
 
-TEST(PathORAM, WithoutPositionMapLarge) {
-  int memSize = 1 << 26;
+TEST(PathORAM, WithoutPositionMapLargePerf) {
+  int memSize = 1 << 24;
   PathORAM<SortElement, 5, 63> oram;
   oram.Init(memSize);
-  std::vector<uint64_t> posMap(memSize);
-  for (uint64_t i = 0; i < 1e3; i++) {
-    SortElement val = SortElement();
-    uint64_t pos = oram.Write(i % memSize, val);
-    posMap[i % memSize] = pos;
-  }
 
-  for (uint64_t i = 0; i < 1e3; i++) {
-    SortElement val = SortElement();
-    uint64_t pos = oram.Read(posMap[i % memSize], i % memSize, val);
-    posMap[i % memSize] = pos;
-
-    // printf("read %lu %lu\n", i, val);
+  uint64_t numAccesses = 1e6;
+  auto start = std::chrono::system_clock::now();
+  for (uint64_t i = 0; i < numAccesses; i++) {
+    SortElement val;
+    uint64_t pos = oram.Read(i % memSize, 0, val);
   }
+  auto end = std::chrono::system_clock::now();
+  std::chrono::duration<double> diff = end - start;
+  printf("Time per access: %f us\n", diff.count() * 1e6 / numAccesses);
 }
