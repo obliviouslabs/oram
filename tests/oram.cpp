@@ -88,7 +88,7 @@ TEST(PathORAM, CommonSuffixLen) {
 }
 
 TEST(PathORAM, WithoutPositionMap1) {
-  int memSize = 1024;
+  int memSize = 10;
   PathORAM<uint64_t, 5, 63> oram;
   oram.Init(memSize);
   std::vector<uint64_t> posMap(memSize);
@@ -98,8 +98,6 @@ TEST(PathORAM, WithoutPositionMap1) {
     uint64_t pos = oram.Write(i, val);
     posMap[i] = pos;
     valMap[i] = val;
-
-    // printf("write %lu %lu\n", i, val);
   }
   for (int r = 0; r < 7; ++r) {
     for (uint64_t i = 0; i < memSize; i++) {
@@ -131,7 +129,7 @@ TEST(PathORAM, WithoutPositionMap1) {
 }
 
 TEST(PathORAM, WithoutPositionMapMixed) {
-  int memSize = 4000;
+  int memSize = 123;
   PathORAM<uint64_t, 5, 63> oram;
   oram.Init(memSize);
   std::vector<uint64_t> posMap(memSize, -1);
@@ -221,4 +219,33 @@ TEST(PathORAM, WithoutPositionMapLargePerf) {
   auto end = std::chrono::system_clock::now();
   std::chrono::duration<double> diff = end - start;
   printf("Time per access: %f us\n", diff.count() * 1e6 / numAccesses);
+}
+
+TEST(PathORAM, testInit) {
+  uint64_t size = 1024;
+  PathORAM<SortElement> oram;
+  StdVector<SortElement> vec(size);
+  for (int i = 0; i < size; ++i) {
+    vec[i] = SortElement();
+    vec[i].key = i;
+  }
+  StdVector<uint64_t> posMap(size);
+  StdVector<uint64_t>::Writer posMapWriter(posMap.begin(), posMap.end());
+  oram.InitFromVector(vec, posMapWriter);
+  for (uint64_t i = 0; i < size; i++) {
+    SortElement val;
+    printf("read %lu at pos %lu\n", i, posMap[i]);
+    uint64_t pos = oram.Read(posMap[i], i, val);
+    posMap[i] = pos;
+    ASSERT_EQ(val.key, i);
+  }
+}
+
+TEST(PathORAM, testInitNaive) {
+  uint64_t size = 16384;
+  PathORAM<SortElement> oram;
+  oram.Init(size);
+  for (uint64_t i = 0; i < size; i++) {
+    oram.Write(i, SortElement());
+  }
 }

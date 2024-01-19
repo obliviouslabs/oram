@@ -2,18 +2,26 @@
 #include <functional>
 #include <vector>
 
+#include "bucket.hpp"
 #include "external_memory/algorithm/bitonic.hpp"
+#include "external_memory/algorithm/kway_butterfly_sort.hpp"
 #include "external_memory/algorithm/or_compact_shuffle.hpp"
-#include "node.hpp"
+#include "external_memory/noncachedvector.hpp"
+#include "external_memory/stdvector.hpp"
+#include "external_memory/virtualvector.hpp"
+#include "tree.hpp"
 
 namespace ORAM::PathORAM {
-template <typename T, const int Z = 5, const int stashSize = 10,
+template <typename T, const int Z = 5, const int stashSize = 63,
           typename PositionType = uint64_t, typename UidType = uint64_t>
 struct PathORAM {
-  using Node_ = Node<T, Z, PositionType, UidType>;
+  // using Node_ = Node<T, Z, PositionType, UidType>;
   using Stash = Bucket<T, stashSize, PositionType, UidType>;
   using Block_ = Block<T, PositionType, UidType>;
-  Node_* root = nullptr;
+  using Bucket_ = Bucket<T, Z, PositionType, UidType>;
+  using UidBlock_ = UidBlock<T, UidType>;
+  // Node_* root = nullptr;
+  HeapTree<Bucket_> tree;
   Stash* stash = nullptr;
   int depth = 0;
   PositionType size = 0;
@@ -23,17 +31,77 @@ struct PathORAM {
   PathORAM(PathORAM&& other) = default;
 
   void Init(PositionType size) {
-    root = initTree(size);
+    tree.Init(size);
     stash = new Stash();
     depth = GetLogBaseTwo(size - 1) + 2;
     this->size = size;
   }
 
+  template <typename Vec, class Writer>
+  void InitFromVector(Vec& vec, Writer& posMapWriter) {
+    InitFromVector(vec, posMapWriter, 0, vec.size());
+  }
+
+  template <typename Vec, class Writer>
+  void InitFromVector(Vec& vec, Writer& posMapWriter, UidType beginIdx,
+                      UidType endIdx) {
+    size = endIdx - beginIdx;
+
+    stash = new Stash();
+    StdVector<UidType> uidVec(size);
+    depth = GetLogBaseTwo(size - 1) + 2;
+    EM::VirtualVector::Vector<UidBlock_, Vec> v(
+        vec,
+        [](size_t i, const T& val) { return UidBlock_(val, i); },  // virtualize
+        [&](size_t i, const UidBlock_& block) {
+          uidVec[i] = block.uid;
+          return block.data;
+        }  // devirtualize
+    );
+    EM::Algorithm::KWayButterflyOShuffle(v);
+
+    for (auto val : vec) {
+      printf("%lu ", val.key);
+    }
+    printf("\n");
+    // for (const uint64_t& uid : uidVec) {
+    //   printf("%lu ", uid);
+    // }
+    // printf("\n");
+
+    // EM::VirtualVector::Vector<Block_, Vec> vBlock(
+    //     vec,
+    //     [&](size_t i, const T& val) {
+    //       printf("set oram entry pos =  %lu uid = %lu\n", i, uidVec[i]);
+    //       return Block_(val, i, uidVec[i]);
+    //     },  // virtualize
+    //     [](size_t i, const Block_& block) {
+    //       return block.data;
+    //     }  // devirtualize
+    // );
+
+    // root = initTree(vBlock.begin(), vBlock.end());
+
+    EM::VirtualVector::Vector<UidBlock<PositionType>, StdVector<UidType>> vUid(
+        uidVec,
+        [](size_t i, const UidType& uid) { return UidBlock<UidType>(i, uid); },
+        [&](size_t i, const UidBlock<UidType>& block) {
+          posMapWriter.write(block.data);
+          return block.uid;
+        });
+    EM::Algorithm::KWayButterflySortInternal(vUid);
+    // for (const uint64_t& pos : positionVec) {
+    //   printf("%lu ", pos);
+    // }
+    // printf("\n");
+  }
+
   void Destroy() {
-    destroyTree(root);
-    root = nullptr;
-    delete stash;
-    stash = nullptr;
+    tree.Destroy();
+    if (stash) {
+      delete stash;
+      stash = nullptr;
+    }
   }
 
   ~PathORAM() { Destroy(); }
@@ -110,39 +178,14 @@ struct PathORAM {
 
     memcpy(&path[0], stash->blocks, stashSize * sizeof(Block_));
 
-    size_t level = 0;
-    for (Node_* curr = root; curr; ++level) {
-      memcpy(&path[0] + stashSize + Z * level, curr->bucket.blocks,
-             Z * sizeof(Block_));
-      // printf("read level %lu: ", level);
-      // for (int i = 0; i < Z; ++i) {
-      //   printf("%ld ", (int64_t)curr->bucket.blocks[i].uid);
-      // }
-      // printf("\n");
-      if (pos & 1) {
-        curr = curr->right;
-      } else {
-        curr = curr->left;
-      }
-      pos >>= 1;
-    }
+    size_t level = tree.ReadPath(pos, (Bucket_*)(&path[stashSize]));
     path.resize(stashSize + Z * level);
     return path;
   }
 
   void WriteBackPath(const std::vector<Block_>& path, PositionType pos) {
     memcpy(stash->blocks, &path[0], stashSize * sizeof(Block_));
-    size_t level = 0;
-    for (Node_* curr = root; curr; ++level) {
-      memcpy(curr->bucket.blocks, &path[0] + stashSize + Z * level,
-             Z * sizeof(Block_));
-      if (pos & 1) {
-        curr = curr->right;
-      } else {
-        curr = curr->left;
-      }
-      pos >>= 1;
-    }
+    tree.WritePath(pos, (Bucket_*)(&path[stashSize]));
     // for (int i = 0; i < path.size(); ++i) {
     //   printf("%ld ", (int64_t)path[i].uid);
     //   if (i >= stashSize - 1 && (path.size() - i - 1) % Z == 0) {
@@ -263,25 +306,42 @@ struct PathORAM {
   }
 
  private:
-  // TODO: make it cache efficient
-  Node_* initTree(size_t size) {
-    Node_* root = new Node_();
-    if (size == 1) {
-      return root;
-    }
-    size_t rightSize = size >> 1;
-    root->left = initTree(size - rightSize);
-    root->right = initTree(rightSize);
-    return root;
-  }
+  // // TODO: make it cache efficient
+  // Node_* initTree(size_t size) {
+  //   Node_* root = new Node_();
+  //   if (size == 1) {
+  //     return root;
+  //   }
+  //   size_t rightSize = size >> 1;
+  //   root->left = initTree(size - rightSize);
+  //   root->right = initTree(rightSize);
+  //   return root;
+  // }
 
-  void destroyTree(Node_* node) {
-    if (node == nullptr) {
-      return;
-    }
-    destroyTree(node->left);
-    destroyTree(node->right);
-    delete node;
-  }
+  // template <typename Iterator>
+  // Node_* initTree(Iterator begin, Iterator end) {
+  //   size_t size = end - begin;
+  //   Node_* root = new Node_();
+  //   if (size == 1) {
+  //     root->bucket.blocks[0] = *begin;
+  //     printf("init pos %lu uid %lu, key = %lu\n",
+  //            root->bucket.blocks[0].position, root->bucket.blocks[0].uid,
+  //            root->bucket.blocks[0].data.key);
+  //     return root;
+  //   }
+  //   Iterator mid = begin + ((size + 1) >> 1);
+  //   root->left = initTree(begin, mid);
+  //   root->right = initTree(mid, end);
+  //   return root;
+  // }
+
+  // void destroyTree(Node_* node) {
+  //   if (node == nullptr) {
+  //     return;
+  //   }
+  //   destroyTree(node->left);
+  //   destroyTree(node->right);
+  //   delete node;
+  // }
 };
 }  // namespace ORAM::PathORAM

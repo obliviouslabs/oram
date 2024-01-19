@@ -21,6 +21,8 @@ struct Block {
   Block& operator=(Block&& other) = default;
   bool operator==(const Block& other) const { return uid == other.uid; }
   bool operator!=(const Block& other) const { return !(*this == other); }
+  static_assert(std::is_trivially_copyable_v<T>,
+                "T must be trivially copyable");
 
   INLINE bool checkUidMatch(const UidType& uid) const {
     return this->uid == uid;
@@ -35,6 +37,31 @@ struct Block {
 
   INLINE bool conditionalFillIfDummy(bool cond, const Block& data) {
     return obliMove(cond & isDummy(), *this, data);
+  }
+
+  INLINE bool isDummy() const { return uid == DUMMY<UidType>(); }
+};
+
+template <typename T, typename UidType = uint64_t>
+struct UidBlock {
+  T data;
+  UidType uid = DUMMY<UidType>();
+  UidBlock() = default;
+  UidBlock(const T& data, UidType uid) : data(data), uid(uid) {}
+
+  UidBlock(UidType uid) : uid(uid), data(DUMMY<T>()) {}
+  UidBlock(const UidBlock& other) = default;
+  UidBlock(UidBlock&& other) = default;
+  UidBlock& operator=(const UidBlock& other) = default;
+  UidBlock& operator=(UidBlock&& other) = default;
+  bool operator==(const UidBlock& other) const { return uid == other.uid; }
+  bool operator!=(const UidBlock& other) const { return !(*this == other); }
+
+  // define less
+  bool operator<(const UidBlock& other) const { return uid < other.uid; }
+
+  INLINE bool checkUidMatch(const UidType& uid) const {
+    return this->uid == uid;
   }
 
   INLINE bool isDummy() const { return uid == DUMMY<UidType>(); }

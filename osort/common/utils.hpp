@@ -114,3 +114,11 @@ void fisherYatesShuffle(Iterator begin, Iterator end) {
     std::swap(*(begin + randPos), *(--end));
   }
 }
+
+size_t reverseBits(size_t num, uint bits) {
+  size_t reverse_num = 0;
+  for (uint i = 0; i < bits; ++i) {
+    reverse_num |= ((num >> i) & 1) << ((bits - 1) - i);
+  }
+  return reverse_num;
+}

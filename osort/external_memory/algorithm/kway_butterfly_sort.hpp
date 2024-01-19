@@ -63,15 +63,15 @@ class ButterflySorter {
   bool needsExtMerge;           // whether to use external merge sort
   uint64_t maxBatchBucket = 0;  // maximum number of buckets in a batch
 
-  Vector<T>
+  EM::NonCachedVector::Vector<T>
       mergeSortFirstLayer;  // the first layer of external-memory merge sort
-  std::vector<
-      std::pair<typename Vector<T>::Iterator, typename Vector<T>::Iterator>>
+  std::vector<std::pair<typename EM::NonCachedVector::Vector<T>::Iterator,
+                        typename EM::NonCachedVector::Vector<T>::Iterator>>
       mergeSortRanges;  // pairs of iterators that specifies each sorted range
                         // in the first layer of external-memory merge sort
 
   // writer for the first layer of external-memory merge sort
-  typename Vector<T>::Writer mergeSortFirstLayerWriter;
+  typename EM::NonCachedVector::Vector<T>::Writer mergeSortFirstLayerWriter;
 
   typename IOVector::PrefetchReader inputReader;  // input reader
   typename IOVector::Writer outputWriter;         // output writer
@@ -241,32 +241,34 @@ class ButterflySorter {
             }
           }
         }
-        if (task == KWAYBUTTERFLYOSORT && (intBatchIdx == batchPerEnclave - 1 ||
-                                           batchIdx == batchCount - 1)) {
-          // sort the batch and write to first layer of merge sort
-          const auto cmpVal = [](const auto& a, const auto& b) {
-            return a.v < b.v;
-          };
-          size_t BNCountPerBatch = batchIdx == batchCount - 1
-                                       ? batchIdx % batchPerEnclave + 1
-                                       : batchPerEnclave;
-          Assert(localBatchSize * BNCountPerBatch <= batchSize);
-          auto realEnd =
-              partitionDummy(batch, batch + localBatchSize * BNCountPerBatch);
-          // partition dummies to the end
-          Assert(realEnd <= batch + batchSize);
-          std::sort(batch, realEnd, cmpVal);
-          if (needsExtMerge) {
-            auto mergeSortReaderBeginIt = mergeSortFirstLayerWriter.it;
-            for (auto it = batch; it != realEnd; ++it) {
-              mergeSortFirstLayerWriter.write(it->getData());
-            }
+        if constexpr (task == KWAYBUTTERFLYOSORT) {
+          if (intBatchIdx == batchPerEnclave - 1 ||
+              batchIdx == batchCount - 1) {
+            // sort the batch and write to first layer of merge sort
+            const auto cmpVal = [](const auto& a, const auto& b) {
+              return a.v < b.v;
+            };
+            size_t BNCountPerBatch = batchIdx == batchCount - 1
+                                         ? batchIdx % batchPerEnclave + 1
+                                         : batchPerEnclave;
+            Assert(localBatchSize * BNCountPerBatch <= batchSize);
+            auto realEnd =
+                partitionDummy(batch, batch + localBatchSize * BNCountPerBatch);
+            // partition dummies to the end
+            Assert(realEnd <= batch + batchSize);
+            std::sort(batch, realEnd, cmpVal);
+            if (needsExtMerge) {
+              auto mergeSortReaderBeginIt = mergeSortFirstLayerWriter.it;
+              for (auto it = batch; it != realEnd; ++it) {
+                mergeSortFirstLayerWriter.write(it->getData());
+              }
 
-            mergeSortRanges.emplace_back(mergeSortReaderBeginIt,
-                                         mergeSortFirstLayerWriter.it);
-          } else {
-            for (auto it = batch; it != realEnd; ++it) {
-              outputWriter.write(it->getData());
+              mergeSortRanges.emplace_back(mergeSortReaderBeginIt,
+                                           mergeSortFirstLayerWriter.it);
+            } else {
+              for (auto it = batch; it != realEnd; ++it) {
+                outputWriter.write(it->getData());
+              }
             }
           }
         }
@@ -328,7 +330,6 @@ void KWayButterflyOShuffle(Iterator begin, Iterator end, uint32_t inAuth,
   size_t N = end - begin;
   if (N <= 512) {
     if constexpr (Iterator::random_access) {
-      printf("using or shuffle\n");
       OrShuffle(begin, end);
     } else {
       StdVector<T> Mem(N);
@@ -338,6 +339,7 @@ void KWayButterflyOShuffle(Iterator begin, Iterator end, uint32_t inAuth,
     }
     return;
   }
+  heapSize = std::min(heapSize, N * sizeof(WrappedT) * 2);
   uint64_t numElementFit = heapSize / sizeof(WrappedT);
   WrappedT* batch = new WrappedT[numElementFit];  // avoid fragmentation
   const KWayButterflyParams& KWayParams =
@@ -365,7 +367,7 @@ void KWayButterflySort(Iterator begin, Iterator end, uint32_t inAuth,
     }
     return;
   }
-
+  heapSize = std::min(heapSize, N * sizeof(WrappedT) * 2);
   uint64_t numElementFit = heapSize / sizeof(WrappedT);
   WrappedT* batch = new WrappedT[numElementFit];  // avoid fragmentation
   const KWayButterflyParams& KWayParams =
@@ -379,7 +381,8 @@ void KWayButterflySort(Iterator begin, Iterator end, uint32_t inAuth,
   }
   const auto& mergeRanges = sorter.getMergeSortBatchRanges();
   ExtMergeSort(begin, end, mergeRanges, inAuth + 1,
-               heapSize / (sizeof(T) * Vector<T>::item_per_page * 2));
+               heapSize / (sizeof(T) *
+                           EM::NonCachedVector::Vector<T>::item_per_page * 2));
 }
 
 template <typename Vec>

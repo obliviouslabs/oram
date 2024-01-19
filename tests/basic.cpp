@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 
 #include "common/mov_intrinsics.hpp"
+#include "oram/tree.hpp"
 #include "testutils.hpp"
 
 template <const uint64_t size>
@@ -173,3 +174,62 @@ TEST(Basic, ObliSwap) {
 TEST(Basic, MovPerf) { testObliMovPerf<200>(); }
 
 TEST(Basic, SwapPerf) { testObliSwapPerf<200>(); }
+
+TEST(Basic, TestHeapTree) {
+  size_t size = 11;
+  int maxLevel = GetLogBaseTwo(size - 1) + 2;
+  for (int level = 0; level < maxLevel; ++level) {
+    for (int i = 0; i < size; ++i) {
+      size_t idx = HeapTree<int>::GetCAIdx(i, size, level, maxLevel);
+      printf("level: %d, i: %d, idx: %lu\n", level, i, idx);
+    }
+  }
+}
+
+TEST(Basic, TestHeapTree2) {
+  size_t size = 10;
+  int maxLevel = GetLogBaseTwo(size - 1) + 2;
+  std::vector<size_t> pathIdxs(maxLevel);
+  for (size_t i = 0; i < size; ++i) {
+    int level =
+        HeapTree<int>::GetCAPathIdx(pathIdxs.begin(), pathIdxs.end(), i, size);
+    printf("Path %lu:\n", i);
+    for (int j = 0; j < level; ++j) {
+      printf("%lu ", pathIdxs[j]);
+    }
+    printf("\n");
+  }
+}
+
+TEST(Basic, TestHeapTree3) {
+  for (size_t size = 2; size <= 4096; size *= 2) {
+    int maxLevel = GetLogBaseTwo(size - 1) + 2;
+    for (int cacheLevel = 1; cacheLevel <= maxLevel; ++cacheLevel) {
+      for (int packLevel = 1; packLevel <= maxLevel; ++packLevel) {
+        // printf("size: %lu, cacheLevel: %d, packLevel: %d\n", size,
+        // cacheLevel,
+        //        packLevel);
+        std::vector<size_t> pathIdxs(maxLevel);
+        std::vector<size_t> res;
+        for (size_t i = 0; i < 1UL << (maxLevel - 1); ++i) {
+          size_t ri = reverseBits(i, maxLevel - 1);
+          if (ri >= size) {
+            continue;
+          }
+          int level =
+              HeapTree<int>::GetCAPathIdx(pathIdxs.begin(), pathIdxs.end(), ri,
+                                          size, packLevel, cacheLevel);
+          res.push_back(pathIdxs[level - 1]);
+        }
+        HeapTree<int> t;
+        t.Init(size, cacheLevel, packLevel);
+        HeapTree<int>::ReverseLexLeafPow2Indexer iter(t);
+        for (size_t i = 0; i < size; ++i) {
+          // printf("i: %lu\n", i);
+          ASSERT_EQ(iter.getIndex(), res[i]);
+          ++iter;
+        }
+      }
+    }
+  }
+}

@@ -6,6 +6,10 @@ template <typename T, const int Z = 4, typename PositionType = uint64_t,
           typename UidType = uint64_t>
 struct Bucket {
   using BlockType = Block<T, PositionType, UidType>;
+  static_assert(std::is_trivially_copyable_v<T>,
+                "T must be trivially copyable");
+  static_assert(std::is_trivially_copyable_v<BlockType>,
+                "Block must be trivially copyable");
   BlockType blocks[Z];
   Bucket() = default;
   Bucket(const Bucket& other) = default;

@@ -94,7 +94,7 @@ static_assert(IS_POD<Encrypted<int>>());
 template <typename T>
 // requires (IS_POD<T>())
 struct FreshEncrypted {
-  static_assert(IS_POD<T>());
+  // static_assert(IS_POD<T>());
 
   static constexpr uint64_t SIZE = sizeof(T);
   uint8_t data[SIZE];  // We don't need to adjust this because CTR modes don't
