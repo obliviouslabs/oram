@@ -56,8 +56,8 @@ struct HeapTree {
     }
     if (topLevel == 0) {
       topLevel = totalLevel >> 1;
-      if (totalLevel > packLevel && packLevel > 1) {
-        topLevel = divRoundUp(topLevel, packLevel) * packLevel;
+      if (topLevel > packLevel && packLevel > 1) {
+        topLevel = topLevel / packLevel * packLevel;
       }
     }
     int botLevel = totalLevel - topLevel;
@@ -102,8 +102,8 @@ struct HeapTree {
     }
     if (topLevel == 0) {
       topLevel = totalLevel >> 1;
-      if (totalLevel > packLevel && packLevel > 1) {
-        topLevel = divRoundUp(topLevel, packLevel) * packLevel;
+      if (topLevel > packLevel && packLevel > 1) {
+        topLevel = topLevel / packLevel * packLevel;
       }
     }
     int botLevel = totalLevel - topLevel;
@@ -130,8 +130,8 @@ struct HeapTree {
     }
     if (topLevel == 0) {
       topLevel = totalLevel >> 1;
-      if (totalLevel > packLevel && packLevel > 1) {
-        topLevel = divRoundUp(topLevel, packLevel) * packLevel;
+      if (topLevel > packLevel && packLevel > 1) {
+        topLevel = topLevel / packLevel * packLevel;
       }
     } else if (topLevel >= totalLevel) {
       return GetCAPathIdxPow2(outputBegin, outputEnd, idx, packLevel);
@@ -163,8 +163,8 @@ struct HeapTree {
     int totalLevel = outputEnd - outputBegin;
     if (topLevel == 0) {
       topLevel = totalLevel >> 1;
-      if (totalLevel > packLevel && packLevel > 1) {
-        topLevel = divRoundUp(topLevel, packLevel) * packLevel;
+      if (topLevel > packLevel && packLevel > 1) {
+        topLevel = topLevel / packLevel * packLevel;
       }
     } else if (topLevel >= totalLevel) {
       return GetCAPathIdx(outputBegin, outputEnd, idx, leafCount, packLevel);
@@ -276,18 +276,18 @@ struct HeapTree {
     size_t pos;
     std::vector<size_t> rzero2inc;
 
-    ReverseLexLeafPow2Indexer(const HeapTree& tree) {
+    ReverseLexLeafPow2Indexer(int totalLevel, int cacheLevel, int packLevel) {
       std::vector<int> topLevels;
-      int botLevel = tree.totalLevel - tree.cacheLevel;
+      int botLevel = totalLevel - cacheLevel;
       if (botLevel <= 0) {
-        botLevel = tree.totalLevel;
+        botLevel = totalLevel;
       } else {
-        topLevels.push_back(tree.cacheLevel);
+        topLevels.push_back(cacheLevel);
       }
       while (botLevel > 1) {
         size_t topLevel = botLevel >> 1;
-        if (botLevel > tree.packLevel && tree.packLevel > 1) {
-          topLevel = divRoundUp(topLevel, tree.packLevel) * tree.packLevel;
+        if (topLevel > packLevel && packLevel > 1) {
+          topLevel = topLevel / packLevel * packLevel;
         }
         topLevels.push_back(topLevel);
         botLevel -= topLevel;
@@ -296,17 +296,23 @@ struct HeapTree {
 
       auto topIter = topLevels.rbegin();
       size_t accRZero = *topIter;
-      for (int i = 0; i < tree.totalLevel; ++i) {
+      for (int i = 0; i < totalLevel; ++i) {
         if (i == accRZero) {
           accInc += (1UL << (*topIter)) - 1;
           accRZero += *(++topIter);
         }
         rzero2inc.push_back(accInc);
       }
-
+      // for (int i = 0; i < totalLevel; ++i) {
+      //   printf("%lu ", rzero2inc[i]);
+      // }
       idx = rzero2inc.back() - 1;
       pos = 0;
     }
+
+    ReverseLexLeafPow2Indexer(const HeapTree& tree)
+        : ReverseLexLeafPow2Indexer(tree.totalLevel, tree.cacheLevel,
+                                    tree.packLevel) {}
 
     ReverseLexLeafPow2Indexer& operator++() {
       int rZero = 0;
@@ -320,5 +326,65 @@ struct HeapTree {
     }
 
     size_t getIndex() const { return idx; }
+  };
+
+  struct ReverseLexLeafIndexer : public ReverseLexLeafPow2Indexer {
+    typedef ReverseLexLeafPow2Indexer Base;
+    size_t highestBitMask;
+    size_t size;
+    bool separateLastLevel = false;
+    ReverseLexLeafPow2Indexer prevLevelIndexer;
+    size_t lastLevelIdx = 0;
+    ReverseLexLeafIndexer(const HeapTree& tree)
+        : ReverseLexLeafIndexer(tree.totalLevel, tree.cacheLevel,
+                                tree.packLevel, tree.leafCount) {}
+
+    ReverseLexLeafIndexer(int totalLevel, int cacheLevel, int packLevel,
+                          size_t _size)
+        : Base(totalLevel, cacheLevel, packLevel),
+          prevLevelIndexer(std::max(2, totalLevel - 1), cacheLevel, packLevel) {
+      separateLastLevel =
+          cacheLevel >= 2 && totalLevel == cacheLevel + 1;  // special case
+      highestBitMask = 1UL << (totalLevel - 2);
+      size = _size;
+      lastLevelIdx = Base::idx;
+    }
+
+    ReverseLexLeafIndexer& operator++() {
+      size_t mask = highestBitMask;
+      int consecutiveOnes = 0;
+      while (Base::pos & mask) {
+        consecutiveOnes++;
+        Base::pos ^= mask;
+        mask >>= 1;
+      }
+      Base::pos ^= mask;
+      size_t posSibling = Base::pos | highestBitMask;
+      if (separateLastLevel) {
+        // special case
+        // printf("posSibling: %lu, size: %lu\n", posSibling, size);
+        if (posSibling >= size) {
+          Base::idx = prevLevelIndexer.getIndex();
+          // printf("idx becomes %lu\n", Base::idx);
+          Base::pos = posSibling;
+        } else {
+          Base::idx = ++lastLevelIdx;
+        }
+        if (Base::pos & highestBitMask) {
+          // printf("increasing prevLevelIndexer\n");
+          ++prevLevelIndexer;
+        }
+        return *this;
+      }
+      if (posSibling >= size) {
+        Base::idx += Base::rzero2inc[consecutiveOnes] - 1;
+        Base::pos = posSibling;
+      } else {
+        Base::idx += Base::rzero2inc[consecutiveOnes];
+      }
+      return *this;
+    }
+
+    size_t getIndex() const { return Base::idx; }
   };
 };
