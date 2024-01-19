@@ -4,10 +4,10 @@ source /startsgxenv.sh
 SGX_MODE=HW # HW or SIM
 
 # Algorithms:
-ALGOs=(CABUCKETSORT)
+ALGOs=(KWAYBUTTERFLYOSORT KWAYBUTTERFLYOSHUFFLE)
 MIN_ELEMENT_SIZE=128 # element size in bytes
 MAX_ELEMENT_SIZE=128
-MIN_SIZE=1000000    # input size in number of elements
+MIN_SIZE=100    # input size in number of elements
 MAX_SIZE=10000000
 MIN_ENCLAVE_SIZE=128 # enclave size in MB
 MAX_ENCLAVE_SIZE=128

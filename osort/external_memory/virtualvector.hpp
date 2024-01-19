@@ -110,6 +110,7 @@ struct Vector {
 
   struct Reader {
     typename BaseVec::Reader baseReader;
+    using value_type = T;
     Vector* vec_ptr;
     uint64_t idx = 0;
     Reader() {}
@@ -127,10 +128,13 @@ struct Vector {
     VT read() { return vec_ptr->virtualize(idx++, baseReader.read()); }
 
     bool eof() { return baseReader.eof(); }
+
+    size_t size() { return baseReader.size(); }
   };
 
   struct PrefetchReader {
     typename BaseVec::PrefetchReader baseReader;
+    using value_type = T;
     Vector* vec_ptr;
     uint64_t idx = 0;
     PrefetchReader() {}
@@ -148,10 +152,13 @@ struct Vector {
     VT read() { return vec_ptr->virtualize(idx++, baseReader.read()); }
 
     bool eof() { return baseReader.eof(); }
+
+    size_t size() { return baseReader.size(); }
   };
 
   struct Writer {
     typename BaseVec::Writer baseWriter;
+    using value_type = T;
     Vector* vec_ptr;
     uint64_t idx = 0;
     Writer() {}
@@ -171,6 +178,8 @@ struct Vector {
     bool eof() { return baseWriter.eof(); }
 
     void flush() { baseWriter.flush(); }
+
+    size_t size() { return baseWriter.size(); }
   };
 };
 

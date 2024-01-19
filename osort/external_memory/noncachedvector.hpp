@@ -153,6 +153,8 @@ struct Vector {
     Iterator end;
     T* curr = (T*)UINT64_MAX;
     uint32_t counter;
+    using value_type = T;
+    using iterator_type = Iterator;
     Reader() {}
 
     Reader(Iterator _begin, Iterator _end, uint32_t _counter = 0)
@@ -198,10 +200,14 @@ struct Vector {
       return val;
     }
     bool eof() { return end <= it; }
+
+    size_t size() { return end - it; }
   };
 
 #ifdef DISK_IO
   struct PrefetchReader {
+    using value_type = T;
+    using iterator_type = Iterator;
     static const uint64_t cacheCapacity = Server::bufferCapacity;
     Page cache[cacheCapacity];
     Iterator it;
@@ -267,6 +273,7 @@ struct Vector {
       return val;
     }
     bool eof() { return end <= it; }
+    size_t size() { return end - it; }
   };
 #else
   struct PrefetchReader : Reader {
@@ -285,6 +292,8 @@ struct Vector {
   // the advantage is that the requests for multipler readers can be
   // interleaved and the most on-demand pages can be handled first
   struct LazyPrefetchReader {
+    using value_type = T;
+    using iterator_type = Iterator;
     std::vector<Page> cache;  // ring cache
 
     std::vector<uint64_t> jobCounters;
@@ -371,6 +380,7 @@ struct Vector {
       return val;
     }
     bool eof() { return end <= it; }
+    size_t size() { return end - it; }
   };
 #else
   struct LazyPrefetchReader : Reader {
@@ -382,6 +392,8 @@ struct Vector {
 
   // writer always overwrites data between begin and end
   struct Writer {
+    using value_type = T;
+    using iterator_type = Iterator;
     Page cache;
     Iterator it;
     Iterator end;
@@ -454,6 +466,7 @@ struct Vector {
       }
       vec.server.flushWrite();
     }
+    size_t size() { return end - it; }
   };
 
   // default:

@@ -58,6 +58,8 @@ struct StdVector : public std::vector<T> {
   INLINE size_t size() { return std::vector<T>::size(); }
 
   struct Reader {
+    using value_type = T;
+    using iterator_type = Iterator;
     Iterator it;
     Iterator end;
 
@@ -83,9 +85,13 @@ struct StdVector : public std::vector<T> {
     }
 
     INLINE bool eof() { return end <= it; }
+
+    size_t size() { return end - it; }
   };
 
   struct PrefetchReader : public Reader {
+    using value_type = T;
+    using iterator_type = Iterator;
     PrefetchReader() {}
 
     PrefetchReader(Iterator _begin, Iterator _end, uint32_t _auth = 0,
@@ -94,6 +100,8 @@ struct StdVector : public std::vector<T> {
   };
 
   struct Writer {
+    using value_type = T;
+    using iterator_type = Iterator;
     Iterator it;
     Iterator end;
     Writer() {}
@@ -112,6 +120,8 @@ struct StdVector : public std::vector<T> {
     }
 
     INLINE bool eof() { return end <= it; }
+
+    size_t size() { return end - it; }
 
     INLINE void flush() {}
   };

@@ -50,15 +50,16 @@ struct PathORAM {
     stash = new Stash();
     StdVector<UidType> uidVec(size);
     depth = GetLogBaseTwo(size - 1) + 2;
-    EM::VirtualVector::Vector<UidBlock_, Vec> v(
-        vec,
-        [](size_t i, const T& val) { return UidBlock_(val, i); },  // virtualize
-        [&](size_t i, const UidBlock_& block) {
-          uidVec[i] = block.uid;
-          return block.data;
-        }  // devirtualize
-    );
-    EM::Algorithm::KWayButterflyOShuffle(v);
+    // EM::VirtualVector::Vector<UidBlock_, Vec> v(
+    //     vec,
+    //     [](size_t i, const T& val) { return UidBlock_(val, i); },  //
+    //     virtualize
+    //     [&](size_t i, const UidBlock_& block) {
+    //       uidVec[i] = block.uid;
+    //       return block.data;
+    //     }  // devirtualize
+    // );
+    // EM::Algorithm::KWayButterflyOShuffle(v);
 
     for (auto val : vec) {
       printf("%lu ", val.key);
@@ -82,14 +83,16 @@ struct PathORAM {
 
     // root = initTree(vBlock.begin(), vBlock.end());
 
-    EM::VirtualVector::Vector<UidBlock<PositionType>, StdVector<UidType>> vUid(
-        uidVec,
-        [](size_t i, const UidType& uid) { return UidBlock<UidType>(i, uid); },
-        [&](size_t i, const UidBlock<UidType>& block) {
-          posMapWriter.write(block.data);
-          return block.uid;
-        });
-    EM::Algorithm::KWayButterflySortInternal(vUid);
+    // EM::VirtualVector::Vector<UidBlock<PositionType>, StdVector<UidType>>
+    // vUid(
+    //     uidVec,
+    //     [](size_t i, const UidType& uid) { return UidBlock<UidType>(i, uid);
+    //     },
+    //     [&](size_t i, const UidBlock<UidType>& block) {
+    //       posMapWriter.write(block.data);
+    //       return block.uid;
+    //     });
+    // EM::Algorithm::KWayButterflySortInternal(vUid);
     // for (const uint64_t& pos : positionVec) {
     //   printf("%lu ", pos);
     // }

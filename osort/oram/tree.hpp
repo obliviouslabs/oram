@@ -198,9 +198,19 @@ struct HeapTree {
     return actualLevel;
   }
 
-  T& Get(size_t pos, int level) {
+  const T& Get(size_t pos, int level) const {
     size_t idx =
         GetCAIdx(pos, cacheSize, level, totalLevel, packLevel, cacheLevel);
+    return GetByInternalIdx(idx);
+  }
+
+  void Set(size_t pos, int level, const T& val) {
+    size_t idx =
+        GetCAIdx(pos, cacheSize, level, totalLevel, packLevel, cacheLevel);
+    SetByInternalIdx(idx, val);
+  }
+
+  const T& GetByInternalIdx(size_t idx) const {
     if (idx < cacheSize) {
       return cacheArr[idx];
     } else {
@@ -208,9 +218,7 @@ struct HeapTree {
     }
   }
 
-  void Set(size_t pos, int level, const T& val) {
-    size_t idx =
-        GetCAIdx(pos, cacheSize, level, totalLevel, packLevel, cacheLevel);
+  void SetByInternalIdx(size_t idx, const T& val) {
     if (idx < cacheSize) {
       cacheArr[idx] = val;
     } else {
@@ -386,5 +394,44 @@ struct HeapTree {
     }
 
     size_t getIndex() const { return Base::idx; }
+  };
+
+  template <const bool isPow2 = false>
+  struct LeafReader {
+    std::conditional_t<isPow2, HeapTree::ReverseLexLeafPow2Indexer,
+                       HeapTree::ReverseLexLeafIndexer>
+        iter;
+    const HeapTree& tree;
+    size_t idx = 0;
+    LeafReader(const HeapTree& _tree) : iter(_tree), tree(_tree) {}
+
+    const T& get() const { return tree.GetByInternalIdx(iter.getIndex()); }
+
+    const T& read() {
+      const T& res = get();
+      ++iter;
+      ++idx;
+      return res;
+    }
+
+    bool eof() { return idx >= tree.leafCount; }
+  };
+
+  template <const bool isPow2 = false>
+  struct LeafWriter {
+    std::conditional_t<isPow2, HeapTree::ReverseLexLeafPow2Indexer,
+                       HeapTree::ReverseLexLeafIndexer>
+        iter;
+    HeapTree& tree;
+    size_t idx = 0;
+    LeafWriter(HeapTree& _tree) : iter(_tree), tree(_tree) {}
+
+    void write(const T& val) {
+      tree.SetByInternalIdx(iter.getIndex(), val);
+      ++iter;
+      ++idx;
+    }
+
+    bool eof() { return idx >= tree.leafCount; }
   };
 };
