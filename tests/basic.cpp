@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 
 #include "common/mov_intrinsics.hpp"
+#include "common/probability.hpp"
 #include "oram/tree.hpp"
 #include "testutils.hpp"
 
@@ -271,4 +272,72 @@ TEST(Basic, TestHeapTreeIndexerPerf) {
   std::chrono::duration<double> diff2 = end2 - end1;
   printf("Time indexer: %f ms\n", diff2.count() * 1e3);
   ASSERT_NE(dummy, 0);
+}
+
+TEST(Basic, testSamplingExpectation) {
+  size_t size = 100;
+  std::vector<size_t> counts(size);
+
+  SampleFromPoisson(1.0, counts.begin(), counts.end());
+  // SampleFromBinomial(1e-5, 1e5, counts.begin(), counts.end());
+  // sum counts
+  size_t sum = 0;
+  for (size_t i = 0; i < size; ++i) {
+    sum += counts[i];
+  }
+  printf("sum: %lu\n", sum);
+
+  // for (size_t i = 0; i < size; ++i) {
+  //   printf("%lu ", counts[i]);
+  // }
+  // printf("\n");
+}
+
+TEST(Basic, testSamplingPerf) {
+  size_t size = 1e8;
+  size_t sum = 0;
+  NoReplaceSampler sampler(size);
+  auto start = std::chrono::system_clock::now();
+  for (size_t i = 0; i < size; ++i) {
+    sum += sampler.Sample();
+  }
+  auto end = std::chrono::system_clock::now();
+  std::chrono::duration<double> diff = end - start;
+  ASSERT_EQ(sum, size);
+  printf("Time: %f ms\n", diff.count() * 1e3);
+}
+
+TEST(Basic, testBuildBottomUp) {
+  for (size_t leafCount = 2; leafCount < 1000; ++leafCount) {
+    int totalLevel = GetLogBaseTwo(leafCount - 1) + 2;
+    for (int cacheLevel = 1; cacheLevel <= totalLevel; ++cacheLevel) {
+      for (int packLevel = 1; packLevel <= totalLevel; ++packLevel) {
+        size_t size = leafCount * 2 - 1;
+        std::vector<uint64_t> heap(size);
+        std::function<uint64_t(uint64_t&, uint64_t&)> reduceFunc =
+            [](uint64_t& i, uint64_t& j) -> uint64_t { return i + j; };
+        std::function<uint64_t(uint64_t&)> leafFunc =
+            [](uint64_t& i) -> uint64_t { return i = 1UL; };
+        ASSERT_EQ(BuildBottomUp(heap.begin(), heap.end(), reduceFunc, leafFunc,
+                                cacheLevel, packLevel),
+                  leafCount);
+      }
+    }
+  }
+}
+
+TEST(Basic, testBuildBottomUpPerf) {
+  for (size_t leafCount = 10000; leafCount < 100000000;
+       leafCount = leafCount * 5 / 4) {
+    int totalLevel = GetLogBaseTwo(leafCount - 1) + 2;
+    size_t size = leafCount * 2 - 1;
+    std::vector<uint64_t> heap(size);
+    std::function<uint64_t(uint64_t&, uint64_t&)> reduceFunc =
+        [](uint64_t& i, uint64_t& j) -> uint64_t { return i + j; };
+    std::function<uint64_t(uint64_t&)> leafFunc = [](uint64_t& i) -> uint64_t {
+      return i = 1UL;
+    };
+    ASSERT_EQ(BuildBottomUp(heap.begin(), heap.end(), reduceFunc, leafFunc),
+              leafCount);
+  }
 }

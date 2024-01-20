@@ -37,6 +37,13 @@ struct PathORAM {
     this->size = size;
   }
 
+  template <typename Reader, class PosMapWriter>
+  void InitFromReader(Reader& reader, PosMapWriter& posMapWriter) {
+    size = reader.size();
+    stash = new Stash();
+    depth = GetLogBaseTwo(size - 1) + 2;
+  }
+
   template <typename Vec, class Writer>
   void InitFromVector(Vec& vec, Writer& posMapWriter) {
     InitFromVector(vec, posMapWriter, 0, vec.size());

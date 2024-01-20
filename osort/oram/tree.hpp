@@ -283,8 +283,14 @@ struct HeapTree {
     size_t idx;
     size_t pos;
     std::vector<size_t> rzero2inc;
+    int totalLevel;
 
-    ReverseLexLeafPow2Indexer(int totalLevel, int cacheLevel, int packLevel) {
+    ReverseLexLeafPow2Indexer(int totalLevel, int cacheLevel, int packLevel)
+        : totalLevel(totalLevel) {
+      if (totalLevel <= 2) {
+        idx = totalLevel - 1;
+        return;
+      }
       std::vector<int> topLevels;
       int botLevel = totalLevel - cacheLevel;
       if (botLevel <= 0) {
@@ -323,6 +329,10 @@ struct HeapTree {
                                     tree.packLevel) {}
 
     ReverseLexLeafPow2Indexer& operator++() {
+      if (totalLevel <= 2) {
+        ++idx;
+        return *this;
+      }
       int rZero = 0;
       int tmpPos = ++pos;
       while (!(tmpPos & 1)) {
@@ -415,6 +425,8 @@ struct HeapTree {
     }
 
     bool eof() { return idx >= tree.leafCount; }
+
+    size_t size() { return tree.leafCount; }
   };
 
   template <const bool isPow2 = false>
@@ -433,5 +445,86 @@ struct HeapTree {
     }
 
     bool eof() { return idx >= tree.leafCount; }
+
+    void flush() {}
+
+    size_t size() { return tree.leafCount; }
   };
+};
+
+template <typename T, typename Iterator>
+T BuildBottomUpHelper(Iterator begin, Iterator end,
+                      const std::function<T(T&, T&)>& reduceFunc,
+                      const std::function<T(T&)>& leafFunc, uint topLevel,
+                      uint packLevel) {
+  size_t size = end - begin;
+  Assert(size & 1);
+  size_t leafCount = (size + 1) / 2;
+  // printf("size = %lu, leafCount = %lu\n", size, leafCount);
+  if (size == 1) {
+    return leafFunc(*begin);
+  }
+  int totalLevel = GetLogBaseTwo(size) + 1;
+  if (topLevel == 0) {
+    topLevel = totalLevel >> 1;
+    if (topLevel > packLevel && packLevel > 1) {
+      topLevel = topLevel / packLevel * packLevel;
+    }
+  }
+  int botLevel = totalLevel - topLevel;
+  size_t topSize = (1UL << topLevel) - 1;
+  size_t botOffset = topSize;
+  size_t topLeafCount = 1UL << (topLevel - 1);
+  HeapTree<bool>::ReverseLexLeafPow2Indexer topLeafIndxer(topLevel, topLevel,
+                                                          packLevel);
+  for (size_t topLeafIdx = 0; topLeafIdx < topLeafCount;
+       ++topLeafIdx, ++topLeafIndxer) {
+    auto& topLeaf = *(begin + topLeafIndxer.getIndex());
+    size_t reversedTopLeafIdx = reverseBits(topLeafIdx, topLevel - 1);
+    if ((reversedTopLeafIdx | topLeafCount) >= leafCount) {
+      topLeaf = leafFunc(topLeaf);
+      // printf("topLeaf = leafFunc %lu\n", topLeaf);
+      continue;
+    }
+    // number of integer less than size whose last bits are 0+reversedTopLeafIdx
+    size_t leftLeafCount =
+        ((leafCount - reversedTopLeafIdx - 1) >> topLevel) + 1;
+
+    // number of integer less than size whose last bits are 1+reversedTopLeafIdx
+    size_t rightLeafCount =
+        ((leafCount - reversedTopLeafIdx - topLeafCount - 1) >> topLevel) + 1;
+    size_t leftSize = 2 * leftLeafCount - 1;
+    size_t rightSize = 2 * rightLeafCount - 1;
+    // printf("leftLeafCount = %lu, rightLeafCount = %lu\n", leftLeafCount,
+    //        rightLeafCount);
+    // printf("leftSize = %lu, rightSize = %lu\n", leftSize, rightSize);
+    T left =
+        BuildBottomUpHelper<T>(begin + botOffset, begin + botOffset + leftSize,
+                               reduceFunc, leafFunc, 0, packLevel);
+    botOffset += leftSize;
+    T right =
+        BuildBottomUpHelper<T>(begin + botOffset, begin + botOffset + rightSize,
+                               reduceFunc, leafFunc, 0, packLevel);
+    botOffset += rightSize;
+    topLeaf = reduceFunc(left, right);
+    // printf("topLeaf %lu = reduceFunc %lu %lu\n", topLeaf, left, right);
+  }
+  // already set
+  return BuildBottomUpHelper<T>(
+      begin, begin + topSize, reduceFunc, [](const T& leaf) { return leaf; }, 0,
+      packLevel);
+}
+
+template <typename Iterator,
+          typename T = typename std::iterator_traits<Iterator>::value_type>
+T BuildBottomUp(Iterator begin, Iterator end,
+                const std::function<T(T&, T&)>& reduceFunc,
+                const std::function<T(T&)>& leafFunc, uint _cacheLevel = 62,
+                uint _packLevel = 1) {
+  size_t size = end - begin;
+  Assert(size & 1);
+  int totalLevel = GetLogBaseTwo(size) + 1;
+  int topLevel = _cacheLevel >= totalLevel ? 0 : _cacheLevel;
+  return BuildBottomUpHelper<T>(begin, end, reduceFunc, leafFunc, topLevel,
+                                _packLevel);
 };
