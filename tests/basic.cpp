@@ -316,8 +316,7 @@ TEST(Basic, testBuildBottomUp) {
         std::vector<uint64_t> heap(size);
         std::function<uint64_t(uint64_t&, uint64_t&)> reduceFunc =
             [](uint64_t& i, uint64_t& j) -> uint64_t { return i + j; };
-        std::function<uint64_t(uint64_t&)> leafFunc =
-            [](uint64_t& i) -> uint64_t { return i = 1UL; };
+        std::function<void(uint64_t&)> leafFunc = [](uint64_t& i) { i = 1UL; };
         ASSERT_EQ(BuildBottomUp(heap.begin(), heap.end(), reduceFunc, leafFunc,
                                 cacheLevel, packLevel),
                   leafCount);
@@ -334,9 +333,7 @@ TEST(Basic, testBuildBottomUpPerf) {
     std::vector<uint64_t> heap(size);
     std::function<uint64_t(uint64_t&, uint64_t&)> reduceFunc =
         [](uint64_t& i, uint64_t& j) -> uint64_t { return i + j; };
-    std::function<uint64_t(uint64_t&)> leafFunc = [](uint64_t& i) -> uint64_t {
-      return i = 1UL;
-    };
+    std::function<void(uint64_t&)> leafFunc = [](uint64_t& i) { i = 1UL; };
     ASSERT_EQ(BuildBottomUp(heap.begin(), heap.end(), reduceFunc, leafFunc),
               leafCount);
   }

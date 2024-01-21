@@ -249,3 +249,13 @@ TEST(PathORAM, testInitNaive) {
     oram.Write(i, SortElement());
   }
 }
+
+TEST(PathORAM, testInitWithReader) {
+  uint64_t size = 11;
+  PathORAM<SortElement, 2> oram;
+  StdVector<SortElement> vec(size);
+  StdVector<uint64_t> posMap(size);
+  StdVector<SortElement>::Reader reader(vec.begin(), vec.end());
+  StdVector<uint64_t>::Writer posMapWriter(posMap.begin(), posMap.end());
+  oram.InitFromReader(reader, posMapWriter);
+}

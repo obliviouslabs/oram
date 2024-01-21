@@ -453,16 +453,17 @@ struct HeapTree {
 };
 
 template <typename T, typename Iterator>
-T BuildBottomUpHelper(Iterator begin, Iterator end,
-                      const std::function<T(T&, T&)>& reduceFunc,
-                      const std::function<T(T&)>& leafFunc, uint topLevel,
-                      uint packLevel) {
+T& BuildBottomUpHelper(Iterator begin, Iterator end,
+                       const std::function<T(T&, T&)>& reduceFunc,
+                       const std::function<void(T&)>& leafFunc, uint topLevel,
+                       uint packLevel) {
   size_t size = end - begin;
   Assert(size & 1);
   size_t leafCount = (size + 1) / 2;
   // printf("size = %lu, leafCount = %lu\n", size, leafCount);
   if (size == 1) {
-    return leafFunc(*begin);
+    leafFunc(*begin);
+    return *begin;
   }
   int totalLevel = GetLogBaseTwo(size) + 1;
   if (topLevel == 0) {
@@ -482,7 +483,7 @@ T BuildBottomUpHelper(Iterator begin, Iterator end,
     auto& topLeaf = *(begin + topLeafIndxer.getIndex());
     size_t reversedTopLeafIdx = reverseBits(topLeafIdx, topLevel - 1);
     if ((reversedTopLeafIdx | topLeafCount) >= leafCount) {
-      topLeaf = leafFunc(topLeaf);
+      leafFunc(topLeaf);
       // printf("topLeaf = leafFunc %lu\n", topLeaf);
       continue;
     }
@@ -498,11 +499,11 @@ T BuildBottomUpHelper(Iterator begin, Iterator end,
     // printf("leftLeafCount = %lu, rightLeafCount = %lu\n", leftLeafCount,
     //        rightLeafCount);
     // printf("leftSize = %lu, rightSize = %lu\n", leftSize, rightSize);
-    T left =
+    T& left =
         BuildBottomUpHelper<T>(begin + botOffset, begin + botOffset + leftSize,
                                reduceFunc, leafFunc, 0, packLevel);
     botOffset += leftSize;
-    T right =
+    T& right =
         BuildBottomUpHelper<T>(begin + botOffset, begin + botOffset + rightSize,
                                reduceFunc, leafFunc, 0, packLevel);
     botOffset += rightSize;
@@ -517,10 +518,10 @@ T BuildBottomUpHelper(Iterator begin, Iterator end,
 
 template <typename Iterator,
           typename T = typename std::iterator_traits<Iterator>::value_type>
-T BuildBottomUp(Iterator begin, Iterator end,
-                const std::function<T(T&, T&)>& reduceFunc,
-                const std::function<T(T&)>& leafFunc, uint _cacheLevel = 62,
-                uint _packLevel = 1) {
+T& BuildBottomUp(Iterator begin, Iterator end,
+                 const std::function<T(T&, T&)>& reduceFunc,
+                 const std::function<void(T&)>& leafFunc, uint _cacheLevel = 62,
+                 uint _packLevel = 1) {
   size_t size = end - begin;
   Assert(size & 1);
   int totalLevel = GetLogBaseTwo(size) + 1;

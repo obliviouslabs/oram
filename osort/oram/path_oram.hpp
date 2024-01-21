@@ -3,6 +3,7 @@
 #include <vector>
 
 #include "bucket.hpp"
+#include "common/probability.hpp"
 #include "external_memory/algorithm/bitonic.hpp"
 #include "external_memory/algorithm/kway_butterfly_sort.hpp"
 #include "external_memory/algorithm/or_compact_shuffle.hpp"
@@ -42,6 +43,31 @@ struct PathORAM {
     size = reader.size();
     stash = new Stash();
     depth = GetLogBaseTwo(size - 1) + 2;
+    tree.Init(size);
+    StdVector<char> loadVec(2 * size - 1);
+    NoReplaceSampler sampler(size);
+    std::function<char(char&, char&)> reduceFunc = [](char& i,
+                                                      char& j) -> char {
+      char overflowLeft = 0;
+      char overflowRight = 0;
+      obliMove(i > Z, overflowLeft, (char)(i - Z));
+      obliMove(j > Z, overflowRight, (char)(j - Z));
+      i -= overflowLeft;
+      j -= overflowRight;
+      return overflowLeft + overflowRight;
+    };
+    std::function<void(char&)> leafFunc = [&](char& i) {
+      i = sampler.Sample();
+      // char overflow = 0;
+      // obliMove(i > Z, overflow, (char)(i - Z));
+      // i -= overflow;
+      // return overflow;
+    };
+    char overflow =
+        BuildBottomUp(loadVec.begin(), loadVec.end(), reduceFunc, leafFunc);
+    for (int i = 0; i < loadVec.size(); ++i) {
+      printf("%d ", (int)loadVec[i]);
+    }
   }
 
   template <typename Vec, class Writer>
