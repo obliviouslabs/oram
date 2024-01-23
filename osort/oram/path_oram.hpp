@@ -39,6 +39,7 @@ struct PathORAM {
 
   template <typename Reader, class PosMapWriter>
   void InitFromReader(Reader& reader, PosMapWriter& posMapWriter) {
+    printf("Init from reader\n");
     size_t numBucket = 2 * size - 1;
     size_t numBlock = numBucket * Z;
     // StdVector<char> loadVec(numBucket);
@@ -103,6 +104,7 @@ struct PathORAM {
     using PosVec = StdVector<PositionType>;
     PosVec positionVec(numBlock);
     PosVec prefixSum(numBlock + 1);
+    printf("Generate positions bottom up\n");
     {
       HeapTree<Positions> positions(size, cacheLevel, 1, 1UL << 62);
       positions.template BuildBottomUp<PositionStash>(reduceFunc, leafFunc);
@@ -112,7 +114,7 @@ struct PathORAM {
       //   }
       //   printf("\n");
       // }
-
+      printf("calc prefix sum\n");
       prefixSum[0] = 0;
       for (PositionType i = 0; i < numBucket; ++i) {
         const Positions& posBucket = positions.GetByInternalIdx(i);
@@ -124,9 +126,10 @@ struct PathORAM {
         }
       }
     }
-
     // EM::Algorithm::OrDistributeSeparateMark(
-    Assert(prefixSum[numBlock] == size);
+    if (prefixSum[numBlock] != size) {
+      throw std::runtime_error("Stash overflows.");
+    }
     using DistributeVec = StdVector<UidBlock_>;
     using DistributeReader = typename DistributeVec::Reader;
     using DistributeWriter = typename DistributeVec::Writer;
@@ -139,7 +142,6 @@ struct PathORAM {
                                            distributeVec.begin() + size);
     UidVec uidVec(size);
     UidWriter uidWriter(uidVec.begin(), uidVec.end());
-    PositionType heapIdx = 0;
     PositionType inputIdx = 0;
     EM::VirtualVector::WrappedReader<UidBlock_, Reader> shuffleReader(
         reader, [&](const T& val) { return UidBlock_(val, inputIdx++); });
@@ -148,9 +150,10 @@ struct PathORAM {
           distributeInputWriter.write(block);
           return block.uid;
         });
+    printf("shuffle elements\n");
     EM::Algorithm::KWayButterflyOShuffle(shuffleReader, shuffleWriter);
     distributeInputWriter.flush();
-
+    printf("distribute elements\n");
     EM::Algorithm::OrDistributeSeparateMark(
         distributeVec.begin(), distributeVec.end(), prefixSum.begin());
     DistributeReader distributeOutputReader(distributeVec.begin(),
@@ -159,14 +162,19 @@ struct PathORAM {
       Bucket_ bucket;
       for (int j = 0; j < Z; ++j) {
         const UidBlock_& uidBlock = distributeOutputReader.read();
-        bucket.blocks[j] =
-            Block_(uidBlock.data, positionVec[i * Z + j], uidBlock.uid);
+        PositionType pos = positionVec[i * Z + j];
+        UidType uid = uidBlock.uid;
+        // obliMove(pos == DUMMY<PositionType>(), uid, DUMMY<UidType>());
+        bucket.blocks[j] = Block_(uidBlock.data, pos, uid);
       }
       tree.SetByInternalIdx(i, bucket);
     }
+
+    printf("compact positions\n");
     EM::Algorithm::OrCompactSeparateMark(positionVec.begin(), positionVec.end(),
                                          prefixSum.begin());
-
+    for (size_t i = 0; i < positionVec.size(); ++i) {
+    }
     size_t posMapIdx = 0;
 
     UidReader uidReader(uidVec.begin(), uidVec.end());
@@ -175,7 +183,7 @@ struct PathORAM {
         posMapReader(uidReader, [&](const UidType& uid) {
           return UidBlock<PositionType>(positionVec[posMapIdx++], uid);
         });
-
+    printf("Final sort\n");
     EM::Algorithm::KWayButterflySort(posMapReader, posMapWriter);
 
     /* A quick test for reduceFunc
@@ -226,7 +234,7 @@ for (int i = 0; i < Z; ++i) {
     std::vector<Block_> path = ReadPath(pos);
 
     // for (int i = 0; i < path.size(); ++i) {
-    //   printf("%ld ", (int64_t)path[i].uid);
+    //   printf("(%ld %ld)", (int64_t)path[i].uid, (int64_t)path[i].position);
     //   if (i >= stashSize - 1 && (path.size() - i - 1) % Z == 0) {
     //     printf(", ");
     //   }
@@ -237,7 +245,13 @@ for (int i = 0; i < Z; ++i) {
     Block_ newBlock(out, newPos, uid);
     WriteNewBlockToPath(path, newBlock);
     EvictPath(path, pos);
-
+    // printf("write %ld to position %ld, evict path %lu\n", (int64_t)uid,
+    //        (int64_t)newPos, (int64_t)pos);
+    // for (int i = 0; i < path.size(); ++i) {
+    //   printf("uid %ld pos %ld\n", (int64_t)path[i].uid,
+    //          (int64_t)path[i].position);
+    // }
+    // printf("\n");
     WriteBackPath(path, pos);
     return newPos;
   }
@@ -249,11 +263,6 @@ for (int i = 0; i < Z; ++i) {
     Block_ newBlock(in, newPos, uid);
     WriteNewBlockToPath(path, newBlock);
     EvictPath(path, pos);
-    // printf("write %lu to position %lu, evict path %lu\n", uid, newPos, pos);
-    // for (int i = 0; i < path.size(); ++i) {
-    //   printf("%lu ", path[i].uid);
-    // }
-    // printf("\n");
     WriteBackPath(path, pos);
     return newPos;
   }
@@ -292,6 +301,19 @@ for (int i = 0; i < Z; ++i) {
 
     size_t level = tree.ReadPath(pos, (Bucket_*)(&path[stashSize]));
     path.resize(stashSize + Z * level);
+    // for (int i = stashSize; i < path.size(); ++i) {
+    //   printf("%ld ", (int64_t)path[i].position);
+    // }
+    // printf("\n");
+#ifndef NDEBUG
+    for (int i = stashSize; i < path.size(); ++i) {
+      int lv = (i - stashSize) / Z;
+      size_t mask = (1UL << lv) - 1;
+      Assert(path[i].uid == DUMMY<UidType>() ||
+                 (path[i].position & mask) == (pos & mask),
+             "Path position mismatch");
+    }
+#endif
     return path;
   }
 

@@ -139,7 +139,7 @@ struct HeapTree {
       *outputBegin = 0;
       return 1;
     }
-    int totalLevel = outputEnd - outputBegin;
+    int totalLevel = GetLogBaseTwo(leafCount - 1) + 2;
     if (topLevel == 0) {
       topLevel = totalLevel >> 1;
       if (topLevel > packLevel && packLevel > 1) {
@@ -148,6 +148,8 @@ struct HeapTree {
     } else if (topLevel >= totalLevel) {
       return GetCAPathIdx(outputBegin, outputEnd, idx, leafCount, packLevel);
     }
+    // printf("idx: %lu, leafCount: %lu, topLevel: %d, packLevel: %d\n", idx,
+    //        leafCount, topLevel, packLevel);
 
     int botLevel = totalLevel - topLevel;
 
@@ -207,11 +209,13 @@ struct HeapTree {
                                                 pos, packLevel, cacheLevel)
                              : GetCAPathIdx(pathIdx.begin(), pathIdx.end(), pos,
                                             leafCount, packLevel, cacheLevel);
-
+    // printf("Read path with internal index\n");
     for (int i = 0; i < actualLevel; ++i) {
       size_t idx = pathIdx[i];
+      // printf("%lu ", idx);
       *(pathBegin + i) = arr.Get(idx);
     }
+    // printf("\n");
     return actualLevel;
   }
 

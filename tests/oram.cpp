@@ -18,6 +18,11 @@ TEST(PathORAM, ReadPath) {
   std::vector<PathORAM<int>::Block_> path = oram.ReadPath(UniformRandom(31));
 }
 
+TEST(PathORAM, ReadPath2) {
+  PathORAM<int> oram(1e7);
+  std::vector<PathORAM<int>::Block_> path = oram.ReadPath(1801922);
+}
+
 TEST(PathORAM, ExtractFromPath) {
   PathORAM<int> oram(32);
   std::vector<PathORAM<int>::Block_> path = oram.ReadPath(UniformRandom(31));
@@ -235,7 +240,7 @@ TEST(PathORAM, WithoutPositionMapLargePerf) {
 // }
 
 TEST(PathORAM, testInitNaive) {
-  uint64_t size = 16384;
+  uint64_t size = 123456;
   PathORAM<SortElement> oram(size);
   for (uint64_t i = 0; i < size; i++) {
     oram.Write(i, SortElement());
@@ -243,25 +248,41 @@ TEST(PathORAM, testInitNaive) {
 }
 
 TEST(PathORAM, testInitWithReader) {
-  uint64_t size = 31;
-  PathORAM<SortElement, 2> oram(size);
+  uint64_t size = 1e7;
+  delete EM::Backend::g_DefaultBackend;
+  EM::Backend::g_DefaultBackend =
+      new EM::Backend::MemServerBackend((1ULL << 10) * (size + 1024));
+
+  PathORAM<SortElement> oram(size);
   std::vector<uint64_t> valMap(size);
   StdVector<SortElement> vec(size);
   for (int i = 0; i < size; ++i) {
     valMap[i] = UniformRandom();
-    vec[i] = SortElement();
     vec[i].key = valMap[i];
   }
   StdVector<UidBlock<uint64_t>> posMap(size);
   StdVector<SortElement>::Reader reader(vec.begin(), vec.end());
   StdVector<UidBlock<uint64_t>>::Writer posMapWriter(posMap.begin(),
                                                      posMap.end());
+  auto start = std::chrono::system_clock::now();
   oram.InitFromReader(reader, posMapWriter);
-  for (auto& p : posMap) {
-    printf("(%lu, %lu)\n", p.uid, p.data);
-  }
-  for (int r = 0; r < 10; ++r) {
+  auto end = std::chrono::system_clock::now();
+  std::chrono::duration<double> diff = end - start;
+  printf("Time for initializing %lu elements of %lu bytes: %f s\n", size,
+         sizeof(SortElement), diff.count());
+  // for (auto& p : posMap) {
+  //   printf("(%lu, %lu)\n", p.uid, p.data);
+  // }
+  // for (uint64_t i = 0; i < size * 2 - 1; i++) {
+  //   for (int j = 0; j < 5; ++j) {
+  //     printf("%ld, ",
+  //            (int64_t)oram.tree.GetByInternalIdx(i).blocks[j].position);
+  //   }
+  //   printf("\n");
+  // }
+  for (int r = 0; r < 2; ++r) {
     for (uint64_t i = 0; i < size; i++) {
+      // printf("read %lu at pos %lu\n", i, posMap[i].data);
       SortElement val;
       // printf("read %lu %lu at pos %lu\n", i, val, posMap[i]);
       uint64_t pos = oram.Read(posMap[i].data, i, val);
