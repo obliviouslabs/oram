@@ -303,7 +303,8 @@ class ButterflySorter {
 };
 
 template <class Reader, class Writer>
-void KWayButterflyOShuffle(Reader& reader, Writer& writer, uint64_t heapSize) {
+void KWayButterflyOShuffle(Reader& reader, Writer& writer,
+                           uint64_t heapSize = DEFAULT_HEAP_SIZE) {
   using T = typename Reader::value_type;
   using WrappedT = TaggedT<T>;
   size_t N = reader.size();
@@ -349,7 +350,8 @@ void KWayButterflyOShuffle(Iterator begin, Iterator end, uint32_t inAuth,
 }
 
 template <class Reader, class Writer>
-void KWayButterflySort(Reader& reader, Writer& writer, uint64_t heapSize) {
+void KWayButterflySort(Reader& reader, Writer& writer,
+                       uint64_t heapSize = DEFAULT_HEAP_SIZE) {
   using T = typename Reader::value_type;
   using WrappedT = TaggedT<T>;
   const uint64_t N = reader.size();

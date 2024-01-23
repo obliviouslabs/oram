@@ -9,20 +9,17 @@
 using namespace ORAM::PathORAM;
 
 TEST(PathORAM, Init) {
-  PathORAM<int> oram;
-  oram.Init(1024);
+  PathORAM<int> oram(1024);
   oram.Destroy();
 }
 
 TEST(PathORAM, ReadPath) {
-  PathORAM<int> oram;
-  oram.Init(32);
+  PathORAM<int> oram(32);
   std::vector<PathORAM<int>::Block_> path = oram.ReadPath(UniformRandom(31));
 }
 
 TEST(PathORAM, ExtractFromPath) {
-  PathORAM<int> oram;
-  oram.Init(32);
+  PathORAM<int> oram(32);
   std::vector<PathORAM<int>::Block_> path = oram.ReadPath(UniformRandom(31));
   int out;
   PathORAM<int>::ReadElementAndRemoveFromPath(path, UniformRandom(31), out);
@@ -89,8 +86,7 @@ TEST(PathORAM, CommonSuffixLen) {
 
 TEST(PathORAM, WithoutPositionMap1) {
   int memSize = 10;
-  PathORAM<uint64_t, 5, 63> oram;
-  oram.Init(memSize);
+  PathORAM<uint64_t, 5, 63> oram(memSize);
   std::vector<uint64_t> posMap(memSize);
   std::vector<uint64_t> valMap(memSize);
   for (uint64_t i = 0; i < memSize; i++) {
@@ -130,8 +126,7 @@ TEST(PathORAM, WithoutPositionMap1) {
 
 TEST(PathORAM, WithoutPositionMapMixed) {
   int memSize = 123;
-  PathORAM<uint64_t, 5, 63> oram;
-  oram.Init(memSize);
+  PathORAM<uint64_t, 5, 63> oram(memSize, 5);
   std::vector<uint64_t> posMap(memSize, -1);
   std::vector<uint64_t> valMap(memSize);
   int opCount = 1e5;
@@ -181,8 +176,7 @@ TEST(PathORAM, WithoutPositionMapMixed) {
 TEST(PathORAM, NonPowerOfTwo) {
   for (int memSize :
        {1, 3, 5, 7, 9, 33, 40, 55, 127, 129, 543, 678, 1023, 1025, 2000}) {
-    PathORAM<uint64_t, 5, 20> oram;
-    oram.Init(memSize);
+    PathORAM<uint64_t, 5, 20> oram(memSize, 6);
     std::vector<uint64_t> posMap(memSize);
     std::vector<uint64_t> valMap(memSize);
     for (uint64_t i = 0; i < memSize; i++) {
@@ -207,8 +201,7 @@ TEST(PathORAM, NonPowerOfTwo) {
 
 TEST(PathORAM, WithoutPositionMapLargePerf) {
   int memSize = 1 << 24;
-  PathORAM<SortElement, 5, 63> oram;
-  oram.Init(memSize);
+  PathORAM<SortElement, 5, 63> oram(memSize);
 
   uint64_t numAccesses = 1e6;
   auto start = std::chrono::system_clock::now();
@@ -221,41 +214,59 @@ TEST(PathORAM, WithoutPositionMapLargePerf) {
   printf("Time per access: %f us\n", diff.count() * 1e6 / numAccesses);
 }
 
-TEST(PathORAM, testInit) {
-  uint64_t size = 1024;
-  PathORAM<SortElement> oram;
-  StdVector<SortElement> vec(size);
-  for (int i = 0; i < size; ++i) {
-    vec[i] = SortElement();
-    vec[i].key = i;
-  }
-  StdVector<uint64_t> posMap(size);
-  StdVector<uint64_t>::Writer posMapWriter(posMap.begin(), posMap.end());
-  oram.InitFromVector(vec, posMapWriter);
-  for (uint64_t i = 0; i < size; i++) {
-    SortElement val;
-    printf("read %lu at pos %lu\n", i, posMap[i]);
-    uint64_t pos = oram.Read(posMap[i], i, val);
-    posMap[i] = pos;
-    ASSERT_EQ(val.key, i);
-  }
-}
+// TEST(PathORAM, testInit) {
+//   uint64_t size = 1024;
+//   PathORAM<SortElement> oram(size);
+//   StdVector<SortElement> vec(size);
+//   for (int i = 0; i < size; ++i) {
+//     vec[i] = SortElement();
+//     vec[i].key = i;
+//   }
+//   StdVector<uint64_t> posMap(size);
+//   StdVector<uint64_t>::Writer posMapWriter(posMap.begin(), posMap.end());
+//   oram.InitFromVector(vec, posMapWriter);
+//   for (uint64_t i = 0; i < size; i++) {
+//     SortElement val;
+//     printf("read %lu at pos %lu\n", i, posMap[i]);
+//     uint64_t pos = oram.Read(posMap[i], i, val);
+//     posMap[i] = pos;
+//     ASSERT_EQ(val.key, i);
+//   }
+// }
 
 TEST(PathORAM, testInitNaive) {
   uint64_t size = 16384;
-  PathORAM<SortElement> oram;
-  oram.Init(size);
+  PathORAM<SortElement> oram(size);
   for (uint64_t i = 0; i < size; i++) {
     oram.Write(i, SortElement());
   }
 }
 
 TEST(PathORAM, testInitWithReader) {
-  uint64_t size = 11;
-  PathORAM<SortElement, 2> oram;
+  uint64_t size = 31;
+  PathORAM<SortElement, 2> oram(size);
+  std::vector<uint64_t> valMap(size);
   StdVector<SortElement> vec(size);
-  StdVector<uint64_t> posMap(size);
+  for (int i = 0; i < size; ++i) {
+    valMap[i] = UniformRandom();
+    vec[i] = SortElement();
+    vec[i].key = valMap[i];
+  }
+  StdVector<UidBlock<uint64_t>> posMap(size);
   StdVector<SortElement>::Reader reader(vec.begin(), vec.end());
-  StdVector<uint64_t>::Writer posMapWriter(posMap.begin(), posMap.end());
+  StdVector<UidBlock<uint64_t>>::Writer posMapWriter(posMap.begin(),
+                                                     posMap.end());
   oram.InitFromReader(reader, posMapWriter);
+  for (auto& p : posMap) {
+    printf("(%lu, %lu)\n", p.uid, p.data);
+  }
+  for (int r = 0; r < 10; ++r) {
+    for (uint64_t i = 0; i < size; i++) {
+      SortElement val;
+      // printf("read %lu %lu at pos %lu\n", i, val, posMap[i]);
+      uint64_t pos = oram.Read(posMap[i].data, i, val);
+      posMap[i].data = pos;
+      ASSERT_EQ(val.key, valMap[i]);
+    }
+  }
 }

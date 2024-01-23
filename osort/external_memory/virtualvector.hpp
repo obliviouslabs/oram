@@ -1,29 +1,24 @@
 #pragma once
 #include <functional>
 namespace EM::VirtualVector {
-template <typename VT, class BaseVec>
+template <typename VT>
 struct Vector {
-  using T = typename BaseVec::value_type;
-  using value_type = T;
-  using reference = T&;
-  using const_reference = const T&;
-  using pointer = T*;
-  using const_pointer = const T*;
+  using value_type = VT;
+  using reference = VT&;
+  using const_reference = const VT&;
+  using pointer = VT*;
+  using const_pointer = const VT*;
   size_t _size;
-  std::function<VT(size_t, const T&)> virtualize;
-  std::function<T(size_t, const VT&)> devirtualize;
-  BaseVec& baseVec;
-  Vector(BaseVec& baseVec, std::function<VT(size_t, const T&)> virtualize,
-         std::function<T(size_t, const VT&)> devirtualize)
-      : baseVec(baseVec),
-        _size(baseVec.size()),
-        virtualize(virtualize),
-        devirtualize(devirtualize) {}
+  std::function<VT(size_t)> virtualize;
+  std::function<void(size_t)> devirtualize;
+  Vector(size_t size, std::function<VT(size_t)> virtualize,
+         std::function<void(size_t, const VT&)> devirtualize)
+      : _size(size), virtualize(virtualize), devirtualize(devirtualize) {}
 
   struct Iterator {
     using iterator_category = std::random_access_iterator_tag;
     using value_type = VT;
-    using vector_type = Vector<VT, BaseVec>;
+    using vector_type = Vector<VT>;
     using difference_type = int64_t;
     using pointer = uint64_t;
     using reference = VT&;
@@ -52,9 +47,7 @@ struct Vector {
     Vector* get_vec_ptr() const { return vec_ptr; }
 
     // Custom functions
-    VT operator*() const {
-      return vec_ptr->virtualize(m_ptr, vec_ptr->baseVec[m_ptr]);
-    }
+    VT operator*() const { return vec_ptr->virtualize(m_ptr); }
     pointer operator->() { return m_ptr; }
     const_pointer operator->() const { return m_ptr; }
     Iterator& operator++() {
@@ -100,86 +93,58 @@ struct Vector {
   Iterator begin() { return Iterator(0, *this); }
   Iterator end() { return Iterator(size(), *this); }
 
-  const_reference operator[](size_t i) const {
-    return virtualize(i, baseVec[i]);
-  }
-
-  static typename BaseVec::Iterator toBaseIterator(Iterator it) {
-    return it.get_vec_ptr()->baseVec.begin() + it.get_m_ptr();
-  }
+  const_reference operator[](size_t i) const { return virtualize(i); }
 
   struct Reader {
-    typename BaseVec::Reader baseReader;
-    using value_type = T;
-    Vector* vec_ptr;
-    uint64_t idx = 0;
+    using value_type = VT;
+    Iterator it;
+    Iterator end;
     Reader() {}
     Reader(Iterator _begin, Iterator _end, uint32_t _auth = 0)
-        : baseReader(toBaseIterator(_begin), toBaseIterator(_end), _auth),
-          vec_ptr(_begin.get_vec_ptr()) {}
+        : it(_begin), end(_end) {}
 
     void init(Iterator _begin, Iterator _end, uint32_t _auth = 0) {
-      baseReader.init(toBaseIterator(_begin), toBaseIterator(_end), _auth);
-      vec_ptr = _begin.get_vec_ptr();
+      it = _begin;
+      end = _end;
     }
 
-    VT get() { return vec_ptr->virtualize(idx, baseReader.get()); }
+    VT get() { return *it; }
 
-    VT read() { return vec_ptr->virtualize(idx++, baseReader.read()); }
-
-    bool eof() { return baseReader.eof(); }
-
-    size_t size() { return baseReader.size(); }
-  };
-
-  struct PrefetchReader {
-    typename BaseVec::PrefetchReader baseReader;
-    using value_type = T;
-    Vector* vec_ptr;
-    uint64_t idx = 0;
-    PrefetchReader() {}
-    PrefetchReader(Iterator _begin, Iterator _end, uint32_t _auth = 0)
-        : baseReader(toBaseIterator(_begin), toBaseIterator(_end), _auth),
-          vec_ptr(_begin.get_vec_ptr()) {}
-
-    void init(Iterator _begin, Iterator _end, uint32_t _auth = 0) {
-      baseReader.init(toBaseIterator(_begin), toBaseIterator(_end), _auth);
-      vec_ptr = _begin.get_vec_ptr();
+    VT read() {
+      VT res = *it;
+      ++it;
+      return res;
     }
 
-    VT get() { return vec_ptr->virtualize(idx, baseReader.get()); }
+    bool eof() { return it.get_m_ptr() == end.get_m_ptr(); }
 
-    VT read() { return vec_ptr->virtualize(idx++, baseReader.read()); }
-
-    bool eof() { return baseReader.eof(); }
-
-    size_t size() { return baseReader.size(); }
+    size_t size() { return end - it; }
   };
+
+  typedef Reader PrefetchReader;
 
   struct Writer {
-    typename BaseVec::Writer baseWriter;
-    using value_type = T;
-    Vector* vec_ptr;
-    uint64_t idx = 0;
+    using value_type = VT;
+    Iterator it;
+    Iterator end;
     Writer() {}
     Writer(Iterator _begin, Iterator _end, uint32_t _auth = 0)
-        : baseWriter(toBaseIterator(_begin), toBaseIterator(_end), _auth),
-          vec_ptr(_begin.get_vec_ptr()) {}
+        : it(_begin), end(_end) {}
 
     void init(Iterator _begin, Iterator _end, uint32_t _auth = 0) {
-      baseWriter.init(toBaseIterator(_begin), toBaseIterator(_end), _auth);
-      vec_ptr = _begin.get_vec_ptr();
+      it = _begin;
+      end = _end;
     }
 
     void write(const VT& element) {
-      return baseWriter.write(vec_ptr->devirtualize(idx++, element));
+      return it.get_vec_ptr()->devirtualize(it.get_m_ptr(), element);
     }
 
-    bool eof() { return baseWriter.eof(); }
+    bool eof() { return it.get_m_ptr() == end.get_m_ptr(); }
 
-    void flush() { baseWriter.flush(); }
+    void flush() {}
 
-    size_t size() { return baseWriter.size(); }
+    size_t size() { return end - it; }
   };
 };
 
@@ -205,5 +170,45 @@ static OutputIterator CopyOut(InputIterator begin, InputIterator end,
   writer.eof();
   return to + (end - begin);
 }
+
+template <typename VT, class BaseReader>
+struct WrappedReader {
+  using value_type = VT;
+  using iterator_type = typename BaseReader::iterator_type;
+  BaseReader& baseReader;
+  std::function<VT(const typename BaseReader::value_type&)> virtualize;
+  WrappedReader(
+      BaseReader& baseReader,
+      std::function<VT(const typename BaseReader::value_type&)> virtualize)
+      : baseReader(baseReader), virtualize(virtualize) {}
+
+  VT get() { return virtualize(baseReader.get()); }
+
+  VT read() { return virtualize(baseReader.read()); }
+
+  bool eof() { return baseReader.eof(); }
+
+  size_t size() { return baseReader.size(); }
+};
+
+template <typename VT, class BaseWriter>
+struct WrappedWriter {
+  using value_type = VT;
+  using iterator_type = typename BaseWriter::iterator_type;
+  BaseWriter& baseWriter;
+  std::function<typename BaseWriter::value_type(const VT&)> devirtualize;
+  WrappedWriter(
+      BaseWriter& baseWriter,
+      std::function<typename BaseWriter::value_type(const VT&)> devirtualize)
+      : baseWriter(baseWriter), devirtualize(devirtualize) {}
+
+  void write(const VT& element) { baseWriter.write(devirtualize(element)); }
+
+  bool eof() { return baseWriter.eof(); }
+
+  void flush() { baseWriter.flush(); }
+
+  size_t size() { return baseWriter.size(); }
+};
 
 }  // namespace EM::VirtualVector

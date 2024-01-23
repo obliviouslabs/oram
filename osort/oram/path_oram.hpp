@@ -25,115 +25,191 @@ struct PathORAM {
   HeapTree<Bucket_> tree;
   Stash* stash = nullptr;
   int depth = 0;
+  int cacheLevel = 62;
   PositionType size = 0;
 
-  PathORAM() = default;
   PathORAM(const PathORAM& other) = default;
   PathORAM(PathORAM&& other) = default;
 
-  void Init(PositionType size) {
-    tree.Init(size);
+  PathORAM(PositionType size, int cacheLevel = 62)
+      : size(size), tree(size, cacheLevel), cacheLevel(cacheLevel) {
     stash = new Stash();
     depth = GetLogBaseTwo(size - 1) + 2;
-    this->size = size;
   }
 
   template <typename Reader, class PosMapWriter>
   void InitFromReader(Reader& reader, PosMapWriter& posMapWriter) {
-    size = reader.size();
-    stash = new Stash();
-    depth = GetLogBaseTwo(size - 1) + 2;
-    tree.Init(size);
-    StdVector<char> loadVec(2 * size - 1);
+    size_t numBucket = 2 * size - 1;
+    size_t numBlock = numBucket * Z;
+    // StdVector<char> loadVec(numBucket);
+    struct Positions {
+      PositionType pos[Z];
+      Positions() {
+        for (int i = 0; i < Z; ++i) {
+          pos[i] = DUMMY<PositionType>();
+        }
+      }
+    };
+    struct PositionStash {
+      PositionType pos[16 - Z];
+      PositionStash() {
+        for (int i = 0; i < 16 - Z; ++i) {
+          pos[i] = DUMMY<PositionType>();
+        }
+      }
+    };
+    // HeapTree<
     NoReplaceSampler sampler(size);
-    std::function<char(char&, char&)> reduceFunc = [](char& i,
-                                                      char& j) -> char {
-      char overflowLeft = 0;
-      char overflowRight = 0;
-      obliMove(i > Z, overflowLeft, (char)(i - Z));
-      obliMove(j > Z, overflowRight, (char)(j - Z));
-      i -= overflowLeft;
-      j -= overflowRight;
-      return overflowLeft + overflowRight;
+    std::function<PositionStash(Positions&, const PositionStash&,
+                                const PositionStash&)>
+        reduceFunc = [](Positions& root, const PositionStash& left,
+                        const PositionStash& right) -> PositionStash {
+      PositionType combinedStash[16];
+      for (int i = 0; i < 16; ++i) {
+        combinedStash[i] = DUMMY<PositionType>();
+      }
+      for (int i = 0; i < 16 - Z; ++i) {
+        obliMove(left.pos[i] != DUMMY<PositionType>(), combinedStash[i],
+                 left.pos[i]);
+      }
+      for (int i = 0; i < 16 - Z; ++i) {
+        obliMove(right.pos[i] != DUMMY<PositionType>(), combinedStash[15 - i],
+                 right.pos[i]);
+      }
+      // TODO check that no element is lost
+
+      EM::Algorithm::BitonicMergePow2(
+          combinedStash, combinedStash + 16,
+          [](auto a, auto b) { return a < b; }, true);
+      memcpy(root.pos, combinedStash, sizeof(PositionType) * Z);
+      return *(PositionStash*)(combinedStash + Z);
     };
-    std::function<void(char&)> leafFunc = [&](char& i) {
-      i = sampler.Sample();
-      // char overflow = 0;
-      // obliMove(i > Z, overflow, (char)(i - Z));
-      // i -= overflow;
-      // return overflow;
-    };
-    char overflow =
-        BuildBottomUp(loadVec.begin(), loadVec.end(), reduceFunc, leafFunc);
-    for (int i = 0; i < loadVec.size(); ++i) {
-      printf("%d ", (int)loadVec[i]);
+
+    std::function<PositionStash(Positions&, size_t)> leafFunc =
+        [&](Positions& leaf, size_t path) {
+          for (int i = 0; i < Z; ++i) {
+            leaf.pos[i] = DUMMY<PositionType>();
+          }
+          int num = sampler.Sample();
+          PositionStash stash;
+          for (int i = 0; i < Z; ++i) {
+            obliMove(i < num, leaf.pos[i], path);
+          }
+          for (int i = Z; i < 16; ++i) {
+            obliMove(i < num, stash.pos[i - Z], path);
+          }
+          return stash;
+        };
+    using PosVec = StdVector<PositionType>;
+    PosVec positionVec(numBlock);
+    PosVec prefixSum(numBlock + 1);
+    {
+      HeapTree<Positions> positions(size, cacheLevel, 1, 1UL << 62);
+      positions.template BuildBottomUp<PositionStash>(reduceFunc, leafFunc);
+      // for (size_t i = 0; i < 2 * size - 1; ++i) {
+      //   for (int j = 0; j < Z; ++j) {
+      //     printf("%ld ", (int64_t)positions.GetByInternalIdx(i).pos[j]);
+      //   }
+      //   printf("\n");
+      // }
+
+      prefixSum[0] = 0;
+      for (PositionType i = 0; i < numBucket; ++i) {
+        const Positions& posBucket = positions.GetByInternalIdx(i);
+        for (PositionType j = 0; j < Z; ++j) {
+          prefixSum[i * Z + j + 1] =
+              prefixSum[i * Z + j] +
+              (posBucket.pos[j] != DUMMY<PositionType>());
+          positionVec[i * Z + j] = posBucket.pos[j];
+        }
+      }
     }
-  }
 
-  template <typename Vec, class Writer>
-  void InitFromVector(Vec& vec, Writer& posMapWriter) {
-    InitFromVector(vec, posMapWriter, 0, vec.size());
-  }
+    // EM::Algorithm::OrDistributeSeparateMark(
+    Assert(prefixSum[numBlock] == size);
+    using DistributeVec = StdVector<UidBlock_>;
+    using DistributeReader = typename DistributeVec::Reader;
+    using DistributeWriter = typename DistributeVec::Writer;
+    using UidVec = StdVector<UidType>;
+    using UidReader = typename UidVec::Reader;
+    using UidWriter = typename UidVec::Writer;
 
-  template <typename Vec, class Writer>
-  void InitFromVector(Vec& vec, Writer& posMapWriter, UidType beginIdx,
-                      UidType endIdx) {
-    size = endIdx - beginIdx;
+    DistributeVec distributeVec(numBlock);
+    DistributeWriter distributeInputWriter(distributeVec.begin(),
+                                           distributeVec.begin() + size);
+    UidVec uidVec(size);
+    UidWriter uidWriter(uidVec.begin(), uidVec.end());
+    PositionType heapIdx = 0;
+    PositionType inputIdx = 0;
+    EM::VirtualVector::WrappedReader<UidBlock_, Reader> shuffleReader(
+        reader, [&](const T& val) { return UidBlock_(val, inputIdx++); });
+    EM::VirtualVector::WrappedWriter<UidBlock_, UidWriter> shuffleWriter(
+        uidWriter, [&](const UidBlock_& block) {
+          distributeInputWriter.write(block);
+          return block.uid;
+        });
+    EM::Algorithm::KWayButterflyOShuffle(shuffleReader, shuffleWriter);
+    distributeInputWriter.flush();
 
-    stash = new Stash();
-    StdVector<UidType> uidVec(size);
-    depth = GetLogBaseTwo(size - 1) + 2;
-    // EM::VirtualVector::Vector<UidBlock_, Vec> v(
-    //     vec,
-    //     [](size_t i, const T& val) { return UidBlock_(val, i); },  //
-    //     virtualize
-    //     [&](size_t i, const UidBlock_& block) {
-    //       uidVec[i] = block.uid;
-    //       return block.data;
-    //     }  // devirtualize
-    // );
-    // EM::Algorithm::KWayButterflyOShuffle(v);
-
-    for (auto val : vec) {
-      printf("%lu ", val.key);
+    EM::Algorithm::OrDistributeSeparateMark(
+        distributeVec.begin(), distributeVec.end(), prefixSum.begin());
+    DistributeReader distributeOutputReader(distributeVec.begin(),
+                                            distributeVec.end());
+    for (size_t i = 0; i < numBucket; ++i) {
+      Bucket_ bucket;
+      for (int j = 0; j < Z; ++j) {
+        const UidBlock_& uidBlock = distributeOutputReader.read();
+        bucket.blocks[j] =
+            Block_(uidBlock.data, positionVec[i * Z + j], uidBlock.uid);
+      }
+      tree.SetByInternalIdx(i, bucket);
     }
-    printf("\n");
-    // for (const uint64_t& uid : uidVec) {
-    //   printf("%lu ", uid);
-    // }
-    // printf("\n");
+    EM::Algorithm::OrCompactSeparateMark(positionVec.begin(), positionVec.end(),
+                                         prefixSum.begin());
 
-    // EM::VirtualVector::Vector<Block_, Vec> vBlock(
-    //     vec,
-    //     [&](size_t i, const T& val) {
-    //       printf("set oram entry pos =  %lu uid = %lu\n", i, uidVec[i]);
-    //       return Block_(val, i, uidVec[i]);
-    //     },  // virtualize
-    //     [](size_t i, const Block_& block) {
-    //       return block.data;
-    //     }  // devirtualize
-    // );
+    size_t posMapIdx = 0;
 
-    // root = initTree(vBlock.begin(), vBlock.end());
+    UidReader uidReader(uidVec.begin(), uidVec.end());
 
-    // EM::VirtualVector::Vector<UidBlock<PositionType>, StdVector<UidType>>
-    // vUid(
-    //     uidVec,
-    //     [](size_t i, const UidType& uid) { return UidBlock<UidType>(i, uid);
-    //     },
-    //     [&](size_t i, const UidBlock<UidType>& block) {
-    //       posMapWriter.write(block.data);
-    //       return block.uid;
-    //     });
-    // EM::Algorithm::KWayButterflySortInternal(vUid);
-    // for (const uint64_t& pos : positionVec) {
-    //   printf("%lu ", pos);
-    // }
-    // printf("\n");
+    EM::VirtualVector::WrappedReader<UidBlock<PositionType>, UidReader>
+        posMapReader(uidReader, [&](const UidType& uid) {
+          return UidBlock<PositionType>(positionVec[posMapIdx++], uid);
+        });
+
+    EM::Algorithm::KWayButterflySort(posMapReader, posMapWriter);
+
+    /* A quick test for reduceFunc
+PositionStash testLeft, testRight;
+int leftSize = 6;
+int rightSize = 5;
+for (int i = 0; i < 16 - Z; ++i) {
+  if (i < leftSize) {
+    testLeft.pos[i] = i;
+  } else {
+    testLeft.pos[i] = DUMMY<PositionType>();
+  }
+  if (i < rightSize) {
+    testRight.pos[i] = i;
+  } else {
+    testRight.pos[i] = DUMMY<PositionType>();
+  }
+}
+Positions testRoot;
+PositionStash testRootStash = reduceFunc(testRoot, testLeft, testRight);
+for (int i = 0; i < 16 - Z; ++i) {
+  printf("%d ", (int)testRootStash.pos[i]);
+}
+printf("\n");
+for (int i = 0; i < Z; ++i) {
+  printf("%d ", (int)testRoot.pos[i]);
+}
+
+=> prints 2 3 3 4 4 5 -1 -1 -1 -1 -1
+          0 0 1 1 2 2
+*/
   }
 
   void Destroy() {
-    tree.Destroy();
     if (stash) {
       delete stash;
       stash = nullptr;
@@ -209,7 +285,7 @@ struct PathORAM {
     return newPos;
   }
 
-  std::vector<Block_> ReadPath(PositionType pos) const {
+  std::vector<Block_> ReadPath(PositionType pos) {
     std::vector<Block_> path(stashSize + Z * depth);
 
     memcpy(&path[0], stash->blocks, stashSize * sizeof(Block_));

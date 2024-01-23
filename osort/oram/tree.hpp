@@ -1,9 +1,10 @@
 #pragma once
 #include "common/utils.hpp"
+#include "external_memory/cachefrontvector.hpp"
 template <typename T>
 struct HeapTree {
-  T* cacheArr = NULL;
-  T* extArr = NULL;  // TODO: change it to external
+  using Vec = EM::CacheFrontVector::Vector<T>;
+  Vec arr;
   uint cacheLevel = 0;
   uint totalLevel = 0;
   uint packLevel = 1;
@@ -13,40 +14,18 @@ struct HeapTree {
   size_t totalSize;
   bool isPow2 = false;
 
-  HeapTree() = default;
-  HeapTree(size_t _size, uint _cacheLevel, uint _packLevel = 1) {
-    Init(_size, _cacheLevel, _packLevel);
-  }
-
-  ~HeapTree() { Destroy(); }
-
-  void Init(size_t _size, uint _cacheLevel = 62, uint _packLevel = 1) {
-    isPow2 = !(_size & (_size - 1));
-    leafCount = _size;
-    cacheLevel = _cacheLevel;
-    packLevel = _packLevel;
-    totalSize = 2 * _size - 1;
-    totalLevel = GetLogBaseTwo(_size - 1) + 2;
-    cacheLevel = std::min(cacheLevel, totalLevel);
-    cacheSize = std::min(totalSize, (2UL << cacheLevel) - 1);
+  HeapTree(size_t _size, uint _cacheLevel = 62, uint _packLevel = 1,
+           size_t realCacheSize = -1)
+      : cacheLevel(_cacheLevel),
+        packLevel(_packLevel),
+        leafCount(_size),
+        totalLevel(GetLogBaseTwo(_size - 1) + 2),
+        totalSize(2 * _size - 1),
+        cacheSize(std::min(totalSize, (2UL << _cacheLevel) - 1)),
+        arr(2 * _size - 1,
+            realCacheSize != -1 ? realCacheSize : (2UL << _cacheLevel) - 1),
+        isPow2(!(_size & (_size - 1))) {
     extSize = totalSize - cacheSize;
-    // printf("totalSize: %lu, totalLevel: %u\n", totalSize, totalLevel);
-    // printf("cacheSize: %lu, extSize: %lu\n", cacheSize, extSize);
-    cacheArr = new T[cacheSize];
-    if (extSize > 0) {
-      extArr = new T[extSize];
-    }
-  }
-
-  void Destroy() {
-    if (cacheArr) {
-      delete[] cacheArr;
-      cacheArr = NULL;
-    }
-    if (extArr) {
-      delete[] extArr;
-      extArr = NULL;
-    }
   }
 
   static size_t GetCAIdxPow2(size_t idx, int level, int totalLevel,
@@ -210,24 +189,16 @@ struct HeapTree {
     SetByInternalIdx(idx, val);
   }
 
-  const T& GetByInternalIdx(size_t idx) const {
-    if (idx < cacheSize) {
-      return cacheArr[idx];
-    } else {
-      return extArr[idx - cacheSize];
-    }
-  }
+  const T& GetByInternalIdx(size_t idx) { return arr.Get(idx); }
 
-  void SetByInternalIdx(size_t idx, const T& val) {
-    if (idx < cacheSize) {
-      cacheArr[idx] = val;
-    } else {
-      extArr[idx - cacheSize] = val;
-    }
-  }
+  void SetByInternalIdx(size_t idx, const T& val) { arr[idx] = val; }
+
+  typename Vec::Iterator beginInteranl() { return arr.begin(); }
+
+  typename Vec::Iterator endInteranl() { return arr.end(); }
 
   template <typename Iterator>
-  int ReadPath(size_t pos, Iterator pathBegin) const {
+  int ReadPath(size_t pos, Iterator pathBegin) {
     std::vector<size_t> pathIdx(totalLevel);
     // printf("pos: %lu, totalLevel = %d\n", pos, totalLevel);
     // printf("cacheLevel = %d\n", cacheLevel);
@@ -239,11 +210,7 @@ struct HeapTree {
 
     for (int i = 0; i < actualLevel; ++i) {
       size_t idx = pathIdx[i];
-      if (idx < cacheSize) {
-        *(pathBegin + i) = cacheArr[idx];
-      } else {
-        *(pathBegin + i) = extArr[idx - cacheSize];
-      }
+      *(pathBegin + i) = arr.Get(idx);
     }
     return actualLevel;
   }
@@ -263,13 +230,95 @@ struct HeapTree {
     // printf("\n");
     for (int i = 0; i < actualLevel; ++i) {
       size_t idx = pathIdx[i];
-      if (idx < cacheSize) {
-        cacheArr[idx] = *(pathBegin + i);
-      } else {
-        extArr[idx - cacheSize] = *(pathBegin + i);
-      }
+      arr[idx] = *(pathBegin + i);
     }
     return actualLevel;
+  }
+
+  template <typename AggT>
+  AggT BuildBottomUp(
+      const std::function<AggT(T&, const AggT&, const AggT&)>& reduceFunc,
+      const std::function<AggT(T&, size_t)>& leafFunc) {
+    return BuildBottomUp<AggT>(arr.begin(), arr.end(), reduceFunc, leafFunc,
+                               cacheLevel, packLevel);
+  }
+
+  template <typename AggT, typename Iterator>
+  static AggT BuildBottomUp(
+      Iterator begin, Iterator end,
+      const std::function<AggT(T&, const AggT&, const AggT&)>& reduceFunc,
+      const std::function<AggT(T&, size_t)>& leafFunc, uint _cacheLevel = 62,
+      uint _packLevel = 1) {
+    size_t size = end - begin;
+    Assert(size & 1);
+    int totalLevel = GetLogBaseTwo(size) + 1;
+    int topLevel = _cacheLevel >= totalLevel ? 0 : _cacheLevel;
+    return BuildBottomUpHelper<AggT>(begin, end, 0, 0, reduceFunc, leafFunc,
+                                     topLevel, _packLevel);
+  };
+
+  template <typename AggT, typename Iterator>
+  static AggT BuildBottomUpHelper(
+      Iterator begin, Iterator end, size_t path, int level,
+      const std::function<AggT(T&, const AggT&, const AggT&)>& reduceFunc,
+      const std::function<AggT(T&, size_t)>& leafFunc, uint topLevel,
+      uint packLevel) {
+    size_t size = end - begin;
+    Assert(size & 1);
+    size_t leafCount = (size + 1) / 2;
+    // printf("size = %lu, leafCount = %lu\n", size, leafCount);
+    if (size == 1) {
+      // printf("leafFunc due to size = 1\n");
+      return leafFunc(*begin, path);
+    } else if (size == 3) {
+      // printf("leafFunc due to size = 3\n");
+      return reduceFunc(*begin, leafFunc(*(begin + 1), path),
+                        leafFunc(*(begin + 2), path | (1UL << level)));
+    }
+    int totalLevel = GetLogBaseTwo(size) + 1;
+    if (topLevel == 0) {
+      topLevel = totalLevel >> 1;
+      if (topLevel > packLevel && packLevel > 1) {
+        topLevel = topLevel / packLevel * packLevel;
+      }
+    }
+    int botLevel = totalLevel - topLevel;
+    size_t topSize = (1UL << topLevel) - 1;
+    // InverseIncrementer topLeafIndexer(topLevel - 1);
+    size_t botOffset = topSize;
+    size_t topLeafCount = 1UL << (topLevel - 1);
+    int leafLevel = level + topLevel;
+    std::function<AggT(T&, size_t)> topLeafFunc = [&](T& leaf, size_t path) {
+      // size_t topLeafIdx = topLeafIndexer.getIndex();
+      // ++topLeafIndexer;  // increment topLeafIdx after every leaf call
+      size_t topLeafIdx = path >> level;
+      // printf("topLeafIdx = %lu\n", topLeafIdx);
+      size_t left1 = leafCount - topLeafIdx - 1;
+      if (left1 < topLeafCount) {
+        // printf("leafFunc due to lingering node\n");
+        return leafFunc(leaf, path);
+      }
+      size_t right1 = left1 - topLeafCount;
+      size_t leftLeafCount = ((leafCount - topLeafIdx - 1) >> topLevel) + 1;
+      size_t rightLeafCount =
+          ((leafCount - topLeafIdx - topLeafCount - 1) >> topLevel) + 1;
+      size_t leftSize = 2 * leftLeafCount - 1;
+      size_t rightSize = 2 * rightLeafCount - 1;
+
+      AggT leftResult = BuildBottomUpHelper<AggT, Iterator>(
+          begin + botOffset, begin + botOffset + leftSize, path, leafLevel,
+          reduceFunc, leafFunc, 0, packLevel);
+      botOffset += leftSize;
+      AggT rightResult = BuildBottomUpHelper<AggT, Iterator>(
+          begin + botOffset, begin + botOffset + rightSize,
+          path | (1UL << leafLevel) / 2, leafLevel, reduceFunc, leafFunc, 0,
+          packLevel);
+      botOffset += rightSize;
+      return reduceFunc(leaf, leftResult, rightResult);
+    };
+    return BuildBottomUpHelper<AggT, Iterator>(begin, begin + topSize, path,
+                                               level, reduceFunc, topLeafFunc,
+                                               0, packLevel);
   }
 
   // struct ReverseLexLeafIterator {
@@ -452,80 +501,32 @@ struct HeapTree {
   };
 };
 
-template <typename T, typename Iterator>
-T& BuildBottomUpHelper(Iterator begin, Iterator end,
-                       const std::function<T(T&, T&)>& reduceFunc,
-                       const std::function<void(T&)>& leafFunc, uint topLevel,
-                       uint packLevel) {
-  size_t size = end - begin;
-  Assert(size & 1);
-  size_t leafCount = (size + 1) / 2;
-  // printf("size = %lu, leafCount = %lu\n", size, leafCount);
-  if (size == 1) {
-    leafFunc(*begin);
-    return *begin;
-  }
-  int totalLevel = GetLogBaseTwo(size) + 1;
-  if (topLevel == 0) {
-    topLevel = totalLevel >> 1;
-    if (topLevel > packLevel && packLevel > 1) {
-      topLevel = topLevel / packLevel * packLevel;
+struct InverseIncrementer {
+  size_t num = 0;
+  size_t highestBitMask = 0;
+  InverseIncrementer(int _length) : highestBitMask(1UL << (_length - 1)) {}
+  InverseIncrementer& operator++() {
+    size_t mask = highestBitMask;
+    while (num & mask) {
+      num ^= mask;
+      mask >>= 1;
     }
+    num ^= mask;
+    return *this;
   }
-  int botLevel = totalLevel - topLevel;
-  size_t topSize = (1UL << topLevel) - 1;
-  size_t botOffset = topSize;
-  size_t topLeafCount = 1UL << (topLevel - 1);
-  HeapTree<bool>::ReverseLexLeafPow2Indexer topLeafIndxer(topLevel, topLevel,
-                                                          packLevel);
-  for (size_t topLeafIdx = 0; topLeafIdx < topLeafCount;
-       ++topLeafIdx, ++topLeafIndxer) {
-    auto& topLeaf = *(begin + topLeafIndxer.getIndex());
-    size_t reversedTopLeafIdx = reverseBits(topLeafIdx, topLevel - 1);
-    if ((reversedTopLeafIdx | topLeafCount) >= leafCount) {
-      leafFunc(topLeaf);
-      // printf("topLeaf = leafFunc %lu\n", topLeaf);
-      continue;
-    }
-    // number of integer less than size whose last bits are 0+reversedTopLeafIdx
-    size_t leftLeafCount =
-        ((leafCount - reversedTopLeafIdx - 1) >> topLevel) + 1;
-
-    // number of integer less than size whose last bits are 1+reversedTopLeafIdx
-    size_t rightLeafCount =
-        ((leafCount - reversedTopLeafIdx - topLeafCount - 1) >> topLevel) + 1;
-    size_t leftSize = 2 * leftLeafCount - 1;
-    size_t rightSize = 2 * rightLeafCount - 1;
-    // printf("leftLeafCount = %lu, rightLeafCount = %lu\n", leftLeafCount,
-    //        rightLeafCount);
-    // printf("leftSize = %lu, rightSize = %lu\n", leftSize, rightSize);
-    T& left =
-        BuildBottomUpHelper<T>(begin + botOffset, begin + botOffset + leftSize,
-                               reduceFunc, leafFunc, 0, packLevel);
-    botOffset += leftSize;
-    T& right =
-        BuildBottomUpHelper<T>(begin + botOffset, begin + botOffset + rightSize,
-                               reduceFunc, leafFunc, 0, packLevel);
-    botOffset += rightSize;
-    topLeaf = reduceFunc(left, right);
-    // printf("topLeaf %lu = reduceFunc %lu %lu\n", topLeaf, left, right);
-  }
-  // already set
-  return BuildBottomUpHelper<T>(
-      begin, begin + topSize, reduceFunc, [](const T& leaf) { return leaf; }, 0,
-      packLevel);
-}
-
-template <typename Iterator,
-          typename T = typename std::iterator_traits<Iterator>::value_type>
-T& BuildBottomUp(Iterator begin, Iterator end,
-                 const std::function<T(T&, T&)>& reduceFunc,
-                 const std::function<void(T&)>& leafFunc, uint _cacheLevel = 62,
-                 uint _packLevel = 1) {
-  size_t size = end - begin;
-  Assert(size & 1);
-  int totalLevel = GetLogBaseTwo(size) + 1;
-  int topLevel = _cacheLevel >= totalLevel ? 0 : _cacheLevel;
-  return BuildBottomUpHelper<T>(begin, end, reduceFunc, leafFunc, topLevel,
-                                _packLevel);
+  size_t getIndex() const { return num; }
 };
+
+// template <typename Iterator,
+//           typename T = typename std::iterator_traits<Iterator>::value_type>
+// T& BuildBottomUp(Iterator begin, Iterator end,
+//                  const std::function<T(T&, T&)>& reduceFunc,
+//                  const std::function<void(T&)>& leafFunc, uint _cacheLevel
+//                  = 62, uint _packLevel = 1) {
+//   size_t size = end - begin;
+//   Assert(size & 1);
+//   int totalLevel = GetLogBaseTwo(size) + 1;
+//   int topLevel = _cacheLevel >= totalLevel ? 0 : _cacheLevel;
+//   return BuildBottomUpHelper<T>(begin, end, reduceFunc, leafFunc, topLevel,
+//                                 _packLevel);
+// };

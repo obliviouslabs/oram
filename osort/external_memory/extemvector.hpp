@@ -182,11 +182,21 @@ struct Vector {
     return Iterator(index, *this).derefWriteOnly();
   }
 
-  T& At(uint64_t index) { return *Iterator(index, *this); }
-  const T& At(uint64_t index) const { return *Iterator(index, *this); }
+  T& At(uint64_t index) {
+    const size_t realIdx = index;
+    const size_t pageIdx = realIdx / item_per_page;
+    const size_t pageOffset = realIdx % item_per_page;
+    return server.Access(pageIdx).pages[pageOffset];
+  }
+
+  const T& Get(uint64_t index) {
+    const size_t realIdx = index;
+    const size_t pageIdx = realIdx / item_per_page;
+    const size_t pageOffset = realIdx % item_per_page;
+    return server.AccessReadOnly(pageIdx).pages[pageOffset];
+  }
 
   T& operator[](uint64_t index) { return At(index); }
-  const T& operator[](uint64_t index) const { return At(index); }
 
   uint64_t size() const { return N; }
 

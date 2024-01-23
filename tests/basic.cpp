@@ -222,8 +222,7 @@ TEST(Basic, TestHeapTree3) {
                                           size, packLevel, cacheLevel);
           res.push_back(pathIdxs[level - 1]);
         }
-        HeapTree<int> t;
-        t.Init(size, cacheLevel, packLevel);
+        HeapTree<int> t(size, cacheLevel, packLevel);
         HeapTree<int>::ReverseLexLeafIndexer iter(t);
         for (size_t i = 0; i < size; ++i) {
           // printf("i: %lu\n", i);
@@ -312,14 +311,20 @@ TEST(Basic, testBuildBottomUp) {
     int totalLevel = GetLogBaseTwo(leafCount - 1) + 2;
     for (int cacheLevel = 1; cacheLevel <= totalLevel; ++cacheLevel) {
       for (int packLevel = 1; packLevel <= totalLevel; ++packLevel) {
+        // printf("leafCount: %lu, cacheLevel: %d, packLevel: %d\n", leafCount,
+        //        cacheLevel, packLevel);
         size_t size = leafCount * 2 - 1;
         std::vector<uint64_t> heap(size);
-        std::function<uint64_t(uint64_t&, uint64_t&)> reduceFunc =
-            [](uint64_t& i, uint64_t& j) -> uint64_t { return i + j; };
-        std::function<void(uint64_t&)> leafFunc = [](uint64_t& i) { i = 1UL; };
-        ASSERT_EQ(BuildBottomUp(heap.begin(), heap.end(), reduceFunc, leafFunc,
-                                cacheLevel, packLevel),
-                  leafCount);
+        std::function<uint64_t(uint64_t&, const uint64_t&, const uint64_t&)>
+            reduceFunc =
+                [](uint64_t& val, const uint64_t& i,
+                   const uint64_t& j) -> uint64_t { return val = i + j; };
+        std::function<uint64_t(uint64_t&, size_t)> leafFunc =
+            [](uint64_t& i, size_t idx) { return i = idx; };
+        ASSERT_EQ(HeapTree<uint64_t>::BuildBottomUp<uint64_t>(
+                      heap.begin(), heap.end(), reduceFunc, leafFunc,
+                      cacheLevel, packLevel),
+                  leafCount * (leafCount - 1) / 2);
       }
     }
   }
@@ -331,10 +336,13 @@ TEST(Basic, testBuildBottomUpPerf) {
     int totalLevel = GetLogBaseTwo(leafCount - 1) + 2;
     size_t size = leafCount * 2 - 1;
     std::vector<uint64_t> heap(size);
-    std::function<uint64_t(uint64_t&, uint64_t&)> reduceFunc =
-        [](uint64_t& i, uint64_t& j) -> uint64_t { return i + j; };
-    std::function<void(uint64_t&)> leafFunc = [](uint64_t& i) { i = 1UL; };
-    ASSERT_EQ(BuildBottomUp(heap.begin(), heap.end(), reduceFunc, leafFunc),
+    std::function<uint64_t(uint64_t&, const uint64_t&, const uint64_t&)>
+        reduceFunc = [](uint64_t& val, const uint64_t& i,
+                        const uint64_t& j) -> uint64_t { return val = i + j; };
+    std::function<uint64_t(uint64_t&, size_t)> leafFunc =
+        [](uint64_t& i, size_t idx) { return i = 1UL; };
+    ASSERT_EQ(HeapTree<uint64_t>::BuildBottomUp(heap.begin(), heap.end(),
+                                                reduceFunc, leafFunc),
               leafCount);
   }
 }
