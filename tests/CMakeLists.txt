@@ -4,6 +4,18 @@ include_directories (${PROJECT_SOURCE_DIR}/osort)
 include_directories (${OPENSSL_INCLUDE_DIR})
 
 add_executable(
+  test_omap
+  omap.cpp
+)
+target_compile_definitions(test_omap PRIVATE BOOST_STACKTRACE_USE_ADDR2LINE)
+target_link_libraries(
+  test_omap
+  dl
+  gtest_main
+  common
+)
+
+add_executable(
   test_basic
   basic.cpp
 )

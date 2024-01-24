@@ -46,7 +46,7 @@ void KWayButterflyOShuffle(Vec& vec, uint32_t inAuth = 0,
 /// @tparam Reader the reader type of the input array
 /// @tparam Writer the writer type of the output array
 /// @tparam WrappedT the wrapped type of elements to sort
-template <class Reader, class Writer, SortMethod task>
+template <class Reader, class Writer, SortMethod task, const bool singleBatch>
 class ButterflySorter {
  private:
   using T = typename Reader::value_type;
@@ -58,9 +58,10 @@ class ButterflySorter {
   KWayButterflyParams KWayParams =
       {};  // parameters for flex-way butterfly o-sort
 
-  bool singleBatch;
-  bool needsExtMerge;           // whether to use external merge sort
-  uint64_t maxBatchBucket = 0;  // maximum number of buckets in a batch
+  static constexpr bool needsExtMerge =
+      !singleBatch &&
+      task == KWAYBUTTERFLYOSORT;  // whether to use external merge sort
+  uint64_t maxBatchBucket = 0;     // maximum number of buckets in a batch
 
   std::vector<std::pair<typename Writer::iterator_type,
                         typename Writer::iterator_type>>
@@ -86,9 +87,7 @@ class ButterflySorter {
         outputWriter(writer),
         KWayParams(_KWayParams),
         Z(_KWayParams.Z),
-        numElementFit((_heapSize - 16 * Z) / sizeof(WrappedT) - 8 * Z),
-        singleBatch(_KWayParams.ways.size() == 1),
-        needsExtMerge(!singleBatch && task == KWAYBUTTERFLYOSORT) {
+        numElementFit((_heapSize - 16 * Z) / sizeof(WrappedT) - 8 * Z) {
     size_t size = reader.size();
     Z = KWayParams.Z;
     for (auto& ways : KWayParams.ways) {
@@ -242,7 +241,7 @@ class ButterflySorter {
             // partition dummies to the end
             Assert(realEnd <= batch + batchSize);
             std::sort(batch, realEnd, cmpVal);
-            if (needsExtMerge) {
+            if constexpr (needsExtMerge) {
               auto mergeSortReaderBeginIt = outputWriter.it;
               for (auto it = batch; it != realEnd; ++it) {
                 outputWriter.write(it->getData());
@@ -326,10 +325,16 @@ void KWayButterflyOShuffle(Reader& reader, Writer& writer,
   const KWayButterflyParams& KWayParams =
       bestKWayButterflyParams(N, numElementFit, sizeof(T));
   delete[] batch;
-
-  ButterflySorter<Reader, Writer, KWAYBUTTERFLYOSHUFFLE> sorter(
-      reader, writer, KWayParams, heapSize);
-  sorter.sort();
+  bool singleBatch = KWayParams.ways.size() == 1;
+  if (singleBatch) {
+    ButterflySorter<Reader, Writer, KWAYBUTTERFLYOSHUFFLE, true> sorter(
+        reader, writer, KWayParams, heapSize);
+    sorter.sort();
+  } else {
+    ButterflySorter<Reader, Writer, KWAYBUTTERFLYOSHUFFLE, false> sorter(
+        reader, writer, KWayParams, heapSize);
+    sorter.sort();
+  }
 }
 
 template <class Iterator>
@@ -376,7 +381,7 @@ void KWayButterflySort(Reader& reader, Writer& writer,
   bool singleBatch = KWayParams.ways.size() == 1;
 
   if (singleBatch) {
-    ButterflySorter<Reader, Writer, KWAYBUTTERFLYOSORT> sorter(
+    ButterflySorter<Reader, Writer, KWAYBUTTERFLYOSORT, true> sorter(
         reader, writer, KWayParams, heapSize);
     sorter.sort();
   } else {
@@ -385,7 +390,7 @@ void KWayButterflySort(Reader& reader, Writer& writer,
     using ShuffleWriter = typename ShuffleVector::Writer;
     ShuffleWriter mergeSortFirstLayerWriter(mergeSortFirstLayer.begin(),
                                             mergeSortFirstLayer.end());
-    ButterflySorter<Reader, ShuffleWriter, KWAYBUTTERFLYOSORT> sorter(
+    ButterflySorter<Reader, ShuffleWriter, KWAYBUTTERFLYOSORT, false> sorter(
         reader, mergeSortFirstLayerWriter, KWayParams, heapSize);
     sorter.sort();
     const auto& mergeRanges = sorter.getMergeSortBatchRanges();

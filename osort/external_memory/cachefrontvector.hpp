@@ -28,6 +28,11 @@ struct Vector {
         extVec(N - std::min(cacheSize, N)),
         cacheSize(std::min(cacheSize, N)) {}
 
+  Vector(Vector&& other)
+      : intVec(std::move(other.intVec)),
+        extVec(std::move(other.extVec)),
+        cacheSize(other.cacheSize) {}
+
   struct Iterator {
     using iterator_category = std::random_access_iterator_tag;
     using value_type = T;

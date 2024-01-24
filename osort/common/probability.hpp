@@ -105,13 +105,14 @@ struct NoReplaceSampler {
     if constexpr (approx) {
       if (n > 1e5) {
         if (!(idx & (cacheSize - 1))) {
-          uint64_t s = SampleFromPoisson((double)N / n, cacheSamples,
-                                         cacheSamples + cacheSize);
-          N -= s;
+          SampleFromPoisson((double)N / n, cacheSamples,
+                            cacheSamples + cacheSize);
         }
         --n;
         ++idx;
-        return cacheSamples[n & (cacheSize - 1)];
+        int s = cacheSamples[n & (cacheSize - 1)];
+        N -= s;
+        return s;
       } else {
         uint64_t s = SampleFromBinomial((double)1.0 / n, N);
         --n;

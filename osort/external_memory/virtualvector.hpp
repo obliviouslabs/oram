@@ -211,4 +211,45 @@ struct WrappedWriter {
   size_t size() { return baseWriter.size(); }
 };
 
+template <typename VT>
+struct VirtualReader {
+  using value_type = VT;
+  using iterator_type = uint64_t;
+  iterator_type it = 0;
+  size_t _size;
+  std::function<VT(iterator_type)> virtualize;
+  VirtualReader(size_t size, std::function<VT(iterator_type)> virtualize)
+      : virtualize(virtualize), _size(size) {}
+
+  VT get() { return virtualize(it); }
+
+  VT read() { return virtualize(it++); }
+
+  bool eof() { return it >= _size; }
+
+  size_t size() { return _size; }
+
+  iterator_type getIterator() { return it; }
+};
+
+template <typename VT>
+struct VirtualWriter {
+  using value_type = VT;
+  using iterator_type = uint64_t;
+  iterator_type it = 0;
+  size_t _size;
+  std::function<void(iterator_type, VT&)> devirtualize;
+  VirtualWriter(size_t size,
+                std::function<void(iterator_type, VT&)> devirtualize)
+      : devirtualize(devirtualize), _size(size) {}
+
+  void write(const VT& element) { devirtualize(it++, element); }
+
+  bool eof() { return it >= _size; }
+
+  size_t size() { return _size; }
+
+  void flush() {}
+};
+
 }  // namespace EM::VirtualVector

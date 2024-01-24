@@ -178,6 +178,8 @@ struct Vector {
     std::copy(begin, end, outIt);
   }
 
+  Vector(Vector&& other) : N(other.N), server(std::move(other.server)) {}
+
   T& AtForLateInit(uint64_t index) {
     return Iterator(index, *this).derefWriteOnly();
   }

@@ -306,6 +306,18 @@ TEST(Basic, testSamplingPerf) {
   printf("Time: %f ms\n", diff.count() * 1e3);
 }
 
+TEST(Basic, testSampler) {
+  size_t size = 166667;
+  size_t expectedSum = 83334;
+  NoReplaceSampler sampler(expectedSum, size);
+
+  size_t sum = 0;
+  for (size_t i = 0; i < size; ++i) {
+    sum += sampler.Sample();
+  }
+  ASSERT_EQ(sum, expectedSum);
+}
+
 TEST(Basic, testBuildBottomUp) {
   for (size_t leafCount = 2; leafCount < 1000; ++leafCount) {
     int totalLevel = GetLogBaseTwo(leafCount - 1) + 2;

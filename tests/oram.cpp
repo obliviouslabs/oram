@@ -8,10 +8,7 @@
 
 using namespace ORAM::PathORAM;
 
-TEST(PathORAM, Init) {
-  PathORAM<int> oram(1024);
-  oram.Destroy();
-}
+TEST(PathORAM, Init) { PathORAM<int> oram(1024); }
 
 TEST(PathORAM, ReadPath) {
   PathORAM<int> oram(32);
@@ -248,18 +245,20 @@ TEST(PathORAM, testInitNaive) {
 }
 
 TEST(PathORAM, testInitWithReader) {
-  uint64_t size = 1e7;
+  uint64_t memSize = 1e7;
+  uint64_t size = 1e6;
   delete EM::Backend::g_DefaultBackend;
   EM::Backend::g_DefaultBackend =
-      new EM::Backend::MemServerBackend((1ULL << 10) * (size + 1024));
+      new EM::Backend::MemServerBackend((1ULL << 10) * (memSize + 1024));
 
-  PathORAM<SortElement> oram(size);
+  PathORAM<SortElement> oram(memSize);
   std::vector<uint64_t> valMap(size);
   StdVector<SortElement> vec(size);
   for (int i = 0; i < size; ++i) {
     valMap[i] = UniformRandom();
     vec[i].key = valMap[i];
   }
+  using ORAM::UidBlock;
   StdVector<UidBlock<uint64_t>> posMap(size);
   StdVector<SortElement>::Reader reader(vec.begin(), vec.end());
   StdVector<UidBlock<uint64_t>>::Writer posMapWriter(posMap.begin(),

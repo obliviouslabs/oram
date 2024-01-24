@@ -26,21 +26,29 @@ struct PathORAM {
   Stash* stash = nullptr;
   int depth = 0;
   int cacheLevel = 62;
-  PositionType size = 0;
+  PositionType _size = 0;
 
-  PathORAM(const PathORAM& other) = default;
-  PathORAM(PathORAM&& other) = default;
+  // PathORAM(const PathORAM& other) = default;
+  PathORAM(PathORAM&& other) {
+    _size = other._size;
+    tree = std::move(other.tree);
+    stash = other.stash;
+    other.stash = nullptr;
+    depth = other.depth;
+    cacheLevel = other.cacheLevel;
+  }
 
   PathORAM(PositionType size, int cacheLevel = 62)
-      : size(size), tree(size, cacheLevel), cacheLevel(cacheLevel) {
+      : _size(size), tree(size, cacheLevel), cacheLevel(cacheLevel) {
     stash = new Stash();
     depth = GetLogBaseTwo(size - 1) + 2;
   }
 
   template <typename Reader, class PosMapWriter>
   void InitFromReader(Reader& reader, PosMapWriter& posMapWriter) {
-    printf("Init from reader\n");
-    size_t numBucket = 2 * size - 1;
+    size_t initSize = reader.size();
+    // printf("Init from reader\n");
+    size_t numBucket = 2 * size() - 1;
     size_t numBlock = numBucket * Z;
     // StdVector<char> loadVec(numBucket);
     struct Positions {
@@ -60,7 +68,7 @@ struct PathORAM {
       }
     };
     // HeapTree<
-    NoReplaceSampler sampler(size);
+    NoReplaceSampler sampler(initSize, size());
     std::function<PositionStash(Positions&, const PositionStash&,
                                 const PositionStash&)>
         reduceFunc = [](Positions& root, const PositionStash& left,
@@ -104,9 +112,9 @@ struct PathORAM {
     using PosVec = StdVector<PositionType>;
     PosVec positionVec(numBlock);
     PosVec prefixSum(numBlock + 1);
-    printf("Generate positions bottom up\n");
+    // printf("Generate positions bottom up\n");
     {
-      HeapTree<Positions> positions(size, cacheLevel, 1, 1UL << 62);
+      HeapTree<Positions> positions(size(), cacheLevel, 1, 1UL << 62);
       positions.template BuildBottomUp<PositionStash>(reduceFunc, leafFunc);
       // for (size_t i = 0; i < 2 * size - 1; ++i) {
       //   for (int j = 0; j < Z; ++j) {
@@ -114,7 +122,7 @@ struct PathORAM {
       //   }
       //   printf("\n");
       // }
-      printf("calc prefix sum\n");
+      // printf("calc prefix sum\n");
       prefixSum[0] = 0;
       for (PositionType i = 0; i < numBucket; ++i) {
         const Positions& posBucket = positions.GetByInternalIdx(i);
@@ -127,7 +135,9 @@ struct PathORAM {
       }
     }
     // EM::Algorithm::OrDistributeSeparateMark(
-    if (prefixSum[numBlock] != size) {
+    if (prefixSum[numBlock] != initSize) {
+      printf("prefixSum %lu initSize %lu\n", (int64_t)prefixSum[numBlock],
+             (int64_t)initSize);
       throw std::runtime_error("Stash overflows.");
     }
     using DistributeVec = StdVector<UidBlock_>;
@@ -139,8 +149,8 @@ struct PathORAM {
 
     DistributeVec distributeVec(numBlock);
     DistributeWriter distributeInputWriter(distributeVec.begin(),
-                                           distributeVec.begin() + size);
-    UidVec uidVec(size);
+                                           distributeVec.begin() + initSize);
+    UidVec uidVec(initSize);
     UidWriter uidWriter(uidVec.begin(), uidVec.end());
     PositionType inputIdx = 0;
     EM::VirtualVector::WrappedReader<UidBlock_, Reader> shuffleReader(
@@ -150,10 +160,10 @@ struct PathORAM {
           distributeInputWriter.write(block);
           return block.uid;
         });
-    printf("shuffle elements\n");
+    // printf("shuffle elements\n");
     EM::Algorithm::KWayButterflyOShuffle(shuffleReader, shuffleWriter);
     distributeInputWriter.flush();
-    printf("distribute elements\n");
+    // printf("distribute elements\n");
     EM::Algorithm::OrDistributeSeparateMark(
         distributeVec.begin(), distributeVec.end(), prefixSum.begin());
     DistributeReader distributeOutputReader(distributeVec.begin(),
@@ -170,7 +180,7 @@ struct PathORAM {
       tree.SetByInternalIdx(i, bucket);
     }
 
-    printf("compact positions\n");
+    // printf("compact positions\n");
     EM::Algorithm::OrCompactSeparateMark(positionVec.begin(), positionVec.end(),
                                          prefixSum.begin());
     for (size_t i = 0; i < positionVec.size(); ++i) {
@@ -183,7 +193,7 @@ struct PathORAM {
         posMapReader(uidReader, [&](const UidType& uid) {
           return UidBlock<PositionType>(positionVec[posMapIdx++], uid);
         });
-    printf("Final sort\n");
+    // printf("Final sort\n");
     EM::Algorithm::KWayButterflySort(posMapReader, posMapWriter);
 
     /* A quick test for reduceFunc
@@ -217,20 +227,20 @@ for (int i = 0; i < Z; ++i) {
 */
   }
 
-  void Destroy() {
+  size_t size() const { return _size; }
+
+  ~PathORAM() {
     if (stash) {
       delete stash;
       stash = nullptr;
     }
   }
 
-  ~PathORAM() { Destroy(); }
-
   PathORAM& operator=(const PathORAM& other) = default;
   PathORAM& operator=(PathORAM&& other) = default;
 
   PositionType Read(PositionType pos, const UidType& uid, T& out) {
-    PositionType newPos = UniformRandom(size - 1);
+    PositionType newPos = UniformRandom(size() - 1);
     std::vector<Block_> path = ReadPath(pos);
 
     // for (int i = 0; i < path.size(); ++i) {
@@ -257,8 +267,8 @@ for (int i = 0; i < Z; ++i) {
   }
 
   PositionType Write(const UidType& uid, const T& in) {
-    PositionType pos = UniformRandom(size - 1);
-    PositionType newPos = UniformRandom(size - 1);
+    PositionType pos = UniformRandom(size() - 1);
+    PositionType newPos = UniformRandom(size() - 1);
     std::vector<Block_> path = ReadPath(pos);
     Block_ newBlock(in, newPos, uid);
     WriteNewBlockToPath(path, newBlock);
@@ -268,24 +278,24 @@ for (int i = 0; i < Z; ++i) {
   }
 
   PositionType Update(PositionType pos, const UidType& uid,
-                      std::function<T(T)> updateFunc) {
+                      std::function<void(T&)> updateFunc) {
     T out;
     return Update(pos, uid, updateFunc, out);
   }
 
   PositionType Update(PositionType pos, const UidType& uid,
-                      std::function<T(T)> updateFunc, T& out) {
+                      std::function<void(T&)> updateFunc, T& out) {
     return Update(pos, uid, updateFunc, out, uid);  // does not change uid
   }
 
   PositionType Update(PositionType pos, const UidType& uid,
-                      std::function<T(T)> updateFunc, T& out,
+                      std::function<void(T&)> updateFunc, T& out,
                       const UidType& updatedUid) {
-    PositionType newPos = UniformRandom(size - 1);
+    PositionType newPos = UniformRandom(size() - 1);
     std::vector<Block_> path = ReadPath(pos);
 
     ReadElementAndRemoveFromPath(path, uid, out);
-    out = updateFunc(out);
+    updateFunc(out);
     Block_ newBlock(out, newPos, updatedUid);
     WriteNewBlockToPath(path, newBlock);
     EvictPath(path, pos);
