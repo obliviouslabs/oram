@@ -1,7 +1,7 @@
 #pragma once
 #include "common/utils.hpp"
 #include "external_memory/cachefrontvector.hpp"
-template <typename T>
+template <typename T, typename PositionType = uint64_t>
 struct HeapTree {
   using Vec = EM::CacheFrontVector::Vector<T>;
   Vec arr;

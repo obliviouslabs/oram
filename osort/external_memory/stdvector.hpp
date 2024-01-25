@@ -43,6 +43,15 @@ struct StdVector : public std::vector<T> {
     friend Iterator operator-(const Iterator& it, int32_t size) {
       return Iterator(typename std::vector<T>::iterator(it) - size);
     }
+
+    friend Iterator operator+(const Iterator& it, uint32_t size) {
+      return Iterator(typename std::vector<T>::iterator(it) + size);
+    }
+
+    friend Iterator operator-(const Iterator& it, uint32_t size) {
+      return Iterator(typename std::vector<T>::iterator(it) - size);
+    }
+
     size_t get_page_offset() { return 0; }
   };
 

@@ -100,7 +100,7 @@ struct OMap {
     KeyVec keys(initSize);
     KeyWriter keyWriter(keys.begin(), keys.end());
     EM::VirtualVector::VirtualReader<BPlusLeaf_> leafReader(
-        initSize, [&reader, &keyWriter](uint64_t i) {
+        initSize, [&reader, &keyWriter](PositionType i) {
           BPlusLeaf_ leaf;
           int j = 0;
           for (; j < max_chunk_size; j++) {
@@ -130,7 +130,7 @@ struct OMap {
       KeyWriter newKeyWriter(newKeys.begin(), newKeys.end());
       EM::VirtualVector::VirtualReader<BPlusNode_> nodeReader(
           newInitSize,
-          [&newKeyWriter, &keys, &positions, initSize](uint64_t i) {
+          [&newKeyWriter, &keys, &positions, initSize](PositionType i) {
             BPlusNode_ node;
             int j = 0;
             newKeyWriter.write(keys[i * max_fan_out]);

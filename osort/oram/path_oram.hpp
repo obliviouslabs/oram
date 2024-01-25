@@ -22,7 +22,7 @@ struct PathORAM {
   using Bucket_ = Bucket<T, Z, PositionType, UidType>;
   using UidBlock_ = UidBlock<T, UidType>;
   // Node_* root = nullptr;
-  HeapTree<Bucket_> tree;
+  HeapTree<Bucket_, PositionType> tree;
   Stash* stash = nullptr;
   int depth = 0;
   int cacheLevel = 62;
@@ -46,10 +46,10 @@ struct PathORAM {
 
   template <typename Reader, class PosMapWriter>
   void InitFromReader(Reader& reader, PosMapWriter& posMapWriter) {
-    size_t initSize = reader.size();
+    PositionType initSize = reader.size();
     // printf("Init from reader\n");
-    size_t numBucket = 2 * size() - 1;
-    size_t numBlock = numBucket * Z;
+    PositionType numBucket = 2 * size() - 1;
+    PositionType numBlock = numBucket * Z;
     // StdVector<char> loadVec(numBucket);
     struct Positions {
       PositionType pos[Z];
@@ -94,8 +94,8 @@ struct PathORAM {
       return *(PositionStash*)(combinedStash + Z);
     };
 
-    std::function<PositionStash(Positions&, size_t)> leafFunc =
-        [&](Positions& leaf, size_t path) {
+    std::function<PositionStash(Positions&, PositionType)> leafFunc =
+        [&](Positions& leaf, PositionType path) {
           for (int i = 0; i < Z; ++i) {
             leaf.pos[i] = DUMMY<PositionType>();
           }
@@ -168,7 +168,7 @@ struct PathORAM {
         distributeVec.begin(), distributeVec.end(), prefixSum.begin());
     DistributeReader distributeOutputReader(distributeVec.begin(),
                                             distributeVec.end());
-    for (size_t i = 0; i < numBucket; ++i) {
+    for (PositionType i = 0; i < numBucket; ++i) {
       Bucket_ bucket;
       for (int j = 0; j < Z; ++j) {
         const UidBlock_& uidBlock = distributeOutputReader.read();
@@ -183,15 +183,15 @@ struct PathORAM {
     // printf("compact positions\n");
     EM::Algorithm::OrCompactSeparateMark(positionVec.begin(), positionVec.end(),
                                          prefixSum.begin());
-    for (size_t i = 0; i < positionVec.size(); ++i) {
+    for (PositionType i = 0; i < positionVec.size(); ++i) {
     }
-    size_t posMapIdx = 0;
+    PositionType posMapIdx = 0;
 
     UidReader uidReader(uidVec.begin(), uidVec.end());
 
-    EM::VirtualVector::WrappedReader<UidBlock<PositionType>, UidReader>
+    EM::VirtualVector::WrappedReader<UidBlock<PositionType, UidType>, UidReader>
         posMapReader(uidReader, [&](const UidType& uid) {
-          return UidBlock<PositionType>(positionVec[posMapIdx++], uid);
+          return UidBlock<PositionType, UidType>(positionVec[posMapIdx++], uid);
         });
     // printf("Final sort\n");
     EM::Algorithm::KWayButterflySort(posMapReader, posMapWriter);
@@ -227,7 +227,7 @@ for (int i = 0; i < Z; ++i) {
 */
   }
 
-  size_t size() const { return _size; }
+  PositionType size() const { return _size; }
 
   ~PathORAM() {
     if (stash) {
@@ -309,7 +309,7 @@ for (int i = 0; i < Z; ++i) {
 
     memcpy(&path[0], stash->blocks, stashSize * sizeof(Block_));
 
-    size_t level = tree.ReadPath(pos, (Bucket_*)(&path[stashSize]));
+    int level = tree.ReadPath(pos, (Bucket_*)(&path[stashSize]));
     path.resize(stashSize + Z * level);
     // for (int i = stashSize; i < path.size(); ++i) {
     //   printf("%ld ", (int64_t)path[i].position);

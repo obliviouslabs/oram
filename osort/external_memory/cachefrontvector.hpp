@@ -77,7 +77,7 @@ struct Vector {
     }
 
     // Prefix increment
-    Iterator& operator+=(int n) {
+    Iterator& operator+=(uint64_t n) {
       m_ptr += n;
       return *this;
     }

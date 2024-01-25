@@ -96,7 +96,7 @@ TEST(OMap, Insert) {
 TEST(OMap, FindPerf) {
   size_t mapSize = 1e7;
   size_t initSize = 1e7;
-  OMap<uint64_t, int64_t> omap(mapSize);
+  OMap<uint64_t, int64_t, 9, uint32_t, uint32_t> omap(mapSize);
   StdVector<std::pair<uint64_t, int64_t>> vec(initSize);
   for (int i = 0; i < initSize; i++) {
     vec[i].first = i * 10;
