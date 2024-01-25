@@ -109,7 +109,7 @@ TEST(PathORAM, WithoutPositionMap1) {
   for (uint64_t i = 0; i < memSize; i++) {
     uint64_t val;
     uint64_t pos = oram.Update(
-        posMap[i], i, [](uint64_t x) { return x + 1; }, val);
+        posMap[i], i, [](uint64_t& x) { ++x; }, val);
     posMap[i] = pos;
     ++valMap[i];
     ASSERT_EQ(val, valMap[i]);
@@ -163,7 +163,7 @@ TEST(PathORAM, WithoutPositionMapMixed) {
         }
         uint64_t val;
         uint64_t pos = oram.Update(
-            posMap[uid], uid, [](uint64_t x) { return x + 1; }, val);
+            posMap[uid], uid, [](uint64_t& x) { ++x; }, val);
         posMap[uid] = pos;
         ++valMap[uid];
         ASSERT_EQ(val, valMap[uid]);

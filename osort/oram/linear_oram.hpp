@@ -39,7 +39,7 @@ struct LinearORAM {
     return pos;
   }
 
-  PositionType Write(PositionType pos, const UidType& uid, const T& in) {
+  PositionType Write(const UidType& uid, const T& in) {
     bool inserted = false;
     for (UidBlock_& block : data) {
       bool emptyFlag = block.uid == DUMMY<UidType>();
@@ -47,7 +47,7 @@ struct LinearORAM {
       obliMove(emptyFlag & !inserted, block, newBlock);
       inserted |= emptyFlag;
     }
-    return pos;
+    return 0;
   }
 
   PositionType Update(PositionType pos, const UidType& uid,

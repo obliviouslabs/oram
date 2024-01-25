@@ -11,6 +11,7 @@ struct ORAM {
   using PathORAM_ = PathORAM::PathORAM<T, 5, 63, PositionType, UidType>;
   LinearORAM_* linearOram = NULL;
   PathORAM_* pathOram = NULL;
+  UidType nextUid = 0;
   bool isLinear = false;
   ORAM(PositionType size) {
     isLinear = size <= 100;
@@ -36,6 +37,7 @@ struct ORAM {
 
   template <typename Reader, typename Writer>
   void InitFromReader(Reader& reader, Writer& writer) {
+    nextUid = reader.size();
     if (isLinear) {
       linearOram->InitFromReader(reader);
     } else {
@@ -59,11 +61,11 @@ struct ORAM {
     }
   }
 
-  PositionType Write(PositionType pos, const UidType& uid, const T& in) {
+  PositionType Write(const UidType& uid, const T& in) {
     if (isLinear) {
-      return linearOram->Write(pos, uid, in);
+      return linearOram->Write(uid, in);
     } else {
-      return pathOram->Write(pos, uid, in);
+      return pathOram->Write(uid, in);
     }
   }
 
@@ -93,6 +95,13 @@ struct ORAM {
     } else {
       return pathOram->Update(pos, uid, updateFunc, out, updatedUid);
     }
+  }
+
+  UidType GetNextUid(bool real = true) {
+    UidType res = DUMMY<UidType>();
+    obliMove(real, res, nextUid);
+    nextUid += (UidType)real;
+    return res;
   }
 };
 

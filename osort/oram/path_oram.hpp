@@ -417,32 +417,6 @@ for (int i = 0; i < Z; ++i) {
     }
     EM::Algorithm::OrDistributeSeparateMark(path.rbegin(), path.rend(),
                                             markArr.rbegin());
-
-    // for (int i = 0; i < path.size(); ++i) {
-    //   printf("%d ", deeperDummyCount[i]);
-    //   if (i >= stashSize - 1 && (path.size() - i - 1) % Z == 0) {
-    //     printf("\n");
-    //   }
-    // }
-    // printf("\n");
-
-    // for (int i = 0; i < markArr.size(); ++i) {
-    //   printf("%d ", markArr[i]);
-    //   if (i >= stashSize && (markArr.size() - i - 1) % Z == 0) {
-    //     printf("\n");
-    //   }
-    // }
-    // printf("\n");
-
-    // for (int i = 0; i < path.size(); ++i) {
-    //   printf("%d ",
-    //          path[i].isDummy() ? 0 : commonSuffixLength(path[i].position,
-    //          pos));
-    //   if (i >= stashSize - 1 && (path.size() - i - 1) % Z == 0) {
-    //     printf("\n");
-    //   }
-    // }
-    // printf("\n");
   }
 
   static int commonSuffixLength(PositionType a, PositionType b) {
@@ -450,42 +424,5 @@ for (int i = 0; i < Z; ++i) {
   }
 
  private:
-  // // TODO: make it cache efficient
-  // Node_* initTree(size_t size) {
-  //   Node_* root = new Node_();
-  //   if (size == 1) {
-  //     return root;
-  //   }
-  //   size_t rightSize = size >> 1;
-  //   root->left = initTree(size - rightSize);
-  //   root->right = initTree(rightSize);
-  //   return root;
-  // }
-
-  // template <typename Iterator>
-  // Node_* initTree(Iterator begin, Iterator end) {
-  //   size_t size = end - begin;
-  //   Node_* root = new Node_();
-  //   if (size == 1) {
-  //     root->bucket.blocks[0] = *begin;
-  //     printf("init pos %lu uid %lu, key = %lu\n",
-  //            root->bucket.blocks[0].position, root->bucket.blocks[0].uid,
-  //            root->bucket.blocks[0].data.key);
-  //     return root;
-  //   }
-  //   Iterator mid = begin + ((size + 1) >> 1);
-  //   root->left = initTree(begin, mid);
-  //   root->right = initTree(mid, end);
-  //   return root;
-  // }
-
-  // void destroyTree(Node_* node) {
-  //   if (node == nullptr) {
-  //     return;
-  //   }
-  //   destroyTree(node->left);
-  //   destroyTree(node->right);
-  //   delete node;
-  // }
 };
 }  // namespace ORAM::PathORAM
