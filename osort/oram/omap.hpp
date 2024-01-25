@@ -45,7 +45,7 @@ struct BPlusLeaf {
   }
 };
 
-template <typename K, typename V, const ushort max_fan_out = 8,
+template <typename K, typename V, const ushort max_fan_out = 9,
           typename PositionType = uint64_t, typename UidType = uint64_t>
 struct OMap {
   using UidPosition = UidBlock<PositionType, UidType>;

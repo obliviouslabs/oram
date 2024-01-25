@@ -80,6 +80,17 @@ TEST(OMap, Insert) {
     ASSERT_TRUE(omap.find(p.first, val));
     ASSERT_EQ(val, p.second);
   }
+  for (size_t r = 0; r < 1000; ++r) {
+    uint64_t i = UniformRandom(mapSize * 10);
+    int64_t val;
+    bool res = omap.find(i, val);
+    if (map.find(i) != map.end()) {
+      ASSERT_TRUE(res);
+      ASSERT_EQ(val, map[i]);
+    } else {
+      ASSERT_FALSE(res);
+    }
+  }
 }
 
 TEST(OMap, FindPerf) {
@@ -116,4 +127,39 @@ TEST(OMap, FindPerf) {
   std::chrono::duration<double> elapsed_seconds2 = end2 - start2;
   std::cout << "omap find time per access: "
             << elapsed_seconds2.count() / round * 1e6 << "us\n";
+}
+
+TEST(OMap, InsertPerf) {
+  size_t mapSize = 1e7;
+  size_t initSize = 1e5;
+  OMap<uint64_t, int64_t> omap(mapSize);
+  StdVector<std::pair<uint64_t, int64_t>> vec(initSize);
+  std::unordered_map<uint64_t, int64_t> map;
+  for (int i = 0; i < initSize; i++) {
+    vec[i].first = i * 10;
+    vec[i].second = i * 3;
+    map[i * 10] = i * 3;
+  }
+
+  StdVector<std::pair<uint64_t, int64_t>>::Reader reader(vec.begin(),
+                                                         vec.end());
+
+  omap.InitFromReader(reader);
+  int round = 1e5;
+  auto start = std::chrono::system_clock::now();
+  for (size_t r = 0; r < round; ++r) {
+    uint64_t i = UniformRandom(mapSize * 10);
+    int64_t val = UniformRandom(mapSize * 3);
+    bool res = omap.insert(i, val);
+    if (map.find(i) != map.end()) {
+      ASSERT_TRUE(res);
+    } else {
+      ASSERT_FALSE(res);
+    }
+    map[i] = val;
+  }
+  auto end = std::chrono::system_clock::now();
+  std::chrono::duration<double> elapsed_seconds = end - start;
+  std::cout << "omap insert time per access: "
+            << elapsed_seconds.count() / round * 1e6 << "us\n";
 }
