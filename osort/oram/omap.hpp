@@ -4,13 +4,14 @@
 
 namespace ORAM {
 
-template <typename K, const ushort max_fan_out = 9,
+template <typename K, const short max_fan_out = 9,
           typename PositionType = uint64_t, typename UidType = uint64_t>
 struct BPlusNode {
   K keys[max_fan_out - 1];
   UidBlock<PositionType, UidType> children[max_fan_out];
-  ushort numChildren = 0;
-  // friend with cout
+  short numChildren = 0;
+// friend with cout
+#ifndef ENCLAVE_MODE
   friend std::ostream& operator<<(std::ostream& os, const BPlusNode& node) {
     os << "BPlusNode  ";
     for (int i = 0; i < node.numChildren; i++) {
@@ -21,17 +22,19 @@ struct BPlusNode {
     }
     return os;
   }
+#endif
 };
 
-template <typename K, typename V, const ushort max_chunk_size = 9>
+template <typename K, typename V, const short max_chunk_size = 9>
 struct BPlusLeaf {
   struct KVPair {
     K key;
     V value;
   };
   KVPair kv[max_chunk_size];
-  ushort numElements = 0;
-  // friend with cout
+  short numElements = 0;
+// friend with cout
+#ifndef ENCLAVE_MODE
   friend std::ostream& operator<<(std::ostream& os, const BPlusLeaf& leaf) {
     os << "BPlusLeaf(";
     for (int i = 0; i < leaf.numElements; i++) {
@@ -43,15 +46,16 @@ struct BPlusLeaf {
     os << ")";
     return os;
   }
+#endif
 };
 
-template <typename K, typename V, const ushort max_fan_out = 9,
+template <typename K, typename V, const short max_fan_out = 9,
           typename PositionType = uint64_t, typename UidType = uint64_t>
 struct OMap {
   using UidPosition = UidBlock<PositionType, UidType>;
   using BPlusNode_ = BPlusNode<K, max_fan_out, PositionType, UidType>;
 
-  static constexpr ushort max_chunk_size =
+  static constexpr short max_chunk_size =
       std::max(2UL, sizeof(BPlusNode_) / (sizeof(K) + sizeof(V)));
   using BPlusLeaf_ = BPlusLeaf<K, V, max_chunk_size>;
   using LeafORAM_ = ORAM<BPlusLeaf_, PositionType, UidType>;
@@ -59,8 +63,8 @@ struct OMap {
   LeafORAM_ leafOram;
   std::vector<InternalORAM_> internalOrams;
   PositionType maxSize = 1024;
-  static constexpr ushort min_fan_out = (max_fan_out + 1) / 2;
-  static constexpr ushort min_chunk_size = (max_chunk_size + 1) / 2;
+  static constexpr short min_fan_out = (max_fan_out + 1) / 2;
+  static constexpr short min_chunk_size = (max_chunk_size + 1) / 2;
 
   OMap(PositionType maxSize)
       : leafOram(divRoundUp(maxSize, min_chunk_size)), maxSize(maxSize) {
@@ -107,8 +111,8 @@ struct OMap {
             if (reader.eof()) {
               break;
             }
-            auto& [k, v] = reader.read();
-            leaf.kv[j] = {k, v};
+            auto kv = reader.read();
+            leaf.kv[j] = {kv.first, kv.second};
           }
           leaf.numElements = j;
           keyWriter.write(leaf.kv[0].key);
@@ -121,7 +125,6 @@ struct OMap {
         wrappedPosWriter(posWriter,
                          [](const UidPosition& uidPos) { return uidPos.data; });
     leafOram.InitFromReader(leafReader, wrappedPosWriter);
-
     // TODO end at a linear oram
     for (InternalORAM_& internalOram : internalOrams) {
       size_t newInitSize = divRoundUp(initSize, max_fan_out);
@@ -206,7 +209,7 @@ struct OMap {
                                         const K& key, const V& val) {
     bool foundFlag = false;
     // update element if exists
-    for (ushort i = 0; i < max_chunk_size; ++i) {
+    for (short i = 0; i < max_chunk_size; ++i) {
       bool flag = (i < leaf.numElements) & (key == leaf.kv[i].key);
       foundFlag |= flag;
       obliMove(flag, leaf.kv[i].value, val);
@@ -216,7 +219,7 @@ struct OMap {
     bool splitFlag = leaf.numElements > max_chunk_size;
 
     // assume split, the index of the rightmost element in the new leaf
-    static constexpr ushort newLeafLastIdx = (max_chunk_size - 1) / 2;
+    static constexpr short newLeafLastIdx = (max_chunk_size - 1) / 2;
     newLeaf.kv[newLeafLastIdx] = {key, val};
 
     // insert the new element by swapping from back
@@ -224,21 +227,21 @@ struct OMap {
     lastKVSwapFlag &= !foundFlag;
     obliSwap(lastKVSwapFlag, leaf.kv[max_chunk_size - 1],
              newLeaf.kv[newLeafLastIdx]);
-    for (ushort i = max_chunk_size - 1; i > 0; --i) {
+    for (short i = max_chunk_size - 1; i > 0; --i) {
       bool swapFlag =
           (i >= leaf.numElements) | (leaf.kv[i].key < leaf.kv[i - 1].key);
       swapFlag &= !foundFlag;
       obliSwap(swapFlag, leaf.kv[i - 1], leaf.kv[i]);
     }
     // put the right half of the leaf into the new leaf
-    for (ushort i = max_chunk_size / 2 + 1, j = 0; i < max_chunk_size;
+    for (short i = max_chunk_size / 2 + 1, j = 0; i < max_chunk_size;
          ++i, ++j) {
       // it's ok to have duplicate kv, since we control validity of
       // element by newElements, and the validity of leaf by uid in oram
       newLeaf.kv[j] = leaf.kv[i];  // TODO optimize with memcpy
     }
     newLeaf.numElements = newLeafLastIdx + 1;
-    obliMove(splitFlag, leaf.numElements, (ushort)(max_chunk_size / 2 + 1));
+    obliMove(splitFlag, leaf.numElements, (short)(max_chunk_size / 2 + 1));
     // std::cout << "Split flag: " << splitFlag << std::endl;
     // std::cout << "leaf: " << leaf << std::endl;
     // if (splitFlag) std::cout << "newLeaf: " << newLeaf << std::endl;
@@ -248,7 +251,7 @@ struct OMap {
   // returns splitFlag
   bool addAndSplitNode(BPlusNode_& node, BPlusNode_& newNode, const K& key,
                        const PositionType& pos, const UidType& uid,
-                       ushort keyRank) {
+                       short keyRank) {
     Assert(keyRank > 0);  // always insert the right child
     // use keyRank to minimize # of key comparisons
 
@@ -259,7 +262,7 @@ struct OMap {
     bool splitFlag = node.numChildren > max_fan_out;
 
     // assume split, the index of the rightmost element in the new node
-    static constexpr ushort newNodeLastIdx = (max_fan_out - 1) / 2;
+    static constexpr short newNodeLastIdx = (max_fan_out - 1) / 2;
     static_assert(newNodeLastIdx != 0);
     newNode.keys[newNodeLastIdx - 1] = key;
     newNode.children[newNodeLastIdx] = {pos, uid};
@@ -270,13 +273,13 @@ struct OMap {
              newNode.children[newNodeLastIdx]);
     obliSwap(lastKVSwapFlag, node.keys[max_fan_out - 2],
              newNode.keys[newNodeLastIdx - 1]);
-    for (ushort i = max_fan_out - 1; i > 1; --i) {
+    for (short i = max_fan_out - 1; i > 1; --i) {
       bool swapFlag = keyRank < i;
       obliSwap(swapFlag, node.keys[i - 2], node.keys[i - 1]);
       obliSwap(swapFlag, node.children[i - 1], node.children[i]);
     }
     // put the right half of the node into the new node
-    for (ushort i = max_fan_out / 2 + 1, j = 0; i < max_fan_out; ++i, ++j) {
+    for (short i = max_fan_out / 2 + 1, j = 0; i < max_fan_out; ++i, ++j) {
       // it's ok to have duplicate kv, since we control validity of
       // element by newElements, and the validity of node by uid in oram
       newNode.children[j] = node.children[i];  // TODO optimize with memcpy
@@ -286,7 +289,7 @@ struct OMap {
     }
 
     newNode.numChildren = newNodeLastIdx + 1;
-    obliMove(splitFlag, node.numChildren, (ushort)(max_fan_out / 2 + 1));
+    obliMove(splitFlag, node.numChildren, (short)(max_fan_out / 2 + 1));
     // std::cout << "Split flag: " << splitFlag << std::endl;
     // std::cout << "node: " << node << std::endl;
     // if (splitFlag) std::cout << "newNode: " << newNode << std::endl;
@@ -306,7 +309,7 @@ struct OMap {
     K keyNewNode;
     std::function<void(BPlusNode_&)> updateFunc = [&, this](BPlusNode_& node) {
       UidPosition child = node.children[0];
-      ushort childIdx = 0;
+      short childIdx = 0;
       for (short i = 1; i < max_fan_out; ++i) {
         bool flag = (i < node.numChildren) & !(key < node.keys[i - 1]);
         obliMove(flag, child, node.children[i]);

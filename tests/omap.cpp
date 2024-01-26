@@ -163,3 +163,66 @@ TEST(OMap, InsertPerf) {
   std::cout << "omap insert time per access: "
             << elapsed_seconds.count() / round * 1e6 << "us\n";
 }
+
+TEST(OMap, InsertAndFind) {
+  printf("test omap\n");
+  size_t mapSize = 1e5;
+  size_t initSize = 5e4;
+  OMap<uint64_t, int64_t> omap(mapSize);
+  std::unordered_map<uint64_t, int64_t> map;
+  for (int i = 0; i < initSize; i++) {
+    map[i * 10] = i * 3;
+  }
+
+  std::function<std::pair<uint64_t, int64_t>(uint64_t)> readerFunc =
+      [](uint64_t i) { return std::pair<uint64_t, int64_t>(i * 10, i * 3); };
+
+  EM::VirtualVector::VirtualReader<std::pair<uint64_t, int64_t>> reader(
+      initSize, readerFunc);
+  uint64_t start, end;
+  printf("init omap\n");
+  omap.InitFromReader(reader);
+
+  int round = 1e4;
+
+  for (size_t r = 0; r < round; ++r) {
+    uint64_t i = UniformRandom(mapSize * 10);
+    int64_t val = UniformRandom(mapSize * 3);
+    bool res = omap.insert(i, val);
+    if (map.find(i) != map.end()) {
+      if (!res) {
+        printf("insert failed at round %lu, does not replace element\n", r);
+        abort();
+      }
+    } else {
+      if (res) {
+        printf("insert failed at round %lu, found element that doesn't exist\n",
+               r);
+        abort();
+      }
+    }
+    map[i] = val;
+  }
+
+  for (size_t r = 0; r < round; ++r) {
+    uint64_t i = UniformRandom(mapSize * 10);
+    int64_t val;
+    bool res = omap.find(i, val);
+    if (map.find(i) != map.end()) {
+      if (!res) {
+        printf("find failed at round %lu, does not find element\n", r);
+        abort();
+      }
+      if (val != map[i]) {
+        printf("find failed at round %lu, value not match\n", r);
+        abort();
+      }
+    } else {
+      if (res) {
+        printf("find failed at round %lu, found element that doesn't exist\n",
+               r);
+        abort();
+      }
+    }
+  }
+}

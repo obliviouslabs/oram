@@ -245,8 +245,8 @@ TEST(PathORAM, testInitNaive) {
 }
 
 TEST(PathORAM, testInitWithReader) {
-  uint64_t memSize = 1e7;
-  uint64_t size = 1e6;
+  uint64_t memSize = 8;
+  uint64_t size = 8;
   delete EM::Backend::g_DefaultBackend;
   EM::Backend::g_DefaultBackend =
       new EM::Backend::MemServerBackend((1ULL << 10) * (memSize + 1024));

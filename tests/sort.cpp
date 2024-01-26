@@ -266,7 +266,7 @@ TEST(TestSort, KWayInterleaveSepMarks) {
       }
       Interleave(vLarge.begin(), vLarge.end(), markLarge.begin(),
                  markLarge.end(), way);
-      for (uint i = 0; i < vLarge.size(); ++i) {
+      for (int i = 0; i < vLarge.size(); ++i) {
         ASSERT_EQ(vLarge[i] / 10, i % way);
       }
     }

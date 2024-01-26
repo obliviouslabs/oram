@@ -116,12 +116,6 @@ struct PathORAM {
     {
       HeapTree<Positions> positions(size(), cacheLevel, 1, 1UL << 62);
       positions.template BuildBottomUp<PositionStash>(reduceFunc, leafFunc);
-      // for (size_t i = 0; i < 2 * size - 1; ++i) {
-      //   for (int j = 0; j < Z; ++j) {
-      //     printf("%ld ", (int64_t)positions.GetByInternalIdx(i).pos[j]);
-      //   }
-      //   printf("\n");
-      // }
       // printf("calc prefix sum\n");
       prefixSum[0] = 0;
       for (PositionType i = 0; i < numBucket; ++i) {
@@ -141,6 +135,8 @@ struct PathORAM {
       throw std::runtime_error("Stash overflows.");
     }
     using DistributeVec = StdVector<UidBlock_>;
+    // using DistributeVec = EM::ExtVector::Vector<UidBlock_, 8192, true, true,
+    // 1UL>;
     using DistributeReader = typename DistributeVec::Reader;
     using DistributeWriter = typename DistributeVec::Writer;
     using UidVec = StdVector<UidType>;
@@ -162,6 +158,9 @@ struct PathORAM {
         });
     // printf("shuffle elements\n");
     EM::Algorithm::KWayButterflyOShuffle(shuffleReader, shuffleWriter);
+    // for (PositionType i = 0; i < initSize; ++i) {
+    //   shuffleWriter.write(shuffleReader.read());
+    // }
     distributeInputWriter.flush();
     // printf("distribute elements\n");
     EM::Algorithm::OrDistributeSeparateMark(
@@ -183,8 +182,7 @@ struct PathORAM {
     // printf("compact positions\n");
     EM::Algorithm::OrCompactSeparateMark(positionVec.begin(), positionVec.end(),
                                          prefixSum.begin());
-    for (PositionType i = 0; i < positionVec.size(); ++i) {
-    }
+
     PositionType posMapIdx = 0;
 
     UidReader uidReader(uidVec.begin(), uidVec.end());
@@ -194,37 +192,16 @@ struct PathORAM {
           return UidBlock<PositionType, UidType>(positionVec[posMapIdx++], uid);
         });
     // printf("Final sort\n");
+    // std::vector<UidBlock<PositionType, UidType>> posMapVec(initSize);
+    // for (PositionType i = 0; i < initSize; ++i) {
+    //   posMapVec[i] = posMapReader.read();
+    // }
+    // std::sort(posMapVec.begin(), posMapVec.end());
+    // for (PositionType i = 0; i < initSize; ++i) {
+    //   posMapWriter.write(posMapVec[i]);
+    // }
+    // posMapWriter.flush();
     EM::Algorithm::KWayButterflySort(posMapReader, posMapWriter);
-
-    /* A quick test for reduceFunc
-PositionStash testLeft, testRight;
-int leftSize = 6;
-int rightSize = 5;
-for (int i = 0; i < 16 - Z; ++i) {
-  if (i < leftSize) {
-    testLeft.pos[i] = i;
-  } else {
-    testLeft.pos[i] = DUMMY<PositionType>();
-  }
-  if (i < rightSize) {
-    testRight.pos[i] = i;
-  } else {
-    testRight.pos[i] = DUMMY<PositionType>();
-  }
-}
-Positions testRoot;
-PositionStash testRootStash = reduceFunc(testRoot, testLeft, testRight);
-for (int i = 0; i < 16 - Z; ++i) {
-  printf("%d ", (int)testRootStash.pos[i]);
-}
-printf("\n");
-for (int i = 0; i < Z; ++i) {
-  printf("%d ", (int)testRoot.pos[i]);
-}
-
-=> prints 2 3 3 4 4 5 -1 -1 -1 -1 -1
-          0 0 1 1 2 2
-*/
   }
 
   PositionType size() const { return _size; }

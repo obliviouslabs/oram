@@ -67,4 +67,4 @@ struct UidBlock {
   INLINE bool isDummy() const { return uid == DUMMY<UidType>(); }
 };
 
-};  // namespace ORAM::PathORAM
+};  // namespace ORAM
