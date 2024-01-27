@@ -35,7 +35,6 @@ TEST(OMap, Find) {
                                                              vec.end());
 
   omap.InitFromReader(reader);
-  printf("init omap done\n");
   SortElement val;
   for (int r = 0; r < 1000; ++r) {
     uint64_t i = UniformRandom(initSize - 1);
@@ -45,6 +44,35 @@ TEST(OMap, Find) {
       ASSERT_EQ(val.key, 3 * i);
     } else {
       ASSERT_FALSE(omap.find(10 * i + 1, val));
+    }
+  }
+}
+
+TEST(OMap, Update) {
+  size_t mapSize = 54321;
+  size_t initSize = 12345;
+  OMap<uint64_t, SortElement> omap(mapSize);
+  std::map<uint64_t, uint64_t> keyMap;
+  StdVector<std::pair<uint64_t, SortElement>> vec(initSize);
+  for (int i = 0; i < initSize; i++) {
+    vec[i].first = i * 10;
+    vec[i].second.key = i * 3;
+    keyMap[i * 10] = i * 3;
+  }
+  StdVector<std::pair<uint64_t, SortElement>>::Reader reader(vec.begin(),
+                                                             vec.end());
+
+  omap.InitFromReader(reader);
+  SortElement val;
+  auto valUpdateFunc = [](SortElement& val) { ++val.key; };
+  for (int r = 0; r < 10000; ++r) {
+    uint64_t i = UniformRandom(initSize - 1);
+    if (UniformRandomBit()) {
+      ASSERT_TRUE(omap.update(10 * i, valUpdateFunc, val));
+      keyMap[10 * i] += 1;
+      ASSERT_EQ(val.key, keyMap[10 * i]);
+    } else {
+      ASSERT_FALSE(omap.update(10 * i + 1, valUpdateFunc));
     }
   }
 }
@@ -199,7 +227,6 @@ TEST(OMap, InsertAndFind) {
   EM::VirtualVector::VirtualReader<std::pair<uint64_t, int64_t>> reader(
       initSize, readerFunc);
   uint64_t start, end;
-  printf("init omap\n");
   omap.InitFromReader(reader);
 
   int round = 1e4;

@@ -220,6 +220,58 @@ struct OMap {
     return foundFlag;  // TODO return false if not found
   }
 
+  bool update(const K& key, const std::function<void(V&)>& valUpdateFunc,
+              V& valOut) {
+    bool foundFlag = false;
+    auto leafUpdateFunc = [&](BPlusLeaf_& leaf) {
+      short foundIdx = max_chunk_size;
+      for (short i = 0; i < max_chunk_size; ++i) {
+        bool flag = (i < leaf.numElements) & (key == leaf.kv[i].key);
+        foundFlag |= flag;
+        obliMove(flag, valOut, leaf.kv[i].value);
+        obliMove(flag, foundIdx, i);
+      }
+      valUpdateFunc(valOut);
+      for (short i = 0; i < max_chunk_size; ++i) {
+        bool flag = i == foundIdx;
+        obliMove(flag, leaf.kv[i].value, valOut);
+      }
+    };
+    auto oramIt = internalOrams.begin();
+    std::function<void(BPlusNode_&)> updateFunc =
+        [&key, &valOut, &oramIt, &updateFunc, &foundFlag, &leafUpdateFunc,
+         this](BPlusNode_& node) {
+          UidPosition child = node.children[0];
+          short childIdx = 0;
+          for (short i = 1; i < max_fan_out; ++i) {
+            bool flag = (i < node.numChildren) & !(key < node.keys[i - 1]);
+            obliMove(flag, child, node.children[i]);
+            childIdx += flag;
+          }
+          ++oramIt;
+          PositionType newPos;
+          if (oramIt == internalOrams.end()) {
+            BPlusLeaf_ leaf;
+            newPos = leafOram.Update(child.data, child.uid, leafUpdateFunc);
+          } else {
+            newPos = oramIt->Update(child.data, child.uid,
+                                    updateFunc);  // recursive lambda
+          }
+          for (short i = 0; i < max_fan_out; ++i) {
+            bool flag = i == childIdx;
+            obliMove(flag, node.children[i].data, newPos);
+          }
+        };
+    oramIt->Update(0, 0, updateFunc);
+
+    return foundFlag;  // TODO return false if not found
+  }
+
+  bool update(const K& key, const std::function<void(V&)>& valUpdateFunc) {
+    V valOut;
+    return update(key, valUpdateFunc, valOut);
+  }
+
   // returns {splitFlag, foundFlag}
   std::pair<bool, bool> addAndSplitLeaf(BPlusLeaf_& leaf, BPlusLeaf_& newLeaf,
                                         const K& key, const V& val) {
