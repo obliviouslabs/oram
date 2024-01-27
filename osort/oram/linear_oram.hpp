@@ -12,6 +12,8 @@ struct LinearORAM {
   using UidBlock_ = UidBlock<T, UidType>;
   StdVector<UidBlock_> data;
   PositionType _size;
+
+  LinearORAM() : _size(0) {}
   LinearORAM(PositionType size) : _size(size), data(size) {}
 
   template <typename Reader>
@@ -31,6 +33,15 @@ struct LinearORAM {
   }
 
   size_t size() const { return _size; }
+
+  void SetSize(size_t size) {
+    _size = size;
+    data.resize(size);
+  }
+
+  static size_t GetMemoryUsage(size_t size) { return sizeof(UidBlock_) * size; }
+
+  size_t GetMemoryUsage() const { return GetMemoryUsage(_size); }
 
   PositionType Read(PositionType pos, const UidType& uid, T& out) {
     for (UidBlock_& block : data) {

@@ -100,8 +100,8 @@ void testORAMInit() {
 
 void testOMap() {
   printf("test omap\n");
-  size_t mapSize = 1e6;
-  size_t initSize = 1e6;
+  size_t mapSize = 1e7;
+  size_t initSize = 1e7;
   OMap<uint64_t, int64_t> omap(mapSize);
   std::unordered_map<uint64_t, int64_t> map;
   for (int i = 0; i < initSize; i++) {
@@ -178,7 +178,7 @@ void ecall_omap_perf() {
   if (EM::Backend::g_DefaultBackend) {
     delete EM::Backend::g_DefaultBackend;
   }
-  size_t BackendSize = 1e9;
+  size_t BackendSize = 1e10;
   EM::Backend::g_DefaultBackend =
       new EM::Backend::MemServerBackend(BackendSize);
   try {

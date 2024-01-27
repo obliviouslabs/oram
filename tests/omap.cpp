@@ -35,6 +35,7 @@ TEST(OMap, Find) {
                                                              vec.end());
 
   omap.InitFromReader(reader);
+  printf("init omap done\n");
   SortElement val;
   for (int r = 0; r < 1000; ++r) {
     uint64_t i = UniformRandom(initSize - 1);
@@ -96,6 +97,12 @@ TEST(OMap, Insert) {
 TEST(OMap, FindPerf) {
   size_t mapSize = 1e7;
   size_t initSize = 1e7;
+  if (EM::Backend::g_DefaultBackend) {
+    delete EM::Backend::g_DefaultBackend;
+  }
+  size_t BackendSize = 1e10;
+  EM::Backend::g_DefaultBackend =
+      new EM::Backend::MemServerBackend(BackendSize);
   OMap<uint64_t, int64_t, 9, uint32_t, uint32_t> omap(mapSize);
   StdVector<std::pair<uint64_t, int64_t>> vec(initSize);
   for (int i = 0; i < initSize; i++) {
@@ -132,6 +139,12 @@ TEST(OMap, FindPerf) {
 TEST(OMap, InsertPerf) {
   size_t mapSize = 1e7;
   size_t initSize = 1e5;
+  if (EM::Backend::g_DefaultBackend) {
+    delete EM::Backend::g_DefaultBackend;
+  }
+  size_t BackendSize = 1e10;
+  EM::Backend::g_DefaultBackend =
+      new EM::Backend::MemServerBackend(BackendSize);
   OMap<uint64_t, int64_t> omap(mapSize);
   StdVector<std::pair<uint64_t, int64_t>> vec(initSize);
   std::unordered_map<uint64_t, int64_t> map;
@@ -168,6 +181,12 @@ TEST(OMap, InsertAndFind) {
   printf("test omap\n");
   size_t mapSize = 1e5;
   size_t initSize = 5e4;
+  if (EM::Backend::g_DefaultBackend) {
+    delete EM::Backend::g_DefaultBackend;
+  }
+  size_t BackendSize = 1e10;
+  EM::Backend::g_DefaultBackend =
+      new EM::Backend::MemServerBackend(BackendSize);
   OMap<uint64_t, int64_t> omap(mapSize);
   std::unordered_map<uint64_t, int64_t> map;
   for (int i = 0; i < initSize; i++) {

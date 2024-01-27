@@ -66,10 +66,18 @@ struct OMap {
   static constexpr short min_fan_out = (max_fan_out + 1) / 2;
   static constexpr short min_chunk_size = (max_chunk_size + 1) / 2;
 
-  OMap(PositionType maxSize)
-      : leafOram(divRoundUp(maxSize, min_chunk_size)), maxSize(maxSize) {
+  OMap(PositionType maxSize,
+       size_t cacheBytes = ((uint64_t)ENCLAVE_SIZE << 20) >> 1) {
+    SetSize(maxSize, cacheBytes);
+  }
+
+  void SetSize(PositionType maxSize,
+               size_t cacheBytes = ((uint64_t)ENCLAVE_SIZE << 20) >> 1) {
+    this->maxSize = maxSize;
     size_t numLevel = 0;
-    PositionType internalSize = divRoundUp(leafOram.size(), min_fan_out);
+    size_t leafOramSize = divRoundUp(maxSize, min_chunk_size);
+    PositionType internalSize = divRoundUp(leafOramSize, min_fan_out);
+    std::vector<PositionType> internalSizes;
     for (PositionType size = internalSize;;
          size = divRoundUp(size, min_fan_out)) {
       ++numLevel;
@@ -77,14 +85,25 @@ struct OMap {
         break;
       }
     }
-    internalOrams.reserve(numLevel);
+    internalSizes.reserve(numLevel);  // avoid fragmentation
     for (PositionType size = internalSize;;
          size = divRoundUp(size, min_fan_out)) {
-      internalOrams.emplace_back(size);
+      internalSizes.push_back(size);
       if (size <= 1) {
         break;
       }
     }
+    internalOrams.reserve(numLevel);
+    size_t remainCacheBytes = cacheBytes;
+    for (auto it = internalSizes.rbegin(); it != internalSizes.rend(); ++it) {
+      PositionType size = *it;
+      size_t levelCacheBytes = remainCacheBytes / (numLevel + 1);
+      internalOrams.emplace_back(size, levelCacheBytes);
+      size_t memUsed = internalOrams.back().GetMemoryUsage();
+      remainCacheBytes -= memUsed;
+      --numLevel;
+    }
+    leafOram.SetSize(leafOramSize, remainCacheBytes);
   };
 
   ~OMap() {}
@@ -95,7 +114,6 @@ struct OMap {
     static_assert(std::is_same_v<T, std::pair<K, V>>,
                   "Reader must read std::pair<K, V>");
     size_t initSize = divRoundUp(reader.size(), max_chunk_size);
-    // printf("initSize: %lu\n", initSize);
     using PositionVec = StdVector<PositionType>;
     using PositionVecWriter = typename PositionVec::Writer;
     using KeyVec = StdVector<K>;
@@ -126,7 +144,8 @@ struct OMap {
                          [](const UidPosition& uidPos) { return uidPos.data; });
     leafOram.InitFromReader(leafReader, wrappedPosWriter);
     // TODO end at a linear oram
-    for (InternalORAM_& internalOram : internalOrams) {
+    for (auto it = internalOrams.rbegin(); it != internalOrams.rend(); ++it) {
+      auto& internalOram = *it;
       size_t newInitSize = divRoundUp(initSize, max_fan_out);
       PositionVec newPositions(newInitSize);
       KeyVec newKeys(newInitSize);
@@ -165,7 +184,7 @@ struct OMap {
   }
 
   bool find(const K& key, V& valOut) {
-    auto oramIt = internalOrams.rbegin();
+    auto oramIt = internalOrams.begin();
     bool foundFlag = false;
     std::function<void(BPlusNode_&)> updateFunc = [&key, &valOut, &oramIt,
                                                    &updateFunc, &foundFlag,
@@ -179,8 +198,7 @@ struct OMap {
       }
       ++oramIt;
       PositionType newPos;
-      // printf("pos: %lu\n", child.data);
-      if (oramIt == internalOrams.rend()) {
+      if (oramIt == internalOrams.end()) {
         BPlusLeaf_ leaf;
         newPos = leafOram.Read(child.data, child.uid, leaf);
         for (short i = 0; i < max_chunk_size; ++i) {
@@ -192,13 +210,11 @@ struct OMap {
         newPos = oramIt->Update(child.data, child.uid,
                                 updateFunc);  // recursive lambda
       }
-      // printf("newPos: %lu\n", newPos);
       for (short i = 0; i < max_fan_out; ++i) {
         bool flag = i == childIdx;
         obliMove(flag, node.children[i].data, newPos);
       }
     };
-
     oramIt->Update(0, 0, updateFunc);
 
     return foundFlag;  // TODO return false if not found
@@ -300,7 +316,7 @@ struct OMap {
   // insert a key-value pair into the map, if the key already exist, update the
   // value
   bool insert(const K& key, const V& val) {
-    auto oramIt = internalOrams.rbegin();
+    auto oramIt = internalOrams.begin();
     bool foundFlag = false;
     BPlusNode_ newNode;
     PositionType posNewNode;
@@ -318,7 +334,7 @@ struct OMap {
       ++oramIt;
       PositionType newPos;
       UidType uidNewNode;
-      if (oramIt == internalOrams.rend()) {
+      if (oramIt == internalOrams.end()) {
         BPlusLeaf_ newLeaf;
 
         // update leaf to write back, and the new node if split
@@ -341,7 +357,6 @@ struct OMap {
         posNewNode = oramIt->Write(uidNewNode, newNode);
       }
 
-      // printf("newPos: %lu\n", newPos);
       for (short i = 0; i < max_fan_out; ++i) {
         bool flag = i == childIdx;
         obliMove(flag, node.children[i].data, newPos);

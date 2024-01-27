@@ -3,31 +3,51 @@
 #include "external_memory/cachefrontvector.hpp"
 template <typename T, typename PositionType = uint64_t>
 struct HeapTree {
-  using Vec = EM::CacheFrontVector::Vector<T>;
+  using Vec = EM::CacheFrontVector::Vector<T, 4096, true, true>;
   Vec arr;
   int cacheLevel = 0;
   int totalLevel = 0;
   int packLevel = 1;
-  PositionType leafCount;
-  PositionType cacheSize;
-  PositionType extSize;
-  PositionType totalSize;
+  PositionType leafCount = 0;
+  PositionType cacheSize = 0;
+  PositionType extSize = 0;
+  PositionType totalSize = 0;
   bool isPow2 = false;
 
+  HeapTree() {}
+
   HeapTree(PositionType _size, int _cacheLevel = 62, int _packLevel = 1,
-           PositionType realCacheSize = -1)
-      : cacheLevel(_cacheLevel),
-        packLevel(_packLevel),
-        leafCount(_size),
-        totalLevel(GetLogBaseTwo(_size - 1) + 2),
-        totalSize(2 * _size - 1),
-        cacheSize(
-            std::min((uint64_t)(2 * _size - 1), (2UL << _cacheLevel) - 1)),
-        arr(2 * _size - 1,
-            realCacheSize != -1 ? realCacheSize : (2UL << _cacheLevel) - 1),
-        isPow2(!(_size & (_size - 1))) {
+           PositionType realCacheSize = -1) {
+    Init(_size, _cacheLevel, _packLevel, realCacheSize);
+  }
+
+  void Init(PositionType _size, int _cacheLevel = 62, int _packLevel = 1,
+            PositionType realCacheSize = -1) {
+    if (totalSize != 0) {
+      throw std::runtime_error("Init called on non-empty tree");
+    }
+    cacheLevel = _cacheLevel;
+    packLevel = _packLevel;
+    leafCount = _size;
+    totalLevel = GetLogBaseTwo(_size - 1) + 2;
+    totalSize = 2 * _size - 1;
+    cacheSize = std::min((uint64_t)totalSize, (2UL << _cacheLevel) - 1);
+    arr.SetSize(totalSize, realCacheSize != -1 ? realCacheSize : cacheSize);
+    isPow2 = !(_size & (_size - 1));
     extSize = totalSize - cacheSize;
   }
+
+  int GetCacheLevel() const { return cacheLevel; }
+
+  static uint64_t GetMemoryUsage(PositionType _size, int _cacheLevel = 62,
+                                 PositionType realCacheSize = -1) {
+    size_t totalSize = 2 * _size - 1;
+    size_t cacheSize = std::min((uint64_t)totalSize, (2UL << _cacheLevel) - 1);
+    return Vec::GetMemoryUsage(totalSize,
+                               realCacheSize != -1 ? realCacheSize : cacheSize);
+  }
+
+  uint64_t GetMemoryUsage() const { return arr.GetMemoryUsage(); }
 
   static PositionType GetCAIdxPow2(PositionType idx, int level, int totalLevel,
                                    int packLevel = 1, int topLevel = 0) {
@@ -159,9 +179,6 @@ struct HeapTree {
     } else if (topLevel >= totalLevel) {
       return GetCAPathIdx(outputBegin, outputEnd, idx, leafCount, packLevel);
     }
-    // printf("idx: %lu, leafCount: %lu, topLevel: %d, packLevel: %d\n", idx,
-    //        leafCount, topLevel, packLevel);
-
     int botLevel = totalLevel - topLevel;
 
     GetCAPathIdxPow2(outputBegin, outputBegin + topLevel, idx, packLevel);
@@ -173,11 +190,6 @@ struct HeapTree {
 
     PositionType offset =
         getCABottomOffset(idx, leafCount, topLevel, bottomLeafCount);
-    // printf(
-    //     "idx: %lu, leafCount: %lu, topLevel: %d, offset: %lu,
-    //     bottomLeafCount: "
-    //     "%lu\n",
-    //     idx, leafCount, topLevel, offset, bottomLeafCount);
 
     int actualBottomLevel =
         GetCAPathIdx(outputBegin + topLevel, outputEnd, idx >> topLevel,
@@ -213,36 +225,27 @@ struct HeapTree {
   template <typename Iterator>
   int ReadPath(PositionType pos, Iterator pathBegin) {
     std::vector<PositionType> pathIdx(totalLevel);
-    // printf("pos: %lu, totalLevel = %d\n", pos, totalLevel);
-    // printf("cacheLevel = %d\n", cacheLevel);
 
     int actualLevel = isPow2 ? GetCAPathIdxPow2(pathIdx.begin(), pathIdx.end(),
                                                 pos, packLevel, cacheLevel)
                              : GetCAPathIdx(pathIdx.begin(), pathIdx.end(), pos,
                                             leafCount, packLevel, cacheLevel);
-    // printf("Read path with internal index\n");
+
     for (int i = 0; i < actualLevel; ++i) {
       PositionType idx = pathIdx[i];
-      // printf("%lu ", idx);
       *(pathBegin + i) = arr.Get(idx);
     }
-    // printf("\n");
     return actualLevel;
   }
 
   template <typename Iterator>
   int WritePath(PositionType pos, const Iterator pathBegin) {
     std::vector<PositionType> pathIdx(totalLevel);
-    // printf("pos: %lu, totalLevel = %d\n", pos, totalLevel);
     int actualLevel = isPow2 ? GetCAPathIdxPow2(pathIdx.begin(), pathIdx.end(),
                                                 pos, packLevel, cacheLevel)
                              : GetCAPathIdx(pathIdx.begin(), pathIdx.end(), pos,
                                             leafCount, packLevel, cacheLevel);
 
-    // for (int i = 0; i < actualLevel; ++i) {
-    //   printf("%lu ", pathIdx[i]);
-    // }
-    // printf("\n");
     for (int i = 0; i < actualLevel; ++i) {
       PositionType idx = pathIdx[i];
       arr[idx] = *(pathBegin + i);
@@ -267,6 +270,7 @@ struct HeapTree {
     PositionType size = end - begin;
     Assert(size & 1);
     int totalLevel = GetLogBaseTwo(size) + 1;
+
     int topLevel = _cacheLevel >= totalLevel ? 0 : _cacheLevel;
     return BuildBottomUpHelper<AggT>(begin, end, 0, 0, reduceFunc, leafFunc,
                                      topLevel, _packLevel);
@@ -283,10 +287,8 @@ struct HeapTree {
     PositionType leafCount = (size + 1) / 2;
 
     if (size == 1) {
-      // printf("leafFunc due to size = 1\n");
       return leafFunc(*begin, path);
     } else if (size == 3) {
-      // printf("leafFunc due to size = 3\n");
       const AggT& left = leafFunc(*(begin + 1), path);
       const AggT& right = leafFunc(*(begin + 2), path | (1UL << level));
       return reduceFunc(*begin, left, right);
@@ -307,13 +309,10 @@ struct HeapTree {
 
     auto topLeafFunc = [=, &reduceFunc, &leafFunc, &botOffset](
                            T& leaf, PositionType path) {
-      // PositionType topLeafIdx = topLeafIndexer.getIndex();
-      // ++topLeafIndexer;  // increment topLeafIdx after every leaf call
       PositionType topLeafIdx = path >> level;
-      // printf("topLeafIdx = %lu\n", topLeafIdx);
       PositionType left1 = leafCount - topLeafIdx - 1;
       if (left1 < topLeafCount) {
-        // printf("leafFunc due to lingering node\n");
+        // a path of depth-1
         return leafFunc(leaf, path);
       }
       PositionType right1 = left1 - topLeafCount;

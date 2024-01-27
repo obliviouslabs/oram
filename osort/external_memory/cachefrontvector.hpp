@@ -13,25 +13,60 @@ template <typename T,
 struct Vector {
   static constexpr uint64_t item_per_page = page_size / sizeof(T);
   constexpr static bool useStdCopy = true;
-  using ExtVec = EM::ExtVector::Vector<T, page_size, ENCRYPTED, AUTH, 1UL>;
+  constexpr static uint64_t ext_cache_bytes = 1UL << 20;
+  using ExtVec =
+      EM::ExtVector::Vector<T, page_size, ENCRYPTED, AUTH,
+                            std::max(1UL, ext_cache_bytes / page_size)>;
   using IntVec = std::vector<T>;
   using value_type = T;
   using reference = T&;
   using const_reference = const T&;
   IntVec intVec;
-  ExtVec extVec;
+  ExtVec* extVec = NULL;
   size_t cacheSize;
-  Vector(uint64_t N) : intVec(N), extVec(0), cacheSize(N) {}
 
-  Vector(uint64_t N, uint64_t cacheSize)
-      : intVec(std::min(cacheSize, N)),
-        extVec(N - std::min(cacheSize, N)),
-        cacheSize(std::min(cacheSize, N)) {}
+  Vector() : intVec(0), cacheSize(0) {}
 
-  Vector(Vector&& other)
-      : intVec(std::move(other.intVec)),
-        extVec(std::move(other.extVec)),
-        cacheSize(other.cacheSize) {}
+  Vector(uint64_t N) : intVec(N), cacheSize(N) {}
+
+  Vector(uint64_t N, uint64_t cacheSize) { SetSize(N, cacheSize); }
+
+  ~Vector() {
+    if (extVec) {
+      delete extVec;
+      extVec = NULL;
+    }
+  }
+
+  void SetSize(uint64_t N) {
+    if (cacheSize != 0 || extVec != NULL) {
+      throw std::runtime_error("SetSize can only be called on empty vector");
+    }
+    intVec.resize(N);
+  }
+
+  void SetSize(uint64_t N, uint64_t cacheSize) {
+    if (this->cacheSize != 0 || extVec != NULL) {
+      throw std::runtime_error("SetSize can only be called on empty vector");
+    }
+    this->cacheSize = std::min(cacheSize, N);
+    intVec.resize(this->cacheSize);
+    if (this->cacheSize < N) {
+      extVec = new ExtVec(N - this->cacheSize);
+    }
+  }
+
+  static uint64_t GetMemoryUsage(uint64_t N, uint64_t cacheSize) {
+    if (cacheSize < N) {
+      return cacheSize * sizeof(T) + ExtVec::GetMemoryUsage();
+    } else {
+      return cacheSize * sizeof(T);
+    }
+  }
+
+  uint64_t GetMemoryUsage() const {
+    return Vector::GetMemoryUsage(size(), cacheSize);
+  }
 
   struct Iterator {
     using iterator_category = std::random_access_iterator_tag;
@@ -48,7 +83,8 @@ struct Vector {
       if (m_ptr < vec_ptr->cacheSize) {
         return vec_ptr->intVec[m_ptr];
       } else {
-        return vec_ptr->extVec[m_ptr - vec_ptr->cacheSize];
+        Assert(vec_ptr->extVec);
+        return (*vec_ptr->extVec)[m_ptr - vec_ptr->cacheSize];
       }
     }
 
@@ -56,7 +92,8 @@ struct Vector {
       if (m_ptr < vec_ptr->cacheSize) {
         return vec_ptr->intVec[m_ptr];
       } else {
-        return vec_ptr->extVec[m_ptr - vec_ptr->cacheSize];
+        Assert(vec_ptr->extVec);
+        return (*vec_ptr->extVec)[m_ptr - vec_ptr->cacheSize];
       }
     }
 
@@ -120,13 +157,20 @@ struct Vector {
 
   Iterator end() { return Iterator(size(), *this); }
 
-  size_t size() const { return intVec.size() + extVec.size(); }
+  size_t size() const {
+    if (extVec == NULL) {
+      return cacheSize;
+    } else {
+      return cacheSize + extVec->size();
+    }
+  }
 
   T& operator[](size_t i) {
     if (i < cacheSize) {
       return intVec[i];
     } else {
-      return extVec[i - cacheSize];
+      Assert(extVec);
+      return (*extVec)[i - cacheSize];
     }
   }
 
@@ -134,7 +178,8 @@ struct Vector {
     if (i < cacheSize) {
       return intVec[i];
     } else {
-      return extVec.Get(i - cacheSize);
+      Assert(extVec);
+      return extVec->Get(i - cacheSize);
     }
   }
 };

@@ -33,6 +33,8 @@ struct Vector {
 
   uint64_t N;
 
+  static uint64_t GetMemoryUsage() { return DMCacheSize * sizeof(Page); }
+
   // https://www.internalpointers.com/post/writing-custom-iterators-modern-cpp
   struct Iterator {
     // Iterator tags here...

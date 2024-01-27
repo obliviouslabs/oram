@@ -21,12 +21,14 @@ struct PathORAM {
   using Block_ = Block<T, PositionType, UidType>;
   using Bucket_ = Bucket<T, Z, PositionType, UidType>;
   using UidBlock_ = UidBlock<T, UidType>;
+  using HeapTree_ = HeapTree<Bucket_, PositionType>;
   // Node_* root = nullptr;
-  HeapTree<Bucket_, PositionType> tree;
+  HeapTree_ tree;
   Stash* stash = nullptr;
   int depth = 0;
-  int cacheLevel = 62;
   PositionType _size = 0;
+
+  PathORAM() {}
 
   // PathORAM(const PathORAM& other) = default;
   PathORAM(PathORAM&& other) {
@@ -35,19 +37,67 @@ struct PathORAM {
     stash = other.stash;
     other.stash = nullptr;
     depth = other.depth;
-    cacheLevel = other.cacheLevel;
   }
 
-  PathORAM(PositionType size, int cacheLevel = 62)
-      : _size(size), tree(size, cacheLevel), cacheLevel(cacheLevel) {
-    stash = new Stash();
+  PathORAM(PositionType size, size_t cacheBytes = 1UL << 62) {
+    SetSize(size, cacheBytes);
+  }
+
+  void SetSize(PositionType size, size_t cacheBytes = 1UL << 62) {
+    if (_size) {
+      throw std::runtime_error("Path ORAM double initialization");
+    }
+
+    _size = size;
+    int cacheLevel = GetMaxCacheLevel(size, cacheBytes);
+    if (cacheLevel < 0) {
+      throw std::runtime_error("Path ORAM cache size too small");
+    }
+    tree.Init(size, cacheLevel);
     depth = GetLogBaseTwo(size - 1) + 2;
+    stash = new Stash();
+  }
+
+  static int GetMaxCacheLevel(PositionType size,
+                              size_t cacheBytes = 1UL << 62) {
+    int maxCacheLevel = 0;
+    if (cacheBytes >= HeapTree_::GetMemoryUsage(size, 62)) {
+      // default value
+      return 62;
+    }
+    if (cacheBytes < sizeof(Stash)) {
+      return -1;
+    }
+    cacheBytes -= sizeof(Stash);
+    for (;; ++maxCacheLevel) {
+      size_t treeUsage = HeapTree_::GetMemoryUsage(size, maxCacheLevel);
+      if (cacheBytes < treeUsage) {
+        break;
+      }
+    }
+    return maxCacheLevel - 1;
+  }
+
+  static size_t GetMemoryUsage(PositionType size,
+                               size_t cacheBytes = 1UL << 62) {
+    return sizeof(Stash) +
+           HeapTree_::getMemoryUsage(size, GetMaxCacheLevel(size, cacheBytes));
+  }
+
+  size_t GetMemoryUsage() const {
+    return sizeof(Stash) + tree.GetMemoryUsage();
   }
 
   template <typename Reader, class PosMapWriter>
   void InitFromReader(Reader& reader, PosMapWriter& posMapWriter) {
     PositionType initSize = reader.size();
-    // printf("Init from reader\n");
+    if (initSize * 10 < size()) {
+      for (UidType uid = 0; uid != (UidType)initSize; ++uid) {
+        PositionType newPos = Write(uid, reader.read());
+        posMapWriter.write(UidBlock<PositionType, UidType>(newPos, uid));
+      }
+      return;
+    }
     PositionType numBucket = 2 * size() - 1;
     PositionType numBlock = numBucket * Z;
     // StdVector<char> loadVec(numBucket);
@@ -112,11 +162,9 @@ struct PathORAM {
     using PosVec = StdVector<PositionType>;
     PosVec positionVec(numBlock);
     PosVec prefixSum(numBlock + 1);
-    // printf("Generate positions bottom up\n");
     {
-      HeapTree<Positions> positions(size(), cacheLevel, 1, 1UL << 62);
+      HeapTree<Positions> positions(size(), tree.GetCacheLevel(), 1, 1UL << 62);
       positions.template BuildBottomUp<PositionStash>(reduceFunc, leafFunc);
-      // printf("calc prefix sum\n");
       prefixSum[0] = 0;
       for (PositionType i = 0; i < numBucket; ++i) {
         const Positions& posBucket = positions.GetByInternalIdx(i);
@@ -130,56 +178,54 @@ struct PathORAM {
     }
     // EM::Algorithm::OrDistributeSeparateMark(
     if (prefixSum[numBlock] != initSize) {
-      printf("prefixSum %lu initSize %lu\n", (int64_t)prefixSum[numBlock],
-             (int64_t)initSize);
       throw std::runtime_error("Stash overflows.");
     }
-    using DistributeVec = StdVector<UidBlock_>;
-    // using DistributeVec = EM::ExtVector::Vector<UidBlock_, 8192, true, true,
-    // 1UL>;
+    // using DistributeVec = StdVector<UidBlock_>;
+    using DistributeVec =
+        EM::ExtVector::Vector<UidBlock_, std::max(8192UL, sizeof(UidBlock_)),
+                              true, true, 1024UL>;
     using DistributeReader = typename DistributeVec::Reader;
     using DistributeWriter = typename DistributeVec::Writer;
     using UidVec = StdVector<UidType>;
     using UidReader = typename UidVec::Reader;
     using UidWriter = typename UidVec::Writer;
-
-    DistributeVec distributeVec(numBlock);
-    DistributeWriter distributeInputWriter(distributeVec.begin(),
-                                           distributeVec.begin() + initSize);
     UidVec uidVec(initSize);
-    UidWriter uidWriter(uidVec.begin(), uidVec.end());
-    PositionType inputIdx = 0;
-    EM::VirtualVector::WrappedReader<UidBlock_, Reader> shuffleReader(
-        reader, [&](const T& val) { return UidBlock_(val, inputIdx++); });
-    EM::VirtualVector::WrappedWriter<UidBlock_, UidWriter> shuffleWriter(
-        uidWriter, [&](const UidBlock_& block) {
-          distributeInputWriter.write(block);
-          return block.uid;
-        });
-    // printf("shuffle elements\n");
-    EM::Algorithm::KWayButterflyOShuffle(shuffleReader, shuffleWriter);
-    // for (PositionType i = 0; i < initSize; ++i) {
-    //   shuffleWriter.write(shuffleReader.read());
-    // }
-    distributeInputWriter.flush();
-    // printf("distribute elements\n");
-    EM::Algorithm::OrDistributeSeparateMark(
-        distributeVec.begin(), distributeVec.end(), prefixSum.begin());
-    DistributeReader distributeOutputReader(distributeVec.begin(),
-                                            distributeVec.end());
-    for (PositionType i = 0; i < numBucket; ++i) {
-      Bucket_ bucket;
-      for (int j = 0; j < Z; ++j) {
-        const UidBlock_& uidBlock = distributeOutputReader.read();
-        PositionType pos = positionVec[i * Z + j];
-        UidType uid = uidBlock.uid;
-        // obliMove(pos == DUMMY<PositionType>(), uid, DUMMY<UidType>());
-        bucket.blocks[j] = Block_(uidBlock.data, pos, uid);
+    {
+      DistributeVec distributeVec(numBlock);
+      DistributeWriter distributeInputWriter(distributeVec.begin(),
+                                             distributeVec.begin() + initSize);
+
+      UidWriter uidWriter(uidVec.begin(), uidVec.end());
+      PositionType inputIdx = 0;
+      EM::VirtualVector::WrappedReader<UidBlock_, Reader> shuffleReader(
+          reader, [&](const T& val) { return UidBlock_(val, inputIdx++); });
+      EM::VirtualVector::WrappedWriter<UidBlock_, UidWriter> shuffleWriter(
+          uidWriter, [&](const UidBlock_& block) {
+            distributeInputWriter.write(block);
+            return block.uid;
+          });
+      EM::Algorithm::KWayButterflyOShuffle(shuffleReader, shuffleWriter);
+      // for (PositionType i = 0; i < initSize; ++i) {
+      //   shuffleWriter.write(shuffleReader.read());
+      // }
+      distributeInputWriter.flush();
+      EM::Algorithm::OrDistributeSeparateMark(
+          distributeVec.begin(), distributeVec.end(), prefixSum.begin());
+      DistributeReader distributeOutputReader(distributeVec.begin(),
+                                              distributeVec.end());
+      for (PositionType i = 0; i < numBucket; ++i) {
+        Bucket_ bucket;
+        for (int j = 0; j < Z; ++j) {
+          const UidBlock_& uidBlock = distributeOutputReader.read();
+          PositionType pos = positionVec[i * Z + j];
+          UidType uid = uidBlock.uid;
+          // obliMove(pos == DUMMY<PositionType>(), uid, DUMMY<UidType>());
+          bucket.blocks[j] = Block_(uidBlock.data, pos, uid);
+        }
+        tree.SetByInternalIdx(i, bucket);
       }
-      tree.SetByInternalIdx(i, bucket);
     }
 
-    // printf("compact positions\n");
     EM::Algorithm::OrCompactSeparateMark(positionVec.begin(), positionVec.end(),
                                          prefixSum.begin());
 
@@ -191,16 +237,7 @@ struct PathORAM {
         posMapReader(uidReader, [&](const UidType& uid) {
           return UidBlock<PositionType, UidType>(positionVec[posMapIdx++], uid);
         });
-    // printf("Final sort\n");
-    // std::vector<UidBlock<PositionType, UidType>> posMapVec(initSize);
-    // for (PositionType i = 0; i < initSize; ++i) {
-    //   posMapVec[i] = posMapReader.read();
-    // }
-    // std::sort(posMapVec.begin(), posMapVec.end());
-    // for (PositionType i = 0; i < initSize; ++i) {
-    //   posMapWriter.write(posMapVec[i]);
-    // }
-    // posMapWriter.flush();
+
     EM::Algorithm::KWayButterflySort(posMapReader, posMapWriter);
   }
 
@@ -220,25 +257,11 @@ struct PathORAM {
     PositionType newPos = UniformRandom(size() - 1);
     std::vector<Block_> path = ReadPath(pos);
 
-    // for (int i = 0; i < path.size(); ++i) {
-    //   printf("(%ld %ld)", (int64_t)path[i].uid, (int64_t)path[i].position);
-    //   if (i >= stashSize - 1 && (path.size() - i - 1) % Z == 0) {
-    //     printf(", ");
-    //   }
-    // }
-    // printf("\n");
     ReadElementAndRemoveFromPath(path, uid, out);
 
     Block_ newBlock(out, newPos, uid);
     WriteNewBlockToPath(path, newBlock);
     EvictPath(path, pos);
-    // printf("write %ld to position %ld, evict path %lu\n", (int64_t)uid,
-    //        (int64_t)newPos, (int64_t)pos);
-    // for (int i = 0; i < path.size(); ++i) {
-    //   printf("uid %ld pos %ld\n", (int64_t)path[i].uid,
-    //          (int64_t)path[i].position);
-    // }
-    // printf("\n");
     WriteBackPath(path, pos);
     return newPos;
   }
@@ -288,10 +311,6 @@ struct PathORAM {
 
     int level = tree.ReadPath(pos, (Bucket_*)(&path[stashSize]));
     path.resize(stashSize + Z * level);
-    // for (int i = stashSize; i < path.size(); ++i) {
-    //   printf("%ld ", (int64_t)path[i].position);
-    // }
-    // printf("\n");
 #ifndef NDEBUG
     for (int i = stashSize; i < path.size(); ++i) {
       int lv = (i - stashSize) / Z;
@@ -307,13 +326,6 @@ struct PathORAM {
   void WriteBackPath(const std::vector<Block_>& path, PositionType pos) {
     memcpy(stash->blocks, &path[0], stashSize * sizeof(Block_));
     tree.WritePath(pos, (Bucket_*)(&path[stashSize]));
-    // for (int i = 0; i < path.size(); ++i) {
-    //   printf("%ld ", (int64_t)path[i].uid);
-    //   if (i >= stashSize - 1 && (path.size() - i - 1) % Z == 0) {
-    //     printf(", ");
-    //   }
-    // }
-    // printf("\n");
   }
 
   static void ReadElementAndRemoveFromPath(std::vector<Block_>& path,
@@ -362,14 +374,6 @@ struct PathORAM {
                0);  // mark dummy as 0, so that it won't be moved
       ++rank;
     }
-
-    // for (int i = 0; i < path.size(); ++i) {
-    //   printf("%d ", deeperDummyCount[i]);
-    //   if (i >= stashSize - 1 && (path.size() - i - 1) % Z == 0) {
-    //     printf("\n");
-    //   }
-    // }
-    // printf("\n");
 
     int distriLevel = GetLogBaseTwo(path.size() - 1) + 1;
 

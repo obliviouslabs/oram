@@ -13,14 +13,13 @@ struct ORAM {
   PathORAM_* pathOram = NULL;
   UidType nextUid = 0;
   bool isLinear = false;
-  ORAM(PositionType size) {
-    isLinear = size <= 100;
-    if (isLinear) {
-      linearOram = new LinearORAM_(size);
-    } else {
-      pathOram = new PathORAM_(size);
-    }
-  }
+  static constexpr PositionType linear_oram_threshold = 100;
+
+  ORAM() {}
+
+  ORAM(PositionType size) { SetSize(size); }
+
+  ORAM(PositionType size, size_t cacheBytes) { SetSize(size, cacheBytes); }
 
   // TODO add copy constructor
 
@@ -45,11 +44,45 @@ struct ORAM {
     }
   }
 
-  size_t size() const {
+  PositionType size() const {
     if (isLinear) {
       return linearOram->size();
     } else {
       return pathOram->size();
+    }
+  }
+
+  void SetSize(PositionType size, size_t cacheBytes = 1UL << 62) {
+    if (linearOram || pathOram) {
+      throw std::runtime_error("SetSize can only be called on empty oram");
+    }
+    isLinear = size <= linear_oram_threshold;
+    if (isLinear) {
+      if (LinearORAM_::GetMemoryUsage(size) > cacheBytes) {
+        throw std::runtime_error(
+            "LinearORAM_::GetMemoryUsage(size) > cacheBytes");
+      }
+      linearOram = new LinearORAM_(size);
+    } else {
+      pathOram = new PathORAM_(size, cacheBytes);
+    }
+  }
+
+  static size_t GetMemoryUsage(size_t size, size_t cacheBytes = 1UL << 62) {
+    if (size <= linear_oram_threshold) {
+      return LinearORAM_::GetMemoryUsage(size);
+    } else {
+      return PathORAM_::GetMemoryUsage(size, cacheBytes);
+    }
+  }
+
+  size_t GetMemoryUsage() const {
+    if (isLinear) {
+      Assert(linearOram);
+      return linearOram->GetMemoryUsage();
+    } else {
+      Assert(pathOram);
+      return pathOram->GetMemoryUsage();
     }
   }
 

@@ -66,6 +66,8 @@ struct StdVector : public std::vector<T> {
 
   Iterator end() { return Iterator(std::vector<T>::end()); }
 
+  void resize(uint64_t N) { std::vector<T>::resize(N); }
+
   INLINE size_t size() { return std::vector<T>::size(); }
 
   struct Reader {
