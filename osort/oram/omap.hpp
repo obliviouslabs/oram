@@ -66,6 +66,8 @@ struct OMap {
   static constexpr short min_fan_out = (max_fan_out + 1) / 2;
   static constexpr short min_chunk_size = (max_chunk_size + 1) / 2;
 
+  OMap() {}
+
   OMap(PositionType maxSize,
        size_t cacheBytes = ((uint64_t)ENCLAVE_SIZE << 20) >> 1) {
     SetSize(maxSize, cacheBytes);
