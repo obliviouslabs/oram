@@ -1,40 +1,45 @@
-#include "App/TrustedLibrary/kvDB.hpp"
 #include <fstream>
+
+#include "App/TrustedLibrary/kvDB.hpp"
 
 using DB_ = KV_DB<std::string, std::string>;
 
 void initFromBalanceFile(const char* DBPath, const char* balancePath) {
-    DB_* db = new DB_(DBPath);
-    std::ifstream balanceFile(balancePath);
-    std::string line;
-    uint64_t lastBlock = 0, recordCount = 0;
-    std::getline(balanceFile, line);
+  DB_* db = new DB_(DBPath);
+  std::ifstream balanceFile(balancePath);
+  std::string line;
+  uint64_t lastBlock = 0, recordCount = 0;
+  std::getline(balanceFile, line);
+  std::istringstream iss(line);
+  if (!(iss >> lastBlock >> recordCount)) {
+    printf("Error reading balance file meta data\n");
+    abort();
+  }
+  printf("lastBlock = %lu, recordCount = %lu\n", lastBlock, recordCount);
+  while (std::getline(balanceFile, line)) {
     std::istringstream iss(line);
-    if (!(iss >> lastBlock >> recordCount)) {
-        printf("Error reading balance file meta data\n");
-        abort();
+    std::string addr;
+    std::string balance;
+    if (!(iss >> addr >> balance)) {
+      printf("Error reading balance file\n");
+      abort();
     }
-    printf("lastBlock = %lu, recordCount = %lu\n", lastBlock, recordCount);
-    while (std::getline(balanceFile, line)) {
-        std::istringstream iss(line);
-        std::string addr;
-        std::string balance;
-        if (!(iss >> addr >> balance)) {
-            printf("Error reading balance file\n");
-            abort();
-        }
-        db->put(addr, balance);
+    if (addr.size() != 42) {
+      int padLen = 42 - addr.size();
+      addr.insert(2, padLen, '0');
     }
-    db->put("lastBlock", std::to_string(lastBlock));
-    db->put("recordCount", std::to_string(recordCount));
-    delete db;
+    db->put(addr, balance);
+  }
+  db->put("lastBlock", std::to_string(lastBlock));
+  db->put("recordCount", std::to_string(recordCount));
+  delete db;
 }
 
 int main(int argc, char** argv) {
-    if (argc != 3) {
-        printf("Usage: %s <DBPath> <balancePath>\n", argv[0]);
-        return 1;
-    }
-    initFromBalanceFile(argv[1], argv[2]);
-    return 0;
+  if (argc != 3) {
+    printf("Usage: %s <DBPath> <balancePath>\n", argv[0]);
+    return 1;
+  }
+  initFromBalanceFile(argv[1], argv[2]);
+  return 0;
 }

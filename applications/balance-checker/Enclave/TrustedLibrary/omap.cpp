@@ -24,10 +24,10 @@ void ecall_omap_init(uint64_t N, uint64_t initSize) {
   uint64_t bufferOffset = 0;
   try {
     EM::VirtualVector::VirtualReader<std::pair<key_type, val_type>> reader(
-        initSize,
-        [&](uint64_t i) { 
+        initSize, [&](uint64_t i) {
           if (bufferOffset >= bufferBytes) {
-            ocall_Fetch_Next_KV_Batch(&bufferBytes, kv_buffer.get(), kv_read_batch_bytes);
+            ocall_Fetch_Next_KV_Batch(&bufferBytes, kv_buffer.get(),
+                                      kv_read_batch_bytes);
             bufferOffset = 0;
           }
           std::pair<key_type, val_type> res;
@@ -35,7 +35,8 @@ void ecall_omap_init(uint64_t N, uint64_t initSize) {
           bufferOffset += sizeof(key_type);
           memcpy(&res.second, kv_buffer.get() + bufferOffset, sizeof(val_type));
           bufferOffset += sizeof(val_type);
-          return res; });
+          return res;
+        });
     omap.InitFromReader(reader);
   } catch (std::exception& e) {
     printf("exception: %s\n", e.what());

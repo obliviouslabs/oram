@@ -382,6 +382,13 @@ struct OMap {
       short childIdx = 0;
       for (short i = 1; i < max_fan_out; ++i) {
         bool flag = (i < node.numChildren) & !(key < node.keys[i - 1]);
+
+        // printf("node.kv[%d].key: \n", i);
+        // for (int partIdx = 0; partIdx < 5; ++partIdx) {
+        //   printf("%X", node.keys[i - 1].part[partIdx]);
+        // }
+        // printf("\n");
+
         obliMove(flag, child, node.children[i]);
         childIdx += flag;
       }
@@ -396,6 +403,13 @@ struct OMap {
           auto sf = addAndSplitLeaf(leaf, newLeaf, key, val);
           splitFlag = sf.first;
           foundFlag = sf.second;
+          // for (short i = 0; i < leaf.numElements; ++i) {
+          //   printf("leaf.kv[%d].key: \n", i);
+          //   for (int partIdx = 0; partIdx < 5; ++partIdx) {
+          //     printf("%X", leaf.kv[i].key.part[partIdx]);
+          //   }
+          //   printf("\n");
+          // }
         };
 
         newPos = leafOram.Update(child.data, child.uid, leafUpdateFunc);

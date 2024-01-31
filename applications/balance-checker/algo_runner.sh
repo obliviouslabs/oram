@@ -2,7 +2,8 @@
 source /startsgxenv.sh
 export LD_LIBRARY_PATH=/usr/local/lib/:$LD_LIBRARY_PATH
 SGX_MODE=SIM # HW or SIM
-
+# g++ init_db_balance.cpp -o init_db_balance -L/usr/local/lib -lrocksdb
+# ./init_db_balance ./db ./rcc_balance.txt 
 # Algorithms:
 MIN_ENCLAVE_SIZE=128 # enclave size in MB
 MAX_ENCLAVE_SIZE=128
