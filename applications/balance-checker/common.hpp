@@ -63,11 +63,13 @@ struct ETH_Addr {
 #ifdef UNTRUSTED_ENV
   // define friend << operator
   friend std::ostream& operator<<(std::ostream& os, const ETH_Addr& addr) {
-    os << "0x";
+    std::ostringstream oss;
+    oss << "0x";
     for (int i = 0; i < 5; ++i) {
       // pad to 8 bytes
-      os << std::hex << std::setfill('0') << std::setw(8) << addr.part[i];
+      oss << std::hex << std::setfill('0') << std::setw(8) << addr.part[i];
     }
+    os << oss.str();
     return os;
   }
 

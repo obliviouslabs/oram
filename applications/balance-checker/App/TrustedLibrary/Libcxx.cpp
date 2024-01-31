@@ -111,10 +111,7 @@ void ActualMain(void) {
     std::cout << "not found" << std::endl;
     abort();
   } else {
-    std::ostringstream oss;
-    oss << "inserted: " << key << std::endl;
-    std::cout << oss.str();
-    std::cout << "val: " << val << std::endl;
+    std::cout << "inserted: key " << key << " val: " << val << std::endl;
   }
   val_type val2;
   ret = ecall_omap_find(global_eid, &findFlag, (uint8_t*)&key, (uint8_t*)&val2,
