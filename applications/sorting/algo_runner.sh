@@ -1,7 +1,7 @@
 #!/bin/bash
 source /startsgxenv.sh
 
-SGX_MODE=HW # HW or SIM
+SGX_MODE=SIM # HW or SIM
 
 # Algorithms:
 ALGOs=(KWAYBUTTERFLYOSORT KWAYBUTTERFLYOSHUFFLE)

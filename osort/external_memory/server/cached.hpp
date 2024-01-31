@@ -5,6 +5,7 @@
 
 #include "common/defs.hpp"
 #include "common/dmcache.hpp"
+#include "common/lrucache.hpp"
 #include "common/tracing/perf.hpp"
 
 #define USE_LRU_FLAG false

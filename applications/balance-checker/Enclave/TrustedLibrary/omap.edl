@@ -1,7 +1,8 @@
 enclave {
   trusted {
-    public void ecall_omap_init(uint64_t N);
+    public void ecall_omap_init(uint64_t N, uint64_t initSize);
     public int ecall_omap_find([in, count=keyLength] uint8_t* key, [out, count=valLength] uint8_t* val, uint32_t keyLength, uint32_t valLength);
+    public int ecall_omap_insert([in, count=keyLength] uint8_t* key, [in, count=valLength] uint8_t* val, uint32_t keyLength, uint32_t valLength);
   };
 
   untrusted {
@@ -14,5 +15,6 @@ enclave {
     void ocall_Read(uint64_t pos, uint64_t length, [out, count=length] uint8_t* page);
     void ocall_Write_Batch([in, count=chunkNum] uint64_t* offsets, [in, count=chunkNum] uint64_t* sizes, [in, count=totalSize] uint8_t* tmp, uint64_t chunkNum, uint64_t totalSize);
     void ocall_Write(uint64_t pos, uint64_t length, [in, count=length] const uint8_t* page);
+    uint64_t ocall_Fetch_Next_KV_Batch([out, count=batchBytes]uint8_t* data, uint64_t batchBytes);
   };
 };

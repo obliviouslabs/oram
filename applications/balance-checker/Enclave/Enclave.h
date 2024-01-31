@@ -1,9 +1,9 @@
 #pragma once
 
-#include <stdlib.h>
 #include <assert.h>
+#include <stdlib.h>
 #ifndef NOOPENSSL
-    #define NOOPENSSL
+#define NOOPENSSL
 #endif
 #if defined(__cplusplus)
 extern "C" {
