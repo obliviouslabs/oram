@@ -40,6 +40,7 @@ void ecall_omap_init(uint64_t N, uint64_t initSize) {
     omap.InitFromReader(reader);
   } catch (std::exception& e) {
     printf("exception: %s\n", e.what());
+    abort();
   }
   return;
 }
@@ -57,5 +58,19 @@ int ecall_omap_insert(uint8_t* key, uint8_t* val, uint32_t keyLength,
   const key_type& k = *reinterpret_cast<key_type*>(key);
   const val_type& v = *reinterpret_cast<val_type*>(val);
   bool res = omap.insert(k, v);
+  return (int)res;
+}
+
+int ecall_omap_delete(uint8_t* key, uint32_t keyLength) {
+  const key_type& k = *reinterpret_cast<key_type*>(key);
+  bool res = true;  // omap.erase(k);
+  return (int)res;
+}
+
+int ecall_omap_update(uint8_t* key, uint8_t* val, uint32_t keyLength,
+                      uint32_t valLength) {
+  const key_type& k = *reinterpret_cast<key_type*>(key);
+  const val_type& v = *reinterpret_cast<val_type*>(val);
+  bool res = omap.update(k, v);
   return (int)res;
 }

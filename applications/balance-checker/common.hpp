@@ -60,6 +60,13 @@ struct ETH_Addr {
     }
   }
 
+  void print() const {
+    printf("0x");
+    for (int i = 0; i < 5; ++i) {
+      printf("%08x", part[i]);
+    }
+  }
+
 #ifdef UNTRUSTED_ENV
   // define friend << operator
   friend std::ostream& operator<<(std::ostream& os, const ETH_Addr& addr) {

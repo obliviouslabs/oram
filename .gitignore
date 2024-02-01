@@ -62,3 +62,7 @@ Enclave_u.c
 
 scripts/
 db/
+usdt_balance.txt
+db_usdt/
+db_rcc/
+tx.log

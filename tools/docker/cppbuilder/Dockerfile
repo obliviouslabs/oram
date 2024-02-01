@@ -29,6 +29,9 @@ debhelper cmake reprepro unzip pkgconf libboost-dev libboost-system-dev libboost
 protobuf-c-compiler libprotobuf-c-dev lsb-release libsystemd0 
 
 RUN pip install cppcheck-codequality
+RUN pip install requests
+RUN pip install web3
+RUN pip install tqdm
 
 RUN apt-get install -y libsgx-urts libsgx-launch libsgx-enclave-common
 RUN apt-get install -y libsgx-epid libsgx-quote-ex libsgx-dcap-ql

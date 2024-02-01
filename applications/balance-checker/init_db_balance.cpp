@@ -8,10 +8,10 @@ void initFromBalanceFile(const char* DBPath, const char* balancePath) {
   DB_* db = new DB_(DBPath);
   std::ifstream balanceFile(balancePath);
   std::string line;
-  uint64_t lastBlock = 0, recordCount = 0;
+  uint64_t lastBlock = 0, lastTxIdx = 0, recordCount = 0;
   std::getline(balanceFile, line);
   std::istringstream iss(line);
-  if (!(iss >> lastBlock >> recordCount)) {
+  if (!(iss >> lastBlock >> lastTxIdx >> recordCount)) {
     printf("Error reading balance file meta data\n");
     abort();
   }
@@ -31,6 +31,7 @@ void initFromBalanceFile(const char* DBPath, const char* balancePath) {
     db->put(addr, balance);
   }
   db->put("lastBlock", std::to_string(lastBlock));
+  db->put("lastTxIdx", std::to_string(lastTxIdx));
   db->put("recordCount", std::to_string(recordCount));
   delete db;
 }

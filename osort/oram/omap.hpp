@@ -106,12 +106,15 @@ struct OMap {
       --numLevel;
     }
     leafOram.SetSize(leafOramSize, remainCacheBytes);
+    printf("OMap: leafOramSize: %lu, internalSize: %lu\n", leafOramSize,
+           internalSize);
   };
 
   ~OMap() {}
 
   template <class Reader>
   void InitFromReader(Reader& reader) {
+    printf("InitFromReader\n");
     using T = typename Reader::value_type;
     static_assert(std::is_same_v<T, std::pair<K, V>>,
                   "Reader must read std::pair<K, V>");
@@ -145,6 +148,7 @@ struct OMap {
         wrappedPosWriter(posWriter,
                          [](const UidPosition& uidPos) { return uidPos.data; });
     leafOram.InitFromReader(leafReader, wrappedPosWriter);
+    printf("leafOram.InitFromReader done\n");
     // TODO end at a linear oram
     for (auto it = internalOrams.rbegin(); it != internalOrams.rend(); ++it) {
       auto& internalOram = *it;
@@ -183,11 +187,14 @@ struct OMap {
       std::swap(positions, newPositions);
       std::swap(keys, newKeys);
     }
+    printf("InitFromReader done\n");
   }
 
   bool find(const K& key, V& valOut) {
     auto oramIt = internalOrams.begin();
     bool foundFlag = false;
+    // key.print();
+    // printf(" to find\n");
     std::function<void(BPlusNode_&)> updateFunc = [&key, &valOut, &oramIt,
                                                    &updateFunc, &foundFlag,
                                                    this](BPlusNode_& node) {
@@ -195,9 +202,14 @@ struct OMap {
       short childIdx = 0;
       for (short i = 1; i < max_fan_out; ++i) {
         bool flag = (i < node.numChildren) & !(key < node.keys[i - 1]);
+        // if (i < node.numChildren) {
+        //   node.keys[i - 1].print();
+        //   printf(" ");
+        // }
         obliMove(flag, child, node.children[i]);
         childIdx += flag;
       }
+      // printf("\nchildIdx: %d\n", childIdx);
       ++oramIt;
       PositionType newPos;
       if (oramIt == internalOrams.end()) {
@@ -205,9 +217,14 @@ struct OMap {
         newPos = leafOram.Read(child.data, child.uid, leaf);
         for (short i = 0; i < max_chunk_size; ++i) {
           bool flag = (i < leaf.numElements) & (key == leaf.kv[i].key);
+          // if (i < leaf.numElements) {
+          //   leaf.kv[i].key.print();
+          //   printf(" ");
+          // }
           foundFlag |= flag;
           obliMove(flag, valOut, leaf.kv[i].value);
         }
+        // printf("\nfoundFlag: %d\n", foundFlag);
       } else {
         newPos = oramIt->Update(child.data, child.uid,
                                 updateFunc);  // recursive lambda
@@ -271,6 +288,12 @@ struct OMap {
 
   bool update(const K& key, const std::function<void(V&)>& valUpdateFunc) {
     V valOut;
+    return update(key, valUpdateFunc, valOut);
+  }
+
+  bool update(const K& key, const V& val) {
+    V valOut;
+    auto valUpdateFunc = [&val](V& v) { v = val; };
     return update(key, valUpdateFunc, valOut);
   }
 
@@ -406,7 +429,7 @@ struct OMap {
           // for (short i = 0; i < leaf.numElements; ++i) {
           //   printf("leaf.kv[%d].key: \n", i);
           //   for (int partIdx = 0; partIdx < 5; ++partIdx) {
-          //     printf("%X", leaf.kv[i].key.part[partIdx]);
+          //     printf("4", leaf.kv[i].key.part[partIdx]);
           //   }
           //   printf("\n");
           // }

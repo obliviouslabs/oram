@@ -91,7 +91,7 @@ struct PathORAM {
   template <typename Reader, class PosMapWriter>
   void InitFromReader(Reader& reader, PosMapWriter& posMapWriter) {
     PositionType initSize = reader.size();
-    if (initSize * 10 < size()) {
+    if (initSize < size()) {
       for (UidType uid = 0; uid != (UidType)initSize; ++uid) {
         PositionType newPos = Write(uid, reader.read());
         posMapWriter.write(UidBlock<PositionType, UidType>(newPos, uid));
@@ -191,7 +191,9 @@ struct PathORAM {
     using UidWriter = typename UidVec::Writer;
     UidVec uidVec(initSize);
     {
+      printf("create distributeVec\n");
       DistributeVec distributeVec(numBlock);
+      printf("create distributeVec done\n");
       DistributeWriter distributeInputWriter(distributeVec.begin(),
                                              distributeVec.begin() + initSize);
 

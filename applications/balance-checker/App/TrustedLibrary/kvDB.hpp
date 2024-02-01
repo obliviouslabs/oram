@@ -7,6 +7,8 @@
 #include <stdexcept>
 #include <string>
 
+#include "rocksdb/write_batch.h"
+
 template <typename K, typename V>
 class KV_DB {
  public:
@@ -32,14 +34,45 @@ class KV_DB {
     }
   }
 
-  V get(const K& key) {
-    std::string value;
+  bool get(const K& key, V& value) {
+    std::string valueStr;
     rocksdb::Status status =
-        db_->Get(rocksdb::ReadOptions(), serialize(key), &value);
+        db_->Get(rocksdb::ReadOptions(), serialize(key), &valueStr);
     if (status.ok()) {
-      return deserialize<V>(value);
+      value = deserialize<V>(valueStr);
+      return true;
+    } else if (status.IsNotFound()) {
+      return false;
     } else {
       throw std::runtime_error("Read failed: " + status.ToString());
+    }
+  }
+
+  bool get(const K& key, V& value, const V& defaultValue) {
+    bool found = get(key, value);
+    if (!found) {
+      value = defaultValue;
+    }
+    return found;
+  }
+
+  bool del(const K& key) {
+    rocksdb::Status status = db_->Delete(rocksdb::WriteOptions(), key);
+    if (status.ok()) {
+      return true;
+    } else if (status.IsNotFound()) {
+      return false;
+    } else {
+      throw std::runtime_error("Delete failed: " + status.ToString());
+    }
+  }
+
+  rocksdb::WriteBatch newWriteBatch() { return rocksdb::WriteBatch(); }
+
+  void writeBatch(rocksdb::WriteBatch& batch) {
+    rocksdb::Status status = db_->Write(rocksdb::WriteOptions(), &batch);
+    if (!status.ok()) {
+      throw std::runtime_error("Write failed: " + status.ToString());
     }
   }
 
