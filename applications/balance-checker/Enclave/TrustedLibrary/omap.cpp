@@ -8,11 +8,22 @@
 #include "../../common.hpp"
 #include "crypt.hpp"
 #include "oram/omap.hpp"
+#include "sgx_spinlock.h"
+#include "sgx_tseal.h"
 
 using namespace ORAM;
 EM::Backend::MemServerBackend* EM::Backend::g_DefaultBackend = nullptr;
 OMap<key_type, val_type> omap;
+// lock for the global OMAP
+// TODO: use fine grained lock within omap
+sgx_spinlock_t omap_lock = SGX_SPINLOCK_INITIALIZER;
 sgx_ec256_private_t private_key;
+
+class OMapCritical {
+ public:
+  OMapCritical() { sgx_spin_lock(&omap_lock); }
+  ~OMapCritical() { sgx_spin_unlock(&omap_lock); }
+};
 
 void ecall_gen_key_pair(uint8_t pubkey[64]) {
   sgx_ec256_public_t public_key;
@@ -30,6 +41,7 @@ void ecall_omap_init(uint64_t N, uint64_t initSize) {
   size_t BackendSize = N * sizeof(pair_type) * 50;
   EM::Backend::g_DefaultBackend =
       new EM::Backend::MemServerBackend(BackendSize);
+  OMapCritical section;
   omap.SetSize(N);
   std::unique_ptr<uint8_t> kv_buffer(new uint8_t[kv_read_batch_bytes]);
   uint64_t bufferBytes = 0;
@@ -61,6 +73,7 @@ int ecall_omap_find(uint8_t* key, uint8_t* val, uint32_t keyLength,
                     uint32_t valLength) {
   const key_type& k = *reinterpret_cast<key_type*>(key);
   const val_type& v = *reinterpret_cast<val_type*>(val);
+  OMapCritical section;
   bool res = omap.find(k, *reinterpret_cast<val_type*>(val));
   return (int)res;
 }
@@ -69,6 +82,7 @@ int ecall_omap_insert(uint8_t* key, uint8_t* val, uint32_t keyLength,
                       uint32_t valLength) {
   const key_type& k = *reinterpret_cast<key_type*>(key);
   const val_type& v = *reinterpret_cast<val_type*>(val);
+  OMapCritical section;
   bool res = omap.insert(k, v);
   return (int)res;
 }
@@ -83,6 +97,7 @@ int ecall_omap_update(uint8_t* key, uint8_t* val, uint32_t keyLength,
                       uint32_t valLength) {
   const key_type& k = *reinterpret_cast<key_type*>(key);
   const val_type& v = *reinterpret_cast<val_type*>(val);
+  OMapCritical section;
   bool res = omap.update(k, v);
   return (int)res;
 }
@@ -116,7 +131,10 @@ void ecall_handle_encrypted_query(uint8_t* encryptedQuery,
   Response response;
   EncryptedResponse encResponse;
   query.addr.ntoh();
-  response.success = omap.find(query.addr, response.balance);
+  {
+    OMapCritical section;
+    response.success = omap.find(query.addr, response.balance);
+  }
 
   sgx_read_rand(encResponse.iv, IV_SIZE);
   encResponse.encResponse.Encrypt(response, shared_key_ptr, encResponse.iv);
