@@ -1,3 +1,4 @@
+#define TRUSTED_ENV 1
 #include "../Enclave.h"
 #include "Enclave_t.h"
 ////
@@ -5,11 +6,22 @@
 #include <unordered_map>
 
 #include "../../common.hpp"
+#include "crypt.hpp"
 #include "oram/omap.hpp"
 
 using namespace ORAM;
 EM::Backend::MemServerBackend* EM::Backend::g_DefaultBackend = nullptr;
 OMap<key_type, val_type> omap;
+sgx_ec256_private_t private_key;
+
+void ecall_gen_key_pair(uint8_t pubkey[64]) {
+  sgx_ec256_public_t public_key;
+  sgx_status_t status = generate_key_pair(&private_key, &public_key);
+  if (status != SGX_SUCCESS) {
+    abort();
+  }
+  memcpy(pubkey, &public_key, 64);
+}
 
 void ecall_omap_init(uint64_t N, uint64_t initSize) {
   if (EM::Backend::g_DefaultBackend) {
@@ -73,4 +85,40 @@ int ecall_omap_update(uint8_t* key, uint8_t* val, uint32_t keyLength,
   const val_type& v = *reinterpret_cast<val_type*>(val);
   bool res = omap.update(k, v);
   return (int)res;
+}
+
+void ecall_handle_encrypted_query(uint8_t* encryptedQuery,
+                                  uint8_t* encryptedResponse,
+                                  uint32_t encryptedQueryLength,
+                                  uint32_t encryptedResponseLength) {
+  if (encryptedQueryLength != sizeof(EncryptedQuery)) {
+    printf("wrong query size\n");
+    return;
+  }
+  if (encryptedResponseLength != sizeof(EncryptedResponse)) {
+    printf("wrong response size\n");
+    return;
+  }
+  sgx_ec256_dh_shared_t shared_key;
+  EncryptedQuery* encQuery = reinterpret_cast<EncryptedQuery*>(encryptedQuery);
+  // sgx_ec256_public_t a_public_key ;
+  sgx_status_t status = compute_shared_key(
+      &private_key,
+      reinterpret_cast<sgx_ec256_public_t*>(&encQuery->senderPubKey),
+      &shared_key);
+  uint8_t* shared_key_ptr = reinterpret_cast<uint8_t*>(&shared_key);
+
+  // decrypt query using shared key
+  Query query;
+  encQuery->encQuery.Decrypt(query, shared_key_ptr, encQuery->iv);
+
+  val_type v;
+  Response response;
+  EncryptedResponse encResponse;
+  query.addr.ntoh();
+  response.success = omap.find(query.addr, response.balance);
+
+  sgx_read_rand(encResponse.iv, IV_SIZE);
+  encResponse.encResponse.Encrypt(response, shared_key_ptr, encResponse.iv);
+  memcpy(encryptedResponse, &encResponse, sizeof(EncryptedResponse));
 }

@@ -12,8 +12,12 @@
 #else
 #include "external_memory/server/enclaveMemServer_untrusted.hpp"
 #endif
+#include <boost/beast/core/detail/base64.hpp>
+
+#include "async_https_server.hpp"
 #include "db_updater.hpp"
 #include "kvDB.hpp"
+#include "sgx_tcrypto.h"
 
 // since most balances are small, it is more space efficient to directly store
 // them as string
@@ -21,6 +25,7 @@ using DB_ = KV_DB<std::string, std::string>;
 
 DB_* db;
 typename DB_::Iterator dbIt;
+sgx_ec256_public_t public_key;
 
 uint64_t ocall_Fetch_Next_KV_Batch(uint8_t* data, uint64_t batchBytes) {
   uint64_t bytes = 0;
@@ -95,8 +100,96 @@ void updateDBAndORAM(const std::string& logPath) {
   }
 }
 
+void periodicUpdateFromLog() {
+  std::string logPath = "tx.log";
+  while (true) {
+    updateDBAndORAM(logPath);
+    std::this_thread::sleep_for(std::chrono::seconds(5));
+  }
+}
+
+void handleEncryptedQuery(uint8_t* encryptedQueryPtr,
+                          uint8_t* encryptedResponsePtr) {
+  uint32_t encryptedQueryLength = sizeof(EncryptedQuery);
+  uint32_t encryptedResponseLength = sizeof(EncryptedResponse);
+  sgx_status_t ret = ecall_handle_encrypted_query(
+      global_eid, encryptedQueryPtr, encryptedResponsePtr, encryptedQueryLength,
+      encryptedResponseLength);
+  if (ret != SGX_SUCCESS) abort();
+  // send encryptedResponse to client
+}
+
+void handleEncryptedQuery(EncryptedQuery& encryptedQuery,
+                          EncryptedResponse& encryptedResponse) {
+  uint8_t* encryptedQueryPtr = (uint8_t*)&encryptedQuery;
+  uint8_t* encryptedResponsePtr = (uint8_t*)&encryptedResponse;
+  handleEncryptedQuery(encryptedQueryPtr, encryptedResponsePtr);
+}
+
+void handleEncryptedQuery(const std::string& encryptedQueryBase64,
+                          std::string& encryptedResponseBase64) {
+  std::string encryptedQuery = base64_decode(encryptedQueryBase64);
+  if (encryptedQuery.size() != sizeof(EncryptedQuery)) {
+    throw std::runtime_error("Invalid encrypted query size");
+  }
+  uint8_t* encryptedQueryPtr = (uint8_t*)encryptedQuery.data();
+  EncryptedResponse encryptedResponse;
+  uint8_t* encryptedResponsePtr = (uint8_t*)&encryptedResponse;
+  handleEncryptedQuery(encryptedQueryPtr, encryptedResponsePtr);
+  encryptedResponseBase64 =
+      base64_encode(encryptedResponsePtr, sizeof(EncryptedResponse));
+}
+
+std::string getServerPublicKeyBase64() {
+  std::string publicKeyStr =
+      base64_encode((uint8_t*)&public_key, sizeof(sgx_ec256_public_t));
+  return publicKeyStr;
+}
+
+void handleHttpRequest(http::request<http::string_body>& request,
+                       http::response<http::string_body>& response) {
+  if (request.target() == "/public_key") {
+    // Client is requesting the server's public key
+    response.result(http::status::ok);
+    response.set(http::field::content_type, "text/plain");
+    response.body() = getServerPublicKeyBase64();
+  } else if (request.target() == "/secure") {
+    // Client is sending an encrypted request
+    try {
+      // Encrypt the response
+      std::string encryptedResponseData;
+      handleEncryptedQuery(request.body(), encryptedResponseData);
+
+      response.result(http::status::ok);
+      response.set(http::field::content_type, "text/plain");
+      response.body() = encryptedResponseData;
+    } catch (const std::exception& e) {
+      // Handle decryption errors or other exceptions
+      response.result(http::status::internal_server_error);
+      response.set(http::field::content_type, "text/plain");
+      response.body() = "Error processing the encrypted request";
+    }
+  } else {
+    // Unrecognized request path
+    response.result(http::status::not_found);
+    response.set(http::field::content_type, "text/plain");
+    response.body() = "Not Found";
+  }
+
+  // Prepare the payload for transmission
+  response.prepare_payload();
+}
+
+void httpServer() {
+  // start http server
+  // handleEncryptedQuery(encryptedQuery, encryptedResponse);
+  // send encryptedResponse to client
+}
+
 void ActualMain(void) {
   sgx_status_t ret = SGX_ERROR_UNEXPECTED;
+
+  ret = ecall_gen_key_pair(global_eid, (uint8_t*)&public_key);
   size_t mapSize = 6e6;
   try {
     db = new DB_("./db_usdt");
@@ -155,11 +248,9 @@ void ActualMain(void) {
   //   }
   // }
 
-  std::string logPath = "tx.log";
-  while (true) {
-    updateDBAndORAM(logPath);
-    std::this_thread::sleep_for(std::chrono::seconds(5));
-  }
+  std::thread updateThread(periodicUpdateFromLog);
+  std::thread serverThread(startServer);
+  updateThread.join();
 
   if (db) {
     delete db;

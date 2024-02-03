@@ -53,6 +53,10 @@ struct PathORAM {
     if (cacheLevel < 0) {
       throw std::runtime_error("Path ORAM cache size too small");
     }
+    printf(
+        "tree size = %lu, cacheBytes = %lu, cacheLevel = %d, element size = "
+        "%d\n",
+        size, cacheBytes, cacheLevel, sizeof(T));
     tree.Init(size, cacheLevel);
     depth = GetLogBaseTwo(size - 1) + 2;
     stash = new Stash();
@@ -91,6 +95,7 @@ struct PathORAM {
   template <typename Reader, class PosMapWriter>
   void InitFromReader(Reader& reader, PosMapWriter& posMapWriter) {
     PositionType initSize = reader.size();
+    printf("initSize = %lu\n", initSize);
     if (initSize < size()) {
       for (UidType uid = 0; uid != (UidType)initSize; ++uid) {
         PositionType newPos = Write(uid, reader.read());

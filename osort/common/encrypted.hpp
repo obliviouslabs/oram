@@ -104,29 +104,36 @@ struct FreshEncrypted {
   // Encrypted& operator=(const Encrypted&) = delete;
   // Encrypted(const Encrypted&) = delete;
 
+  INLINE void Encrypt(const T& in, const uint8_t* key, uint8_t iv[IV_SIZE]) {
+    // PROFILE_F();
+
+    aes_256_gcm_encrypt(
+        SIZE, const_cast<uint8_t*>(reinterpret_cast<const uint8_t*>(&in)), KEY,
+        iv, tag, data);
+  }
+
   INLINE void Encrypt(const T& in, uint8_t iv[IV_SIZE]) {
     // PROFILE_F();
-    for (int round = 0; round < IO_ROUND;
-         ++round) {  // for testing portion of I/O
-      // GetRand16(iv);
-      aes_256_gcm_encrypt(
-          SIZE, const_cast<uint8_t*>(reinterpret_cast<const uint8_t*>(&in)),
-          KEY, iv, tag, data);
+
+    Encrypt(in, KEY, iv);
+  }
+
+  INLINE void Decrypt(T& out, const uint8_t* key,
+                      uint8_t iv[IV_SIZE]) /*const*/ {
+    // PROFILE_F();
+    bool r = aes_256_gcm_decrypt(SIZE, data, KEY, iv, tag,
+                                 reinterpret_cast<uint8_t*>(&out));
+    if (!r) {
+      printf("authentication failure\n");
+      abort();
     }
+    Assert(r);
+    IGNORE_UNUSED(r);
   }
 
   INLINE void Decrypt(T& out, uint8_t iv[IV_SIZE]) /*const*/ {
     // PROFILE_F();
-    for (int round = 0; round < IO_ROUND; ++round) {
-      bool r = aes_256_gcm_decrypt(SIZE, data, KEY, iv, tag,
-                                   reinterpret_cast<uint8_t*>(&out));
-      if (!r) {
-        printf("authentication failure\n");
-        abort();
-      }
-      Assert(r);
-      IGNORE_UNUSED(r);
-    }
+    Decrypt(out, KEY, iv);
   }
 
 #ifndef ENCLAVE_MODE

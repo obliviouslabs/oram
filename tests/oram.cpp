@@ -246,17 +246,14 @@ TEST(PathORAM, testInitNaive) {
 
 TEST(PathORAM, testInitWithReader) {
   uint64_t memSize = 2000000;
-  uint64_t size = 1111112;
-  delete EM::Backend::g_DefaultBackend;
-  EM::Backend::g_DefaultBackend =
-      new EM::Backend::MemServerBackend((1ULL << 10) * (memSize + 1024));
+  uint64_t size = 867835;
   if (EM::Backend::g_DefaultBackend) {
     delete EM::Backend::g_DefaultBackend;
   }
-  size_t BackendSize = 1e10;
+  size_t BackendSize = 8e9;
   EM::Backend::g_DefaultBackend =
       new EM::Backend::MemServerBackend(BackendSize);
-  PathORAM<SortElement> oram(memSize, 210744480);
+  PathORAM<SortElement> oram(memSize, 958794544UL / 2UL);
   std::vector<uint64_t> valMap(size);
   StdVector<SortElement> vec(size);
   for (int i = 0; i < size; ++i) {
