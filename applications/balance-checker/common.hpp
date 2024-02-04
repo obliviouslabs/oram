@@ -9,7 +9,7 @@
 #include "common/mov_intrinsics.hpp"
 
 // #include "sgx_tcrypto.h"
-#define ECP256_KEY_SIZE 256
+#define ECP256_KEY_SIZE 32
 
 // always use little endian when send through network
 bool isLittleEndian() {
@@ -47,7 +47,6 @@ struct ETH_Addr {
   static T parseHex(const char* hexStr) {
     T res = 0;
     static constexpr int numChar = sizeof(T) * 2;
-    Assert(strlen(hexStr) == numChar);
     for (int i = 0; i < numChar; ++i) {
       T hexDigit = hexStr[i] - '0';
       obliMove(hexStr[i] > '9', hexDigit, (T)(hexStr[i] - ('A' - 10)));

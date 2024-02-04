@@ -5,7 +5,7 @@
 #endif
 
 #ifndef NOOPENSSL
-#include <openssl/aes.h>
+// #include <openssl/aes.h>
 #include <openssl/crypto.h>
 #include <openssl/evp.h>
 #include <openssl/rand.h>
@@ -23,49 +23,124 @@ void aes_init() {
   }
 }
 
+void handleErrors(void) {
+  printf("AES Error\n");
+  abort();
+}
+
 void aes_256_gcm_encrypt(uint64_t plaintextSize, uint8_t *plaintext,
                          const uint8_t key[AES_BLOCK_SIZE],
                          uint8_t iv[AES_BLOCK_SIZE],
                          uint8_t tag[AES_BLOCK_SIZE], uint8_t *ciphertext) {
-  aes_init();
+  EVP_CIPHER_CTX *ctx;
 
-  size_t enc_length = ((plaintextSize + 15) / 16) * 16;
+  int len;
 
-  int actual_size = 0, final_size = 0;
-  EVP_CIPHER_CTX *e_ctx = EVP_CIPHER_CTX_new();
-  EVP_CIPHER_CTX_ctrl(e_ctx, EVP_CTRL_GCM_SET_IVLEN, 16, NULL);
-  EVP_CIPHER_CTX_set_padding(e_ctx, 0);
-  EVP_EncryptInit(e_ctx, EVP_aes_256_gcm(), key, iv);
+  int ciphertext_len;
 
-  EVP_EncryptUpdate(e_ctx, ciphertext, &actual_size, plaintext, plaintextSize);
-  int ok = EVP_EncryptFinal(e_ctx, &ciphertext[actual_size], &final_size);
-  Assert(final_size <= enc_length);
-  EVP_CIPHER_CTX_ctrl(e_ctx, EVP_CTRL_GCM_GET_TAG, 16, tag);
-  EVP_CIPHER_CTX_free(e_ctx);
-  Assert(ok == 1);
-  IGNORE_UNUSED(enc_length);
-  IGNORE_UNUSED(ok);
+  /* Create and initialise the context */
+  if (!(ctx = EVP_CIPHER_CTX_new())) handleErrors();
+
+  /* Initialise the encryption operation. */
+  if (1 != EVP_EncryptInit_ex(ctx, EVP_aes_256_gcm(), NULL, NULL, NULL))
+    handleErrors();
+
+  // /*
+  //  * Set IV length if default 12 bytes (96 bits) is not appropriate
+  //  */
+  // if (1 != EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_SET_IVLEN, iv_len, NULL))
+  //   handleErrors();
+
+  /* Initialise key and IV */
+  if (1 != EVP_EncryptInit_ex(ctx, NULL, NULL, key, iv)) handleErrors();
+
+  // /*
+  //  * Provide any AAD data. This can be called zero or more times as
+  //  * required
+  //  */
+  // if (1 != EVP_EncryptUpdate(ctx, NULL, &len, aad, aad_len)) handleErrors();
+
+  /*
+   * Provide the message to be encrypted, and obtain the encrypted output.
+   * EVP_EncryptUpdate can be called multiple times if necessary
+   */
+  if (1 != EVP_EncryptUpdate(ctx, ciphertext, &len, plaintext, plaintextSize))
+    handleErrors();
+  ciphertext_len = len;
+
+  /*
+   * Finalise the encryption. Normally ciphertext bytes may be written at
+   * this stage, but this does not occur in GCM mode
+   */
+  if (1 != EVP_EncryptFinal_ex(ctx, ciphertext + len, &len)) handleErrors();
+  ciphertext_len += len;
+
+  /* Get the tag */
+  if (1 != EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_GET_TAG, 16, tag))
+    handleErrors();
+
+  /* Clean up */
+  EVP_CIPHER_CTX_free(ctx);
 }
 
 bool aes_256_gcm_decrypt(uint64_t ciphertextSize, uint8_t *ciphertext,
                          const uint8_t key[AES_BLOCK_SIZE],
                          uint8_t iv[AES_BLOCK_SIZE],
                          uint8_t tag[AES_BLOCK_SIZE], uint8_t *plaintext) {
-  aes_init();
+  EVP_CIPHER_CTX *ctx;
+  int len;
+  int plaintext_len;
+  int ret;
 
-  int actual_size = 0, final_size = 0;
-  EVP_CIPHER_CTX *d_ctx = EVP_CIPHER_CTX_new();
-  EVP_CIPHER_CTX_ctrl(d_ctx, EVP_CTRL_GCM_SET_IVLEN, 16, NULL);
-  EVP_CIPHER_CTX_set_padding(d_ctx, 0);
-  EVP_DecryptInit(d_ctx, EVP_aes_256_gcm(), key, iv);
-  EVP_DecryptUpdate(d_ctx, plaintext, &actual_size, ciphertext, ciphertextSize);
-  EVP_CIPHER_CTX_ctrl(d_ctx, EVP_CTRL_GCM_SET_TAG, 16, tag);
-  int ok;
-  ok = EVP_DecryptFinal(d_ctx, &plaintext[actual_size], &final_size);
-  EVP_CIPHER_CTX_free(d_ctx);
+  /* Create and initialise the context */
+  if (!(ctx = EVP_CIPHER_CTX_new())) handleErrors();
 
-  Assert(ok == 1);
-  return ok == 1;
+  /* Initialise the decryption operation. */
+  if (!EVP_DecryptInit_ex(ctx, EVP_aes_256_gcm(), NULL, NULL, NULL))
+    handleErrors();
+
+  // /* Set IV length. Not necessary if this is 12 bytes (96 bits) */
+  // if (!EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_SET_IVLEN, iv_len, NULL))
+  //   handleErrors();
+
+  /* Initialise key and IV */
+  if (!EVP_DecryptInit_ex(ctx, NULL, NULL, key, iv)) handleErrors();
+
+  // /*
+  //  * Provide any AAD data. This can be called zero or more times as
+  //  * required
+  //  */
+  // if (!EVP_DecryptUpdate(ctx, NULL, &len, aad, aad_len)) handleErrors();
+
+  /*
+   * Provide the message to be decrypted, and obtain the plaintext output.
+   * EVP_DecryptUpdate can be called multiple times if necessary
+   */
+  if (!EVP_DecryptUpdate(ctx, plaintext, &len, ciphertext, ciphertextSize))
+    handleErrors();
+  plaintext_len = len;
+
+  /* Set expected tag value. Works in OpenSSL 1.0.1d and later */
+  if (!EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_SET_TAG, 16, tag)) handleErrors();
+
+  /*
+   * Finalise the decryption. A positive return value indicates success,
+   * anything else is a failure - the plaintext is not trustworthy.
+   */
+  ret = EVP_DecryptFinal_ex(ctx, plaintext + len, &len);
+
+  /* Clean up */
+  EVP_CIPHER_CTX_free(ctx);
+
+  // if (ret > 0) {
+  //   /* Success */
+  //   plaintext_len += len;
+  //   return plaintext_len;
+  // } else {
+  //   /* Verify failed */
+  //   return -1;
+  // }
+  return ret > 0;
 }
 
 RandGen::RandGen() { new (this) RandGen(rd()); }

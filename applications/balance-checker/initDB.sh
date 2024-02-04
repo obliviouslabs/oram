@@ -1,3 +1,4 @@
+export LD_LIBRARY_PATH=/usr/local/lib/:$LD_LIBRARY_PATH
 DBPath=db_rcc
 BalancePath=rcc_balance.txt
 rm -r $DBPath

@@ -11,6 +11,32 @@
 #include "sgx_spinlock.h"
 #include "sgx_tseal.h"
 
+void testEncrypt() {
+  struct Data {
+    char data[32];
+  };
+  Data data;
+  for (int i = 0; i < 32; ++i) {
+    data.data[i] = 'a';
+  }
+  FreshEncrypted<Data> encData;
+  uint8_t iv[IV_SIZE];
+  for (int i = 0; i < IV_SIZE; ++i) {
+    iv[i] = '0';
+  }
+  uint8_t key[32];
+  for (int i = 0; i < 32; ++i) {
+    key[i] = '1';
+  }
+  key[16] = '2';
+  encData.Encrypt(data, key, iv);
+  printf("Test Encrypted Query: ");
+  for (int i = 0; i < sizeof(encData); ++i) {
+    printf("%02x", ((uint8_t*)&encData)[i]);
+  }
+  printf("\n");
+}
+
 using namespace ORAM;
 EM::Backend::MemServerBackend* EM::Backend::g_DefaultBackend = nullptr;
 OMap<key_type, val_type> omap;
@@ -28,13 +54,15 @@ class OMapCritical {
 void ecall_gen_key_pair(uint8_t pubkey[64]) {
   sgx_ec256_public_t public_key;
   sgx_status_t status = generate_key_pair(&private_key, &public_key);
+  ec256_public_t public_key_big_endian = convert_to_ec256_public_t(public_key);
   if (status != SGX_SUCCESS) {
     abort();
   }
-  memcpy(pubkey, &public_key, 64);
+  memcpy(pubkey, &public_key_big_endian, 64);
 }
 
 void ecall_omap_init(uint64_t N, uint64_t initSize) {
+  testEncrypt();
   if (EM::Backend::g_DefaultBackend) {
     delete EM::Backend::g_DefaultBackend;
   }
@@ -116,17 +144,33 @@ void ecall_handle_encrypted_query(uint8_t* encryptedQuery,
   }
   sgx_ec256_dh_shared_t shared_key;
   EncryptedQuery* encQuery = reinterpret_cast<EncryptedQuery*>(encryptedQuery);
-  // sgx_ec256_public_t a_public_key ;
-  sgx_status_t status = compute_shared_key(
-      &private_key,
-      reinterpret_cast<sgx_ec256_public_t*>(&encQuery->senderPubKey),
-      &shared_key);
+  // to little endianess
+  sgx_ec256_public_t a_public_key = convert_to_sgx_ec256_public_t(
+      *reinterpret_cast<ec256_public_t*>(&encQuery->senderPubKey));
+
+  sgx_status_t status =
+      compute_shared_key(&private_key, &a_public_key, &shared_key);
+  if (status != SGX_SUCCESS) {
+    printf("compute_shared_key failed\n");
+    return;
+  }
   uint8_t* shared_key_ptr = reinterpret_cast<uint8_t*>(&shared_key);
 
+  // reverse the shared secret to match openssl endianess
+  for (int i = 0; i < 16; ++i) {
+    std::swap(shared_key.s[i], shared_key.s[31 - i]);
+  }
+  // for (int i = 0; i < 32; ++i) {
+  //   printf("%02x", shared_key_ptr[i]);
+  // }
+  // printf("\n");
+  // for (int i = 0; i < IV_SIZE; ++i) {
+  //   printf("%02x", encQuery->iv[i]);
+  // }
+  // printf("\n");
   // decrypt query using shared key
   Query query;
   encQuery->encQuery.Decrypt(query, shared_key_ptr, encQuery->iv);
-
   val_type v;
   Response response;
   EncryptedResponse encResponse;

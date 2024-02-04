@@ -14,7 +14,9 @@
 #endif
 #include <boost/beast/core/detail/base64.hpp>
 
-#include "async_https_server.hpp"
+// #include "async_https_server.hpp"
+#define CPPHTTPLIB_OPENSSL_SUPPORT
+#include "../../httplib.h"
 #include "db_updater.hpp"
 #include "kvDB.hpp"
 #include "sgx_tcrypto.h"
@@ -25,7 +27,7 @@ using DB_ = KV_DB<std::string, std::string>;
 
 DB_* db;
 typename DB_::Iterator dbIt;
-sgx_ec256_public_t public_key;
+ec256_public_t public_key;
 
 uint64_t ocall_Fetch_Next_KV_Batch(uint8_t* data, uint64_t batchBytes) {
   uint64_t bytes = 0;
@@ -146,53 +148,48 @@ std::string getServerPublicKeyBase64() {
   return publicKeyStr;
 }
 
-void handleHttpRequest(http::request<http::string_body>& request,
-                       http::response<http::string_body>& response) {
-  if (request.target() == "/public_key") {
-    // Client is requesting the server's public key
-    response.result(http::status::ok);
-    response.set(http::field::content_type, "text/plain");
-    response.body() = getServerPublicKeyBase64();
-  } else if (request.target() == "/secure") {
-    // Client is sending an encrypted request
-    try {
-      // Encrypt the response
-      std::string encryptedResponseData;
-      handleEncryptedQuery(request.body(), encryptedResponseData);
+// void handleHttpRequest(const httplib::Request& request,
+//                        httplib::Response& response) {
+//   if (request.target() == "/public_key") {
+//     // Client is requesting the server's public key
+//     response.result(http::status::ok);
+//     response.set(http::field::content_type, "text/plain");
+//     response.body() = getServerPublicKeyBase64();
+//   } else if (request.target() == "/secure") {
+//     // Client is sending an encrypted request
+//     try {
+//       // Encrypt the response
+//       std::string encryptedResponseData;
+//       handleEncryptedQuery(request.body(), encryptedResponseData);
 
-      response.result(http::status::ok);
-      response.set(http::field::content_type, "text/plain");
-      response.body() = encryptedResponseData;
-    } catch (const std::exception& e) {
-      // Handle decryption errors or other exceptions
-      response.result(http::status::internal_server_error);
-      response.set(http::field::content_type, "text/plain");
-      response.body() = "Error processing the encrypted request";
-    }
-  } else {
-    // Unrecognized request path
-    response.result(http::status::not_found);
-    response.set(http::field::content_type, "text/plain");
-    response.body() = "Not Found";
-  }
+//       response.result(http::status::ok);
+//       response.set(http::field::content_type, "text/plain");
+//       response.body() = encryptedResponseData;
+//     } catch (const std::exception& e) {
+//       // Handle decryption errors or other exceptions
+//       response.result(http::status::internal_server_error);
+//       response.set(http::field::content_type, "text/plain");
+//       response.body() = "Error processing the encrypted request";
+//     }
+//   } else {
+//     // Unrecognized request path
+//     response.result(http::status::not_found);
+//     response.set(http::field::content_type, "text/plain");
+//     response.body() = "Not Found";
+//   }
 
-  // Prepare the payload for transmission
-  response.prepare_payload();
-}
-
-void httpServer() {
-  // start http server
-  // handleEncryptedQuery(encryptedQuery, encryptedResponse);
-  // send encryptedResponse to client
-}
+//   // Prepare the payload for transmission
+//   response.prepare_payload();
+// }
 
 void ActualMain(void) {
   sgx_status_t ret = SGX_ERROR_UNEXPECTED;
 
   ret = ecall_gen_key_pair(global_eid, (uint8_t*)&public_key);
-  size_t mapSize = 6e6;
+  if (ret != SGX_SUCCESS) abort();
+  size_t mapSize = 1e5;
   try {
-    db = new DB_("./db_usdt");
+    db = new DB_("./db_rcc");
     dbIt = db->getIterator();
     dbIt.seekToFirst();
     if (!dbIt.isValid()) {
@@ -249,7 +246,23 @@ void ActualMain(void) {
   // }
 
   std::thread updateThread(periodicUpdateFromLog);
-  std::thread serverThread(startServer);
+  httplib::Server svr;
+  svr.Get("/public_key",
+          [](const httplib::Request& /*req*/, httplib::Response& res) {
+            res.set_content(getServerPublicKeyBase64(), "text/plain");
+          });
+  svr.Post("/secure", [](const httplib::Request& req, httplib::Response& res) {
+    printf("Received encrypted request\n");
+    std::string encryptedResponseBase64;
+    try {
+      handleEncryptedQuery(req.body, encryptedResponseBase64);
+      res.set_content(encryptedResponseBase64, "text/plain");
+    } catch (const std::exception& e) {
+      res.status = 500;
+      res.set_content("Error processing the encrypted request", "text/plain");
+    }
+  });
+  svr.listen("localhost", 1234);
   updateThread.join();
 
   if (db) {

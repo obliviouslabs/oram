@@ -1,6 +1,7 @@
 #pragma once
 #include <string>
 
+#include "../../common.hpp"
 #include "sgx_tcrypto.h"
 sgx_status_t generate_key_pair(sgx_ec256_private_t* p_private,
                                sgx_ec256_public_t* p_public) {
@@ -30,4 +31,23 @@ sgx_status_t compute_shared_key(const sgx_ec256_private_t* p_private_b,
   sgx_ecc256_close_context(ecc_handle);
 
   return status;
+}
+
+ec256_public_t convert_to_ec256_public_t(const sgx_ec256_public_t& public_key) {
+  ec256_public_t res;
+  for (int i = 0; i < 32; ++i) {
+    res.gx[i] = public_key.gx[31 - i];
+    res.gy[i] = public_key.gy[31 - i];
+  }
+  return res;
+}
+
+sgx_ec256_public_t convert_to_sgx_ec256_public_t(
+    const ec256_public_t& public_key_big_endian) {
+  sgx_ec256_public_t res;
+  for (int i = 0; i < 32; ++i) {
+    res.gx[i] = public_key_big_endian.gx[31 - i];
+    res.gy[i] = public_key_big_endian.gy[31 - i];
+  }
+  return res;
 }
