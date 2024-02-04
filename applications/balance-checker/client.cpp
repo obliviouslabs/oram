@@ -258,6 +258,7 @@ int main(int argc, char **argv) {
            server_pub_key_str.size(), sizeof(ec256_public_t));
     return -1;
   }
+  printf("Server public key received\n");
   memcpy(&server_pub_key, server_pub_key_str.data(), sizeof(ec256_public_t));
   EC_GROUP *group = EC_GROUP_new_by_curve_name(NID_X9_62_prime256v1);
   EC_POINT *server_pub_key_ec_point =
@@ -296,10 +297,6 @@ int main(int argc, char **argv) {
   }
 
   printf("Shared secret computed\n");
-  for (size_t i = 0; i < shared_secret_len; i++) {
-    printf("%02x", shared_secret[i]);
-  }
-  printf("\n");
 
   while (true) {
     std::string addr;
