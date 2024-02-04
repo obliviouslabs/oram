@@ -155,14 +155,18 @@ enum class QueryType { READ_BALANCE };
 
 enum class CoinType { USDT };
 
+typedef uint64_t Nounce;
+
 struct Query {
   QueryType type;
   CoinType coinType;
   ETH_Addr addr;
+  Nounce nounce;
 };
 
 struct Response {
   ERC20_Balance balance;
+  Nounce nounce;  // to prevent replay attack
   bool success;
 };
 

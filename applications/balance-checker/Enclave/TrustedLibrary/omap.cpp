@@ -175,6 +175,7 @@ void ecall_handle_encrypted_query(uint8_t* encryptedQuery,
   Response response;
   EncryptedResponse encResponse;
   query.addr.ntoh();
+  response.nounce = query.nounce;
   {
     OMapCritical section;
     response.success = omap.find(query.addr, response.balance);

@@ -108,6 +108,7 @@ int generate_secure_iv(unsigned char *iv, int iv_length) {
 }
 
 std::string makeBalanceQueryBody(CoinType coinType, const std::string &addr,
+                                 const Nounce &nounce,
                                  const ec256_public_t &client_pub_key,
                                  uint8_t *shared_secret) {
   Query query;
@@ -116,6 +117,7 @@ std::string makeBalanceQueryBody(CoinType coinType, const std::string &addr,
   query.addr.hton();
   query.coinType = coinType;
   query.type = QueryType::READ_BALANCE;
+  query.nounce = nounce;
   int status = generate_secure_iv(encQuery.iv, IV_SIZE);
   if (status != 1) {
     printf("Failed to generate secure IV\n");
@@ -131,7 +133,7 @@ std::string makeBalanceQueryBody(CoinType coinType, const std::string &addr,
 }
 
 std::string decodeResponse(const std::string &response_base64,
-                           uint8_t *shared_secret) {
+                           const uint64_t &nounce, uint8_t *shared_secret) {
   std::string response = base64_decode(response_base64);
   if (response.size() != sizeof(EncryptedResponse)) {
     printf("Invalid encrypted response size\n");
@@ -143,6 +145,9 @@ std::string decodeResponse(const std::string &response_base64,
   Response responseObj;
   encResponse.encResponse.Decrypt(responseObj, shared_secret, encResponse.iv);
   if (responseObj.success) {
+    if (responseObj.nounce != nounce) {
+      return "Error: nounce mismatch, possible replay attack";
+    }
     responseObj.balance.ntoh();
     std::ostringstream oss;
     oss << responseObj.balance;
@@ -297,20 +302,22 @@ int main(int argc, char **argv) {
   }
 
   printf("Shared secret computed\n");
-
+  Nounce nounce = 0;
   while (true) {
     std::string addr;
     std::cout << "Enter an ethereum address: ";
     std::cin >> addr;
-    std::string body = makeBalanceQueryBody(CoinType::USDT, addr,
+
+    std::string body = makeBalanceQueryBody(CoinType::USDT, addr, nounce,
                                             client_pub_key, shared_secret);
     auto res = cli.Post("/secure", body, "application/octet-stream");
     if (res && res->status == 200) {
-      std::string resValue = decodeResponse(res->body, shared_secret);
+      std::string resValue = decodeResponse(res->body, nounce, shared_secret);
       std::cout << "Response: " << resValue << std::endl;
     } else {
       std::cout << "Error: " << res.error() << std::endl;
     }
+    ++nounce;
   }
 
   return 0;
