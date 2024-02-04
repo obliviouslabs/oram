@@ -53,10 +53,10 @@ struct PathORAM {
     if (cacheLevel < 0) {
       throw std::runtime_error("Path ORAM cache size too small");
     }
-    printf(
-        "tree size = %lu, cacheBytes = %lu, cacheLevel = %d, element size = "
-        "%d\n",
-        size, cacheBytes, cacheLevel, sizeof(T));
+    // printf(
+    //     "tree size = %lu, cacheBytes = %lu, cacheLevel = %d, element size = "
+    //     "%d\n",
+    //     size, cacheBytes, cacheLevel, sizeof(T));
     tree.Init(size, cacheLevel);
     depth = GetLogBaseTwo(size - 1) + 2;
     stash = new Stash();

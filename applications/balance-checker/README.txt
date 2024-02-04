@@ -18,9 +18,9 @@ How to Build/Execute the OSort sample program
     f. Simulation Mode, Release build:
         $ make SGX_MODE=SIM SGX_DEBUG=0
 4. Execute the binary directly:
-    $ ./sort.elf
+    $ ./map.elf
 5. Remember to "make clean" before switching build mode
-
+6. To compile the client, run "make client"
 -------------------------------------------------
 Launch token initialization
 -------------------------------------------------
@@ -30,8 +30,12 @@ sgx_launch_token_t launch_token = {0};
 sgx_create_enclave(ENCLAVE_FILENAME, SGX_DEBUG_FLAG, launch_token, NULL, &global_eid, NULL);
 
 -------------------------------------------------
-Run Example Testcases for OSort algorithms
+Run Example Testcases for Balance Checker application
 -------------------------------------------------
+To launch the server, run:
 ./algo_runner.sh
 or to output directly to terminal
 ./algo_runner.sh 1
+
+To launch the client, run:
+./client
