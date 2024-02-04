@@ -1,5 +1,5 @@
 ---------------------------------------------
-How to Build/Execute the OSort sample program
+How to Build/Execute the Balance Checker sample program
 ---------------------------------------------
 1. Install Intel(R) Software Guard Extensions (Intel(R) SGX) SDK for Linux* OS
 2. Make sure your environment is set:
