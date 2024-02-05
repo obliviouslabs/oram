@@ -1,12 +1,24 @@
 #include "App.h"
 
 #include <assert.h>
+#include <openssl/sha.h>
 #include <pwd.h>
+#include <stdarg.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 
+#include <iomanip>
+#include <iostream>
+#include <sstream>
+#include <string>
+
 #include "Enclave_u.h"
+#include "sgx_dcap_ql_wrapper.h"
+#include "sgx_eid.h"   /* sgx_enclave_id_t */
+#include "sgx_error.h" /* sgx_status_t */
+#include "sgx_quote_3.h"
 #include "sgx_urts.h"
 
 /* Global EID shared by multiple threads */
@@ -101,6 +113,31 @@ uint64_t ocall_measure_time(void) {
   return ret;
 }
 
+void sha256sum(const uint8_t *data, uint32_t data_size, uint8_t *hash) {
+  SHA256_CTX sha256;
+  SHA256_Init(&sha256);
+  SHA256_Update(&sha256, data, data_size);
+  SHA256_Final(hash, &sha256);
+}
+
+void printh(uint8_t *hash, size_t sz) {
+  std::stringstream ss;
+  for (int i = 0; i < sz; i++) {
+    ss << std::hex << std::setw(2) << std::setfill('0') << (int)hash[i];
+  }
+  std::cout << ss.str() << std::endl;
+}
+
+bool create_app_enclave_report(const char *enclave_path,
+                               sgx_target_info_t qe_target_info,
+                               sgx_report_t *app_report,
+                               const sgx_report_data_t *p_data);
+
+const char *format_hex_buffer(char *buffer, uint maxSize, uint8_t *data,
+                              size_t size);
+const char *uint16_to_buffer(char *buffer, uint maxSize, uint16_t data,
+                             size_t size);
+
 /* Application entry */
 int SGX_CDECL main(int argc, char *argv[]) {
   (void)(argc);
@@ -120,4 +157,62 @@ int SGX_CDECL main(int argc, char *argv[]) {
   sgx_destroy_enclave(global_eid);
 
   return 0;
+}
+
+const char *uint16_to_buffer(char *buffer, uint maxSize, uint16_t n,
+                             size_t size) {
+  if (size * 2 >= maxSize || size < 2) return "DEADBEEF";
+  sprintf(&buffer[0], "%02X", uint8_t(n));
+  sprintf(&buffer[2], "%02X", uint8_t(n >> 8));
+
+  for (int i = 2; i < size; i++) {
+    sprintf(&buffer[i * 2], "%02X", 0);
+  }
+  buffer[size * 2 + 1] = '\0';
+  return buffer;
+}
+
+const char *format_hex_buffer(char *buffer, uint maxSize, uint8_t *data,
+                              size_t size) {
+  if (size * 2 >= maxSize) return "DEADBEEF";
+
+  for (int i = 0; i < size; i++) {
+    sprintf(&buffer[i * 2], "%02X", data[i]);
+  }
+  buffer[size * 2 + 1] = '\0';
+  return buffer;
+}
+
+bool create_app_enclave_report(const char *enclave_path,
+                               sgx_target_info_t qe_target_info,
+                               sgx_report_t *app_report,
+                               const sgx_report_data_t *p_data) {
+  bool ret = true;
+  uint32_t retval = 0;
+  sgx_status_t sgx_status = SGX_SUCCESS;
+  sgx_enclave_id_t eid = 0;
+  int launch_token_updated = 0;
+  sgx_launch_token_t launch_token = {0};
+
+  sgx_status = sgx_create_enclave(enclave_path, SGX_DEBUG_FLAG, &launch_token,
+                                  &launch_token_updated, &eid, NULL);
+  if (SGX_SUCCESS != sgx_status) {
+    printf("Error, call sgx_create_enclave fail [%s], SGXError:%04x.\n",
+           __FUNCTION__, sgx_status);
+    ret = false;
+    sgx_destroy_enclave(eid);
+    return ret;
+  }
+
+  sgx_status =
+      enclave_create_report(eid, &retval, &qe_target_info, p_data, app_report);
+  if ((SGX_SUCCESS != sgx_status) || (0 != retval)) {
+    printf("\nCall to get_app_enclave_report() failed\n");
+    ret = false;
+    sgx_destroy_enclave(eid);
+    return ret;
+  }
+
+  sgx_destroy_enclave(eid);
+  return ret;
 }

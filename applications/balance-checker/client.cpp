@@ -246,8 +246,8 @@ int ec_point_to_pub_key(const EC_GROUP *group, const EC_POINT *point,
 int main(int argc, char **argv) {
   // Example usage
   // std::string host = "example.com";
-  testEncrypt();
-  httplib::Client cli("localhost", 1234);
+  // testEncrypt();
+  httplib::Client cli("20.42.98.54", 8080);
   auto res = cli.Get("/public_key");
   if (res && res->status == 200) {
     std::cout << "Response: " << res->body << std::endl;

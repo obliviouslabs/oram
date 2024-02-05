@@ -8,33 +8,17 @@
 #include "../../common.hpp"
 #include "crypt.hpp"
 #include "oram/omap.hpp"
+#include "sgx_error.h"
+#include "sgx_report.h"
 #include "sgx_spinlock.h"
+#include "sgx_trts.h"
 #include "sgx_tseal.h"
+#include "sgx_utils.h"
 
-void testEncrypt() {
-  struct Data {
-    char data[32];
-  };
-  Data data;
-  for (int i = 0; i < 32; ++i) {
-    data.data[i] = 'a';
-  }
-  FreshEncrypted<Data> encData;
-  uint8_t iv[IV_SIZE];
-  for (int i = 0; i < IV_SIZE; ++i) {
-    iv[i] = '0';
-  }
-  uint8_t key[32];
-  for (int i = 0; i < 32; ++i) {
-    key[i] = '1';
-  }
-  key[16] = '2';
-  encData.Encrypt(data, key, iv);
-  printf("Test Encrypted Query: ");
-  for (int i = 0; i < sizeof(encData); ++i) {
-    printf("%02x", ((uint8_t*)&encData)[i]);
-  }
-  printf("\n");
+uint32_t enclave_create_report(const sgx_target_info_t* p_qe3_target,
+                               const sgx_report_data_t* p_data,
+                               sgx_report_t* p_report) {
+  return sgx_create_report(p_qe3_target, p_data, p_report);
 }
 
 using namespace ORAM;
@@ -62,7 +46,6 @@ void ecall_gen_key_pair(uint8_t pubkey[64]) {
 }
 
 void ecall_omap_init(uint64_t N, uint64_t initSize) {
-  testEncrypt();
   if (EM::Backend::g_DefaultBackend) {
     delete EM::Backend::g_DefaultBackend;
   }
