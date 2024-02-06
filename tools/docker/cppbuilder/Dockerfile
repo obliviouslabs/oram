@@ -34,7 +34,7 @@ RUN pip install web3
 RUN pip install tqdm
 
 RUN apt-get install -y libsgx-urts libsgx-launch libsgx-enclave-common
-RUN apt-get install -y libsgx-epid libsgx-quote-ex libsgx-dcap-ql
+RUN apt-get install -y libsgx-epid libsgx-quote-ex libsgx-dcap-ql libsgx-dcap-ql-dev
 
 
 RUN wget 'https://github.com/boyter/scc/releases/download/v3.0.0/scc-3.0.0-x86_64-unknown-linux.zip'
