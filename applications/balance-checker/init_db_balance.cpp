@@ -10,6 +10,7 @@ void initFromBalanceFile(const char* DBPath, const char* balancePath) {
   std::string line;
   uint64_t lastBlock = 0, lastTxIdx = 0, recordCount = 0;
   std::getline(balanceFile, line);
+  std::cout << line << std::endl;
   std::istringstream iss(line);
   if (!(iss >> lastBlock >> lastTxIdx >> recordCount)) {
     printf("Error reading balance file meta data\n");
