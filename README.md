@@ -16,7 +16,7 @@ docker run -it --rm -v $PWD:/builder -u $(id -u) cppbuilder
 
 ## How to enter the docker environment to run algorithms in enclave
 ```bash
-docker run -v /tmp/sortbackend:/ssdmount --privileged -it --rm -v $PWD:/builder cppbuilder
+docker run -v /tmp/sortbackend:/ssdmount --privileged -it --rm -v $PWD:/builder -p 8080:8080 cppbuilder
 ```
 
 ## How to run the unit tests

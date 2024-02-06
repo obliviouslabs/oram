@@ -262,7 +262,9 @@ void ActualMain(void) {
       res.set_content("Error processing the encrypted request", "text/plain");
     }
   });
-  svr.listen("localhost", 1234);
+  printf("Server listening on port 8080\n");
+  bool success = svr.listen("0.0.0.0", 8080);
+  printf("Server listening ends.\n");
   updateThread.join();
 
   if (db) {
