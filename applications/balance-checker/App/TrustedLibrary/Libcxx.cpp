@@ -101,7 +101,7 @@ void updateDBAndORAM(const std::string& logPath) {
       std::cerr << "key not found when delete" << std::endl;
     }
   }
-  int ret = ecall_set_last_block(lastBlock);
+  int ret = ecall_set_last_block(global_eid, lastBlock);
   if (ret != SGX_SUCCESS) abort();
 }
 
@@ -225,7 +225,7 @@ void ActualMain(void) {
   size_t mapSize = (size_t)(metaData.recordCount * 1.2);
   ret = ecall_omap_init(global_eid, mapSize, metaData.recordCount);
   if (ret != SGX_SUCCESS) abort();
-  ret = ecall_set_last_block(metaData.lastBlock);
+  ret = ecall_set_last_block(global_eid, metaData.lastBlock);
   if (ret != SGX_SUCCESS) abort();
   dbIt.reset();
   // auto it = db->getIterator();

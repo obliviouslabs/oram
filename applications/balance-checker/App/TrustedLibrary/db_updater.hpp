@@ -88,7 +88,7 @@ uint64_t updateDBFromLog(
   if (!changed) {
     // prune log
     clearFile(logFd);
-    return;
+    return metaData.lastBlock;
   }
   // ensure atomic write
   auto writeBatch = db->newWriteBatch();
