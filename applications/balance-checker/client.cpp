@@ -6,6 +6,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#include <chrono>
 #include <cstdio>
 #include <cstdlib>
 #include <iostream>
@@ -110,7 +111,7 @@ int generate_secure_iv(unsigned char *iv, int iv_length) {
 std::string makeBalanceQueryBody(CoinType coinType, const std::string &addr,
                                  const Nounce &nounce,
                                  const ec256_public_t &client_pub_key,
-                                 uint8_t *shared_secret) {
+                                 const uint8_t *shared_secret) {
   Query query;
   EncryptedQuery encQuery;
   query.addr.set(addr);
@@ -133,7 +134,8 @@ std::string makeBalanceQueryBody(CoinType coinType, const std::string &addr,
 }
 
 std::string decodeResponse(const std::string &response_base64,
-                           const uint64_t &nounce, uint8_t *shared_secret) {
+                           const uint64_t &nounce,
+                           const uint8_t *shared_secret) {
   std::string response = base64_decode(response_base64);
   if (response.size() != sizeof(EncryptedResponse)) {
     printf("Invalid encrypted response size\n");
@@ -243,6 +245,54 @@ int ec_point_to_pub_key(const EC_GROUP *group, const EC_POINT *point,
   return 1;  // Success
 }
 
+void interactive(httplib::Client &cli, const ec256_public_t &client_pub_key,
+                 const unsigned char *shared_secret) {
+  Nounce nounce = 0;
+  while (true) {
+    std::string addr;
+    std::cout << "Enter an ethereum address: ";
+    std::cin >> addr;
+
+    std::string body = makeBalanceQueryBody(CoinType::USDT, addr, nounce,
+                                            client_pub_key, shared_secret);
+    auto res = cli.Post("/secure", body, "application/octet-stream");
+    if (res && res->status == 200) {
+      std::string resValue = decodeResponse(res->body, nounce, shared_secret);
+      std::cout << "Response: " << resValue << std::endl;
+    } else {
+      std::cout << "Error: " << res.error() << std::endl;
+    }
+    ++nounce;
+  }
+}
+
+void stressTest(httplib::Client &cli, const ec256_public_t &client_pub_key,
+                const unsigned char *shared_secret) {
+  // measure time
+  Nounce nounce = 0;
+  std::chrono::high_resolution_clock::time_point t1 =
+      std::chrono::high_resolution_clock::now();
+  for (uint64_t round = 0; round < 1000; ++round) {
+    std::string addr = "0xcEe284F754E854890e311e3280b767F80797180d";
+    std::string body = makeBalanceQueryBody(CoinType::USDT, addr, nounce,
+                                            client_pub_key, shared_secret);
+    auto res = cli.Post("/secure", body, "application/octet-stream");
+    if (res && res->status == 200) {
+      std::string resValue = decodeResponse(res->body, nounce, shared_secret);
+      std::cout << "Response: " << resValue << std::endl;
+    } else {
+      std::cout << "Error: " << res.error() << std::endl;
+    }
+    ++nounce;
+  }
+  std::chrono::high_resolution_clock::time_point t2 =
+      std::chrono::high_resolution_clock::now();
+  auto duration =
+      std::chrono::duration_cast<std::chrono::microseconds>(t2 - t1).count();
+  std::cout << "Time taken: " << duration << " microseconds for " << 1000
+            << " queries" << std::endl;
+}
+
 int main(int argc, char **argv) {
   // Example usage
   // std::string host = "example.com";
@@ -302,23 +352,6 @@ int main(int argc, char **argv) {
   }
 
   printf("Shared secret computed\n");
-  Nounce nounce = 0;
-  while (true) {
-    std::string addr;
-    std::cout << "Enter an ethereum address: ";
-    std::cin >> addr;
-
-    std::string body = makeBalanceQueryBody(CoinType::USDT, addr, nounce,
-                                            client_pub_key, shared_secret);
-    auto res = cli.Post("/secure", body, "application/octet-stream");
-    if (res && res->status == 200) {
-      std::string resValue = decodeResponse(res->body, nounce, shared_secret);
-      std::cout << "Response: " << resValue << std::endl;
-    } else {
-      std::cout << "Error: " << res.error() << std::endl;
-    }
-    ++nounce;
-  }
-
+  interactive(cli, client_pub_key, shared_secret);
   return 0;
 }

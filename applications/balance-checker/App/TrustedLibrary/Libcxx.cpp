@@ -56,7 +56,8 @@ void updateDBAndORAM(const std::string& logPath) {
   std::vector<std::pair<std::string, std::string>> insertList;
   std::vector<std::pair<std::string, std::string>> updateList;
   std::vector<std::string> deleteList;
-  uint64_t lastBlock = updateDBFromLog(db, logPath, insertList, updateList, deleteList);
+  uint64_t lastBlock =
+      updateDBFromLog(db, logPath, insertList, updateList, deleteList);
   printf("insert %lu keys, update %lu keys, delete %lu keys\n",
          insertList.size(), updateList.size(), deleteList.size());
   for (auto& kv : updateList) {
@@ -266,7 +267,7 @@ void ActualMain(void) {
     }
   });
   printf("Server listening on port 8080\n");
-  bool success = svr.listen("0.0.0.0", 8080);
+  bool success = svr.listen("localhost", 8080);
   printf("Server listening ends.\n");
   updateThread.join();
 
