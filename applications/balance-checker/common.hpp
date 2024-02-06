@@ -166,6 +166,7 @@ struct Query {
 
 struct Response {
   ERC20_Balance balance;
+  uint64_t tillBlock;
   Nounce nounce;  // to prevent replay attack
   bool success;
 };

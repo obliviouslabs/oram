@@ -33,7 +33,8 @@ DBMetaData readMetaData(DB_* db) {
   return metaData;
 }
 
-void updateDBFromLog(
+// returns the last block scanned
+uint64_t updateDBFromLog(
     DB_* db, const std::string& logPath,
     std::vector<std::pair<std::string, std::string>>& insertList,
     std::vector<std::pair<std::string, std::string>>& updateList,
@@ -125,4 +126,5 @@ void updateDBFromLog(
   writeBatch.Put("recordCount", std::to_string(metaData.recordCount));
   db->writeBatch(writeBatch);
   clearFile(logFd);
+  return metaData.lastBlock;
 }

@@ -150,7 +150,7 @@ std::string decodeResponse(const std::string &response_base64,
     }
     responseObj.balance.ntoh();
     std::ostringstream oss;
-    oss << responseObj.balance;
+    oss << responseObj.balance << " till block " << responseObj.tillBlock;
     return oss.str();
   } else {
     return "Error: balance not found";

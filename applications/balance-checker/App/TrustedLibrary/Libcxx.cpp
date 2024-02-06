@@ -56,7 +56,7 @@ void updateDBAndORAM(const std::string& logPath) {
   std::vector<std::pair<std::string, std::string>> insertList;
   std::vector<std::pair<std::string, std::string>> updateList;
   std::vector<std::string> deleteList;
-  updateDBFromLog(db, logPath, insertList, updateList, deleteList);
+  uint64_t lastBlock = updateDBFromLog(db, logPath, insertList, updateList, deleteList);
   printf("insert %lu keys, update %lu keys, delete %lu keys\n",
          insertList.size(), updateList.size(), deleteList.size());
   for (auto& kv : updateList) {
@@ -100,6 +100,8 @@ void updateDBAndORAM(const std::string& logPath) {
       std::cerr << "key not found when delete" << std::endl;
     }
   }
+  int ret = ecall_set_last_block(lastBlock);
+  if (ret != SGX_SUCCESS) abort();
 }
 
 void periodicUpdateFromLog() {
@@ -187,9 +189,8 @@ void ActualMain(void) {
 
   ret = ecall_gen_key_pair(global_eid, (uint8_t*)&public_key);
   if (ret != SGX_SUCCESS) abort();
-  size_t mapSize = 1e5;
   try {
-    db = new DB_("./db_rcc");
+    db = new DB_("./db_usdt");
     dbIt = db->getIterator();
     dbIt.seekToFirst();
     if (!dbIt.isValid()) {
@@ -220,8 +221,10 @@ void ActualMain(void) {
   }
   printf("lastBlock = %lu, recordCount = %lu\n", metaData.lastBlock,
          metaData.recordCount);
-
+  size_t mapSize = (size_t)(metaData.recordCount * 1.2);
   ret = ecall_omap_init(global_eid, mapSize, metaData.recordCount);
+  if (ret != SGX_SUCCESS) abort();
+  ret = ecall_set_last_block(metaData.lastBlock);
   if (ret != SGX_SUCCESS) abort();
   dbIt.reset();
   // auto it = db->getIterator();
