@@ -20,7 +20,6 @@
 #include "db_updater.hpp"
 #include "kvDB.hpp"
 #include "sgx_tcrypto.h"
-
 // since most balances are small, it is more space efficient to directly store
 // them as string
 using DB_ = KV_DB<std::string, std::string>;
@@ -28,6 +27,7 @@ using DB_ = KV_DB<std::string, std::string>;
 DB_* db;
 typename DB_::Iterator dbIt;
 ec256_public_t public_key;
+std::counting_semaphore sem(1);  // may set to tcs_max_num
 
 uint64_t ocall_Fetch_Next_KV_Batch(uint8_t* data, uint64_t batchBytes) {
   uint64_t bytes = 0;
@@ -60,6 +60,7 @@ void updateDBAndORAM(const std::string& logPath) {
       updateDBFromLog(db, logPath, insertList, updateList, deleteList);
   printf("insert %lu keys, update %lu keys, delete %lu keys\n",
          insertList.size(), updateList.size(), deleteList.size());
+  SemaphoreLock lock(sem);
   for (auto& kv : updateList) {
     key_type key;
     val_type val;
@@ -117,6 +118,7 @@ void handleEncryptedQuery(uint8_t* encryptedQueryPtr,
                           uint8_t* encryptedResponsePtr) {
   uint32_t encryptedQueryLength = sizeof(EncryptedQuery);
   uint32_t encryptedResponseLength = sizeof(EncryptedResponse);
+  SemaphoreLock lock(sem);
   sgx_status_t ret = ecall_handle_encrypted_query(
       global_eid, encryptedQueryPtr, encryptedResponsePtr, encryptedQueryLength,
       encryptedResponseLength);
@@ -151,47 +153,13 @@ std::string getServerPublicKeyBase64() {
   return publicKeyStr;
 }
 
-// void handleHttpRequest(const httplib::Request& request,
-//                        httplib::Response& response) {
-//   if (request.target() == "/public_key") {
-//     // Client is requesting the server's public key
-//     response.result(http::status::ok);
-//     response.set(http::field::content_type, "text/plain");
-//     response.body() = getServerPublicKeyBase64();
-//   } else if (request.target() == "/secure") {
-//     // Client is sending an encrypted request
-//     try {
-//       // Encrypt the response
-//       std::string encryptedResponseData;
-//       handleEncryptedQuery(request.body(), encryptedResponseData);
-
-//       response.result(http::status::ok);
-//       response.set(http::field::content_type, "text/plain");
-//       response.body() = encryptedResponseData;
-//     } catch (const std::exception& e) {
-//       // Handle decryption errors or other exceptions
-//       response.result(http::status::internal_server_error);
-//       response.set(http::field::content_type, "text/plain");
-//       response.body() = "Error processing the encrypted request";
-//     }
-//   } else {
-//     // Unrecognized request path
-//     response.result(http::status::not_found);
-//     response.set(http::field::content_type, "text/plain");
-//     response.body() = "Not Found";
-//   }
-
-//   // Prepare the payload for transmission
-//   response.prepare_payload();
-// }
-
 void ActualMain(void) {
   sgx_status_t ret = SGX_ERROR_UNEXPECTED;
 
   ret = ecall_gen_key_pair(global_eid, (uint8_t*)&public_key);
   if (ret != SGX_SUCCESS) abort();
   try {
-    db = new DB_("./db_usdt");
+    db = new DB_("./db_rcc");
     dbIt = db->getIterator();
     dbIt.seekToFirst();
     if (!dbIt.isValid()) {

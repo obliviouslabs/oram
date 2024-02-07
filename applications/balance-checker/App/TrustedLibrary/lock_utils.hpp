@@ -71,3 +71,27 @@ bool clearFile(int fileDescriptor) {
   }
   return true;
 }
+
+#include <semaphore>
+class SemaphoreLock {
+ public:
+  explicit SemaphoreLock(std::counting_semaphore<>& semaphore)
+      : sem(semaphore) {
+    // Acquire a semaphore slot
+    sem.acquire();
+  }
+
+  ~SemaphoreLock() {
+    // Release the semaphore slot
+    sem.release();
+  }
+
+  // Delete copy constructor and copy assignment operator
+  SemaphoreLock(const SemaphoreLock&) = delete;
+  SemaphoreLock& operator=(const SemaphoreLock&) = delete;
+
+  // Define move constructor and move assignment operator, if needed
+
+ private:
+  std::counting_semaphore<>& sem;
+};
