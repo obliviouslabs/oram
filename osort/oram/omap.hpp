@@ -62,6 +62,7 @@ struct OMap {
   using InternalORAM_ = ORAM<BPlusNode_, PositionType, UidType>;
   LeafORAM_ leafOram;
   std::vector<InternalORAM_> internalOrams;
+  std::vector<PositionType> oramSizes;
   PositionType maxSize = 1024;
   static constexpr short min_fan_out = (max_fan_out + 1) / 2;
   static constexpr short min_chunk_size = (max_chunk_size + 1) / 2;
@@ -79,7 +80,6 @@ struct OMap {
     size_t numLevel = 0;
     size_t leafOramSize = divRoundUp(maxSize, min_chunk_size);
     PositionType internalSize = divRoundUp(leafOramSize, min_fan_out);
-    std::vector<PositionType> internalSizes;
     for (PositionType size = internalSize;;
          size = divRoundUp(size, min_fan_out)) {
       ++numLevel;
@@ -87,17 +87,17 @@ struct OMap {
         break;
       }
     }
-    internalSizes.reserve(numLevel);  // avoid fragmentation
+    oramSizes.reserve(numLevel + 1);  // avoid fragmentation
     for (PositionType size = internalSize;;
          size = divRoundUp(size, min_fan_out)) {
-      internalSizes.push_back(size);
+      oramSizes.push_back(size);
       if (size <= 1) {
         break;
       }
     }
     internalOrams.reserve(numLevel);
     size_t remainCacheBytes = cacheBytes;
-    for (auto it = internalSizes.rbegin(); it != internalSizes.rend(); ++it) {
+    for (auto it = oramSizes.rbegin(); it != oramSizes.rend(); ++it) {
       PositionType size = *it;
       size_t levelCacheBytes = remainCacheBytes / (numLevel + 1);
       internalOrams.emplace_back(size, levelCacheBytes);
@@ -106,6 +106,8 @@ struct OMap {
       --numLevel;
     }
     leafOram.SetSize(leafOramSize, remainCacheBytes);
+    std::reverse(oramSizes.begin(), oramSizes.end());
+    oramSizes.push_back(leafOramSize);
     printf("OMap: leafOramSize: %lu, internalSize: %lu\n", leafOramSize,
            internalSize);
   };
@@ -191,51 +193,45 @@ struct OMap {
   }
 
   bool find(const K& key, V& valOut) {
-    auto oramIt = internalOrams.begin();
     bool foundFlag = false;
-    // key.print();
-    // printf(" to find\n");
-    std::function<void(BPlusNode_&)> updateFunc = [&key, &valOut, &oramIt,
-                                                   &updateFunc, &foundFlag,
-                                                   this](BPlusNode_& node) {
-      UidPosition child = node.children[0];
-      short childIdx = 0;
-      for (short i = 1; i < max_fan_out; ++i) {
-        bool flag = (i < node.numChildren) & !(key < node.keys[i - 1]);
-        // if (i < node.numChildren) {
-        //   node.keys[i - 1].print();
-        //   printf(" ");
-        // }
-        obliMove(flag, child, node.children[i]);
-        childIdx += flag;
-      }
-      // printf("\nchildIdx: %d\n", childIdx);
-      ++oramIt;
-      PositionType newPos;
-      if (oramIt == internalOrams.end()) {
-        BPlusLeaf_ leaf;
-        newPos = leafOram.Read(child.data, child.uid, leaf);
-        for (short i = 0; i < max_chunk_size; ++i) {
-          bool flag = (i < leaf.numElements) & (key == leaf.kv[i].key);
-          // if (i < leaf.numElements) {
-          //   leaf.kv[i].key.print();
-          //   printf(" ");
-          // }
-          foundFlag |= flag;
-          obliMove(flag, valOut, leaf.kv[i].value);
+    int level = 0;
+    PositionType newPos = 0;
+    UidPosition child;
+    child.data = 0;
+    child.uid = 0;
+    for (auto& oram : internalOrams) {
+      PositionType childNewPos = UniformRandom(oramSizes[level + 1] - 1);
+      UidPosition nextChild;
+      std::function<void(BPlusNode_&)> updateFunc = [&](BPlusNode_& node) {
+        nextChild = node.children[0];
+        short childIdx = 0;
+        for (short i = 1; i < max_fan_out; ++i) {
+          bool flag = (i < node.numChildren) & !(key < node.keys[i - 1]);
+          obliMove(flag, nextChild, node.children[i]);
+          childIdx += flag;
         }
-        // printf("\nfoundFlag: %d\n", foundFlag);
-      } else {
-        newPos = oramIt->Update(child.data, child.uid,
-                                updateFunc);  // recursive lambda
-      }
-      for (short i = 0; i < max_fan_out; ++i) {
-        bool flag = i == childIdx;
-        obliMove(flag, node.children[i].data, newPos);
-      }
-    };
-    oramIt->Update(0, 0, updateFunc);
-
+        for (short i = 0; i < max_fan_out; ++i) {
+          bool flag = i == childIdx;
+          obliMove(flag, node.children[i].data, childNewPos);
+        }
+      };
+      BPlusNode_ checkUpdateRes;
+      oram.Update(child.data, child.uid, newPos, updateFunc, checkUpdateRes);
+      child = nextChild;
+      newPos = childNewPos;
+      ++level;
+    }
+    BPlusLeaf_ leaf;
+    leafOram.Read(child.data, child.uid, leaf, newPos);
+    for (short i = 0; i < max_chunk_size; ++i) {
+      bool flag = (i < leaf.numElements) & (key == leaf.kv[i].key);
+      // if (i < leaf.numElements) {
+      //   leaf.kv[i].key.print();
+      //   printf(" ");
+      // }
+      foundFlag |= flag;
+      obliMove(flag, valOut, leaf.kv[i].value);
+    }
     return foundFlag;  // TODO return false if not found
   }
 

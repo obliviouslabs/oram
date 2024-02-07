@@ -130,6 +130,51 @@ struct ORAM {
     }
   }
 
+  PositionType Read(PositionType pos, const UidType& uid, T& out,
+                    PositionType newPos) {
+    if (isLinear) {
+      return linearOram->Read(pos, uid, out);
+    } else {
+      return pathOram->Read(pos, uid, out, newPos);
+    }
+  }
+
+  PositionType Write(const UidType& uid, const T& in, PositionType newPos) {
+    if (isLinear) {
+      return linearOram->Write(uid, in);
+    } else {
+      return pathOram->Write(uid, in, newPos);
+    }
+  }
+
+  PositionType Update(PositionType pos, const UidType& uid, PositionType newPos,
+                      std::function<void(T&)> updateFunc) {
+    if (isLinear) {
+      return linearOram->Update(pos, uid, updateFunc);
+    } else {
+      return pathOram->Update(pos, uid, newPos, updateFunc);
+    }
+  }
+
+  PositionType Update(PositionType pos, const UidType& uid, PositionType newPos,
+                      std::function<void(T&)> updateFunc, T& out) {
+    if (isLinear) {
+      return linearOram->Update(pos, uid, updateFunc, out);
+    } else {
+      return pathOram->Update(pos, uid, newPos, updateFunc, out);
+    }
+  }
+
+  PositionType Update(PositionType pos, const UidType& uid, PositionType newPos,
+                      std::function<void(T&)> updateFunc, T& out,
+                      const UidType& updatedUid) {
+    if (isLinear) {
+      return linearOram->Update(pos, uid, updateFunc, out, updatedUid);
+    } else {
+      return pathOram->Update(pos, uid, newPos, updateFunc, out, updatedUid);
+    }
+  }
+
   UidType GetNextUid(bool real = true) {
     UidType res = DUMMY<UidType>();
     obliMove(real, res, nextUid);

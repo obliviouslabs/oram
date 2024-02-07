@@ -91,6 +91,11 @@ struct PathORAM {
   size_t GetMemoryUsage() const {
     return sizeof(Stash) + tree.GetMemoryUsage();
   }
+  // template <class PositionVec>
+  // void externalDistributeBlocks(PositionType initSize,
+  //                               const PositionVec& positions) {
+  //   PositionType maxIdx = initSize;
+  // }
 
   template <typename Reader, class PosMapWriter>
   void InitFromReader(Reader& reader, PosMapWriter& posMapWriter) {
@@ -260,8 +265,8 @@ struct PathORAM {
   PathORAM& operator=(const PathORAM& other) = default;
   PathORAM& operator=(PathORAM&& other) = default;
 
-  PositionType Read(PositionType pos, const UidType& uid, T& out) {
-    PositionType newPos = UniformRandom(size() - 1);
+  PositionType Read(PositionType pos, const UidType& uid, T& out,
+                    PositionType newPos) {
     std::vector<Block_> path = ReadPath(pos);
 
     ReadElementAndRemoveFromPath(path, uid, out);
@@ -273,9 +278,13 @@ struct PathORAM {
     return newPos;
   }
 
-  PositionType Write(const UidType& uid, const T& in) {
-    PositionType pos = UniformRandom(size() - 1);
+  PositionType Read(PositionType pos, const UidType& uid, T& out) {
     PositionType newPos = UniformRandom(size() - 1);
+    return Read(pos, uid, out, newPos);
+  }
+
+  PositionType Write(const UidType& uid, const T& in, PositionType newPos) {
+    PositionType pos = UniformRandom(size() - 1);
     std::vector<Block_> path = ReadPath(pos);
     Block_ newBlock(in, newPos, uid);
     WriteNewBlockToPath(path, newBlock);
@@ -284,10 +293,21 @@ struct PathORAM {
     return newPos;
   }
 
+  PositionType Write(const UidType& uid, const T& in) {
+    PositionType newPos = UniformRandom(size() - 1);
+    return Write(uid, in, newPos);
+  }
+
   PositionType Update(PositionType pos, const UidType& uid,
                       std::function<void(T&)> updateFunc) {
     T out;
     return Update(pos, uid, updateFunc, out);
+  }
+
+  PositionType Update(PositionType pos, const UidType& uid, PositionType newPos,
+                      std::function<void(T&)> updateFunc) {
+    T out;
+    return Update(pos, uid, newPos, updateFunc, out);
   }
 
   PositionType Update(PositionType pos, const UidType& uid,
@@ -295,10 +315,22 @@ struct PathORAM {
     return Update(pos, uid, updateFunc, out, uid);  // does not change uid
   }
 
+  PositionType Update(PositionType pos, const UidType& uid, PositionType newPos,
+                      std::function<void(T&)> updateFunc, T& out) {
+    return Update(pos, uid, newPos, updateFunc, out,
+                  uid);  // does not change uid
+  }
+
   PositionType Update(PositionType pos, const UidType& uid,
                       std::function<void(T&)> updateFunc, T& out,
                       const UidType& updatedUid) {
     PositionType newPos = UniformRandom(size() - 1);
+    return Update(pos, uid, newPos, updateFunc, out, updatedUid);
+  }
+
+  PositionType Update(PositionType pos, const UidType& uid, PositionType newPos,
+                      std::function<void(T&)> updateFunc, T& out,
+                      const UidType& updatedUid) {
     std::vector<Block_> path = ReadPath(pos);
 
     ReadElementAndRemoveFromPath(path, uid, out);

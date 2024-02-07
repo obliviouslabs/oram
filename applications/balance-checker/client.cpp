@@ -297,7 +297,7 @@ int main(int argc, char **argv) {
   // Example usage
   // std::string host = "example.com";
   // testEncrypt();
-  httplib::Client cli("20.42.98.54", 8080);
+  httplib::Client cli("localhost", 8080);
   auto res = cli.Get("/public_key");
   if (res && res->status == 200) {
     std::cout << "Response: " << res->body << std::endl;
@@ -352,6 +352,7 @@ int main(int argc, char **argv) {
   }
 
   printf("Shared secret computed\n");
-  interactive(cli, client_pub_key, shared_secret);
+  // interactive(cli, client_pub_key, shared_secret);
+  stressTest(cli, client_pub_key, shared_secret);
   return 0;
 }
