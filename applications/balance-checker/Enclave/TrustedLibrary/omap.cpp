@@ -36,7 +36,9 @@ class OMapCritical {
   ~OMapCritical() { sgx_spin_unlock(&omap_lock); }
 };
 
-void ecall_gen_key_pair(uint8_t pubkey[64]) {
+// return sealed private key size
+uint32_t ecall_gen_key_pair(uint8_t pubkey[64], uint8_t sealedPrivKey[1024]) {
+  static_assert(sizeof(ec256_public_t) == 64);
   sgx_ec256_public_t public_key;
   sgx_status_t status = generate_key_pair(&private_key, &public_key);
   ec256_public_t public_key_big_endian = convert_to_ec256_public_t(public_key);
@@ -44,6 +46,29 @@ void ecall_gen_key_pair(uint8_t pubkey[64]) {
     abort();
   }
   memcpy(pubkey, &public_key_big_endian, 64);
+  size_t sealed_data_size;
+  uint8_t* sealed_data;
+  status = seal_private_key(&private_key, &sealed_data, &sealed_data_size);
+  if (status != SGX_SUCCESS) {
+    printf("seal private key failed\n");
+    abort();
+  }
+  if (sealed_data_size > 1024) {
+    printf("sealed data size too large\n");
+    abort();
+  }
+  memcpy(sealedPrivKey, sealed_data, sealed_data_size);
+  free(sealed_data);
+  return sealed_data_size;
+}
+
+void ecall_set_private_key(uint8_t* sealedPrivKey, uint32_t sealedPrivKeySize) {
+  sgx_status_t status =
+      unseal_private_key(sealedPrivKey, sealedPrivKeySize, &private_key);
+  if (status != SGX_SUCCESS) {
+    printf("unseal private key failed\n");
+    abort();
+  }
 }
 
 void ecall_omap_init(uint64_t N, uint64_t initSize) {
@@ -114,9 +139,7 @@ int ecall_omap_update(uint8_t* key, uint8_t* val, uint32_t keyLength,
   return (int)res;
 }
 
-void ecall_set_last_block(uint64_t lastBlock) {
-  globalLastBlock = lastBlock;
-}
+void ecall_set_last_block(uint64_t lastBlock) { globalLastBlock = lastBlock; }
 
 void ecall_handle_encrypted_query(uint8_t* encryptedQuery,
                                   uint8_t* encryptedResponse,
@@ -166,7 +189,7 @@ void ecall_handle_encrypted_query(uint8_t* encryptedQuery,
   response.nounce = query.nounce;
   {
     OMapCritical section;
-    response.tillBlock = globalLastBlock; // TODO add pending status
+    response.tillBlock = globalLastBlock;  // TODO add pending status
     response.success = omap.find(query.addr, response.balance);
   }
 

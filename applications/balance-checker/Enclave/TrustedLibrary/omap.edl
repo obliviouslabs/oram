@@ -7,7 +7,8 @@ enclave {
     public int ecall_omap_update([in, count=keyLength] uint8_t* key, [in, count=valLength] uint8_t* val, uint32_t keyLength, uint32_t valLength);
     public void ecall_set_last_block(uint64_t lastBlock);
     public int ecall_omap_delete([in, count=keyLength] uint8_t* key, uint32_t keyLength);
-    public void ecall_gen_key_pair([out] uint8_t pubkey[64]);
+    public uint32_t ecall_gen_key_pair([out] uint8_t pubkey[64], [out] uint8_t sealedPrivKey[1024]);
+    public void ecall_set_private_key([in, count=sealedPrivKeySize] uint8_t* sealedPrivKey, uint32_t sealedPrivKeySize);
     public void ecall_handle_encrypted_query([in, count=encryptedQueryLength] uint8_t* encryptedQuery, [out, count=encryptedResponseLength] uint8_t* encryptedResponse, uint32_t encryptedQueryLength, uint32_t encryptedResponseLength);
     public uint32_t enclave_create_report([in]const sgx_target_info_t* p_qe3_target,
                                               [in]const sgx_report_data_t* p_data,

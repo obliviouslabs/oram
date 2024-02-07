@@ -273,7 +273,7 @@ void stressTest(httplib::Client &cli, const ec256_public_t &client_pub_key,
   std::chrono::high_resolution_clock::time_point t1 =
       std::chrono::high_resolution_clock::now();
   for (uint64_t round = 0; round < 1000; ++round) {
-    std::string addr = "0xcEe284F754E854890e311e3280b767F80797180d";
+    std::string addr = "0x9086a22abf1a5f072242669fccfe4536c24c4084";
     std::string body = makeBalanceQueryBody(CoinType::USDT, addr, nounce,
                                             client_pub_key, shared_secret);
     auto res = cli.Post("/secure", body, "application/octet-stream");

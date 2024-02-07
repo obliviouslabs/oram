@@ -26,7 +26,7 @@ using DB_ = KV_DB<std::string, std::string>;
 
 DB_* db;
 typename DB_::Iterator dbIt;
-ec256_public_t public_key;
+std::string publicKeyBase64;
 std::counting_semaphore sem(1);  // may set to tcs_max_num
 
 uint64_t ocall_Fetch_Next_KV_Batch(uint8_t* data, uint64_t batchBytes) {
@@ -147,17 +147,11 @@ void handleEncryptedQuery(const std::string& encryptedQueryBase64,
       base64_encode(encryptedResponsePtr, sizeof(EncryptedResponse));
 }
 
-std::string getServerPublicKeyBase64() {
-  std::string publicKeyStr =
-      base64_encode((uint8_t*)&public_key, sizeof(sgx_ec256_public_t));
-  return publicKeyStr;
-}
+std::string getServerPublicKeyBase64() { return publicKeyBase64; }
 
 void ActualMain(void) {
   sgx_status_t ret = SGX_ERROR_UNEXPECTED;
 
-  ret = ecall_gen_key_pair(global_eid, (uint8_t*)&public_key);
-  if (ret != SGX_SUCCESS) abort();
   try {
     db = new DB_("./db_rcc");
     dbIt = db->getIterator();
@@ -179,6 +173,34 @@ void ActualMain(void) {
     }
     std::cerr << e.what() << std::endl;
     return;
+  }
+
+  std::string sealedPrivateKeyBase64;
+  if (db->get("public_key", publicKeyBase64) &&
+      db->get("sealed_private_key", sealedPrivateKeyBase64)) {
+    printf("Recovered public key and sealed private key from db\n");
+    printf("public key: %s\n", publicKeyBase64.c_str());
+    printf("sealed private key: %s\n", sealedPrivateKeyBase64.c_str());
+    std::string sealedPrivateKey = base64_decode(sealedPrivateKeyBase64);
+    ecall_set_private_key(global_eid, (uint8_t*)sealedPrivateKey.data(),
+                          sealedPrivateKey.size());
+  } else {
+    ec256_public_t public_key;
+    uint32_t sealedDataSize = 0;
+    uint8_t sealedData[1024];  // ecall will fail it detected overflow
+    ret = ecall_gen_key_pair(global_eid, &sealedDataSize, (uint8_t*)&public_key,
+                             sealedData);
+
+    if (ret != SGX_SUCCESS) {
+      printf("ecall_gen_key_pair failed\n");
+      abort();
+    }
+    publicKeyBase64 =
+        base64_encode((uint8_t*)&public_key, sizeof(sgx_ec256_public_t));
+    sealedPrivateKeyBase64 = base64_encode(sealedData, sealedDataSize);
+    db->put("public_key", publicKeyBase64);
+    db->put("sealed_private_key", sealedPrivateKeyBase64);
+    dbIt.seekToFirst();
   }
 
   DBMetaData metaData;
