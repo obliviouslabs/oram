@@ -100,7 +100,7 @@ struct PathORAM {
   template <typename Reader, class PosMapWriter>
   void InitFromReader(Reader& reader, PosMapWriter& posMapWriter) {
     PositionType initSize = reader.size();
-    printf("initSize = %lu\n", initSize);
+    // printf("initSize = %lu\n", initSize);
     if (initSize < size()) {
       for (UidType uid = 0; uid != (UidType)initSize; ++uid) {
         PositionType newPos = Write(uid, reader.read());
