@@ -94,7 +94,7 @@ endif
 App_Cpp_Files := App/App.cpp $(wildcard App/TrustedLibrary/*.cpp)
 App_Include_Paths := -IApp -I$(SGX_SDK)/include -I../../osort/
 
-App_C_Flags := -fPIC -Wno-attributes $(App_Include_Paths)
+App_C_Flags := -fPIC -Wno-attributes -Wno-deprecated-declarations $(App_Include_Paths)
 
 # Three configuration modes - Debug, prerelease, release
 #   Debug - Macro DEBUG enabled.
@@ -144,7 +144,7 @@ Crypto_Library_Name := sgx_tcrypto
 
 CLIENT_SOURCES = client.cpp ../../osort/common/encutils.cpp
 CLIENT_TARGET = client
-CLIENT_CXXFLAGS = -std=c++20 -I../../osort/
+CLIENT_CXXFLAGS = -Wno-deprecated-declarations -std=c++20 -I../../osort/
 CLIENT_LDFLAGS = -lssl -lcrypto
 
 BEARSSL_SOURCES := \

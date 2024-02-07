@@ -18,7 +18,7 @@
 #define CPPHTTPLIB_OPENSSL_SUPPORT
 #include "../../httplib.h"
 #include "db_updater.hpp"
-#include "kvDB.hpp"
+#include "kv_db.hpp"
 #include "sgx_tcrypto.h"
 // since most balances are small, it is more space efficient to directly store
 // them as string
