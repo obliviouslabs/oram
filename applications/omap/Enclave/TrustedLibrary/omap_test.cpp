@@ -174,7 +174,80 @@ void testOMap() {
          timediff / round % 1'000);
 }
 
-void ecall_omap_perf() {
+struct ETH_Addr {
+  // 20 bytes
+
+  uint32_t part[5];
+
+  // define less operator
+  bool operator<(const ETH_Addr& other) const {
+    bool res = false;
+    bool eq = true;
+    for (int i = 0; i < 5; ++i) {
+      res |= (eq & (part[i] < other.part[i]));
+      eq &= part[i] == other.part[i];
+    }
+    return res;
+  }
+
+  bool operator==(const ETH_Addr& other) const {
+    bool eq = true;
+    for (int i = 0; i < 5; ++i) {
+      eq &= (part[i] == other.part[i]);
+    }
+    return eq;
+  }
+
+  bool operator!=(const ETH_Addr& other) const { return !(*this == other); }
+};
+
+struct ERC20_Balance {
+  uint64_t part[4];
+};
+
+void testOMapPerf() {
+  size_t mapSize = 1e6;
+  size_t initSize = 1e6;
+  OMap<ETH_Addr, ERC20_Balance> omap(mapSize);
+
+  std::function<std::pair<ETH_Addr, ERC20_Balance>(uint64_t)> readerFunc =
+      [](uint64_t i) { return std::pair<ETH_Addr, ERC20_Balance>(); };
+
+  EM::VirtualVector::VirtualReader<std::pair<ETH_Addr, ERC20_Balance>> reader(
+      initSize, readerFunc);
+  uint64_t start, end;
+  printf("init omap of size %lu\n", mapSize);
+  ocall_measure_time(&start);
+  omap.InitFromReader(reader);
+  ocall_measure_time(&end);
+  uint64_t timediff = end - start;
+  printf("oram init time %d.%d s\n", timediff / 1'000'000'000,
+         timediff % 1'000'000'000);
+  int round = 1e4;
+  ocall_measure_time(&start);
+  for (size_t r = 0; r < round; ++r) {
+    ETH_Addr addr;
+    ERC20_Balance balance;
+    bool res = omap.insert(addr, balance);
+  }
+  ocall_measure_time(&end);
+  timediff = end - start;
+  printf("oram insert time %d.%d us\n", timediff / round / 1'000,
+         timediff / round % 1'000);
+
+  ocall_measure_time(&start);
+  for (size_t r = 0; r < round; ++r) {
+    ETH_Addr addr;
+    ERC20_Balance balance;
+    omap.find(addr, balance);
+  }
+  ocall_measure_time(&end);
+  timediff = end - start;
+  printf("oram find time %d.%d us\n", timediff / round / 1'000,
+         timediff / round % 1'000);
+}
+
+void ecall_omap() {
   if (EM::Backend::g_DefaultBackend) {
     delete EM::Backend::g_DefaultBackend;
   }
@@ -183,6 +256,24 @@ void ecall_omap_perf() {
       new EM::Backend::MemServerBackend(BackendSize);
   try {
     testOMap();
+    // testORAMInit();
+    // testORAMReadWrite();
+    // testBuildBottomUp();
+  } catch (std::exception& e) {
+    printf("exception: %s\n", e.what());
+  }
+  return;
+}
+
+void ecall_omap_perf() {
+  if (EM::Backend::g_DefaultBackend) {
+    delete EM::Backend::g_DefaultBackend;
+  }
+  size_t BackendSize = 8e9;
+  EM::Backend::g_DefaultBackend =
+      new EM::Backend::MemServerBackend(BackendSize);
+  try {
+    testOMapPerf();
     // testORAMInit();
     // testORAMReadWrite();
     // testBuildBottomUp();

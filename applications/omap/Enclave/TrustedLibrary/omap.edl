@@ -1,5 +1,6 @@
 enclave {
   trusted {
+    public void ecall_omap(void);
     public void ecall_omap_perf(void);
   };
 

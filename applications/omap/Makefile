@@ -161,7 +161,7 @@ Enclave_C_Files := $(BEARSSL_SOURCES)
 Enclave_Cpp_Files := Enclave/Enclave.cpp $(wildcard Enclave/TrustedLibrary/*.cpp) 
 Enclave_Include_Paths := -IEnclave -I$(SGX_SDK)/include -I$(SGX_SDK)/include/libcxx -I$(SGX_SDK)/include/tlibc -I../../osort -IEnclave/bearssl/include -IEnclave/bearssl/src/bearssl
 
-Enclave_Flags := -fvisibility=hidden -fpie -fstack-protector -fno-builtin-printf -march=icelake-server $(Enclave_Include_Paths)
+Enclave_Flags := -fvisibility=hidden -fpie -fstack-protector -fno-builtin-printf -march=native $(Enclave_Include_Paths)
 
 ifeq ($(SGX_DEBUG), 1)
 	Enclave_Flags += -DDEBUG -UNDEBUG -UEDEBUG
