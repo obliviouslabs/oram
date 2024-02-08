@@ -177,8 +177,8 @@ TEST(PathORAM, WithoutPositionMapMixed) {
 
 TEST(PathORAM, NonPowerOfTwo) {
   for (int memSize :
-       {1, 3, 5, 7, 9, 33, 40, 55, 127, 129, 543, 678, 1023, 1025, 2000}) {
-    PathORAM<uint64_t, 5, 20> oram(memSize);
+       {2, 3, 5, 7, 9, 33, 40, 55, 127, 129, 543, 678, 1023, 1025, 2000}) {
+    PathORAM<uint64_t> oram(memSize);
     std::vector<uint64_t> posMap(memSize);
     std::vector<uint64_t> valMap(memSize);
     for (uint64_t i = 0; i < memSize; i++) {
@@ -237,8 +237,9 @@ TEST(PathORAM, WithoutPositionMapLargePerf) {
 // }
 
 TEST(PathORAM, testInitNaive) {
-  uint64_t size = 123456;
-  PathORAM<SortElement> oram(size);
+  uint64_t memSize = 123456;
+  uint64_t size = 100000;
+  PathORAM<SortElement> oram(memSize);
   for (uint64_t i = 0; i < size; i++) {
     oram.Write(i, SortElement());
   }
@@ -253,7 +254,7 @@ TEST(PathORAM, testInitWithReader) {
   size_t BackendSize = 1e9;
   EM::Backend::g_DefaultBackend =
       new EM::Backend::MemServerBackend(BackendSize);
-  PathORAM<SortElement> oram(memSize, 958794544UL / 2UL);
+  PathORAM<SortElement> oram(memSize);
   std::vector<uint64_t> valMap(size);
   StdVector<SortElement> vec(size);
   for (int i = 0; i < size; ++i) {
