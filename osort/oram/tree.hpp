@@ -21,8 +21,9 @@ struct HeapTree {
     Init(_size, _cacheLevel, _packLevel, realCacheSize);
   }
 
-  void Init(PositionType _size, int _cacheLevel = 62, int _packLevel = 1,
-            PositionType realCacheSize = -1) {
+  void InitWithDefault(PositionType _size, const T& defaultVal,
+                       int _cacheLevel = 62, int _packLevel = 1,
+                       PositionType realCacheSize = -1) {
     if (totalSize != 0) {
       throw std::runtime_error("Init called on non-empty tree");
     }
@@ -32,9 +33,15 @@ struct HeapTree {
     totalLevel = GetLogBaseTwo(_size - 1) + 2;
     totalSize = 2 * _size - 1;
     cacheSize = std::min((uint64_t)totalSize, (2UL << _cacheLevel) - 1);
-    arr.SetSize(totalSize, realCacheSize != -1 ? realCacheSize : cacheSize);
+    arr.SetSize(totalSize, realCacheSize != -1 ? realCacheSize : cacheSize,
+                defaultVal);
     isPow2 = !(_size & (_size - 1));
     extSize = totalSize - cacheSize;
+  }
+
+  void Init(PositionType _size, int _cacheLevel = 62, int _packLevel = 1,
+            PositionType realCacheSize = -1) {
+    InitWithDefault(_size, T(), _cacheLevel, _packLevel, realCacheSize);
   }
 
   int GetCacheLevel() const { return cacheLevel; }
@@ -215,6 +222,8 @@ struct HeapTree {
   }
 
   const T& GetByInternalIdx(PositionType idx) { return arr.Get(idx); }
+
+  T& GetMutableByInternalIdx(PositionType idx) { return arr.GetMutable(idx); }
 
   void SetByInternalIdx(PositionType idx, const T& val) { arr[idx] = val; }
 

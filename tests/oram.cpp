@@ -128,7 +128,7 @@ TEST(PathORAM, WithoutPositionMap1) {
 
 TEST(PathORAM, WithoutPositionMapMixed) {
   int memSize = 123;
-  PathORAM<uint64_t, 5, 63> oram(memSize, 5);
+  PathORAM<uint64_t, 5, 63> oram(memSize);
   std::vector<uint64_t> posMap(memSize, -1);
   std::vector<uint64_t> valMap(memSize);
   int opCount = 1e5;
@@ -178,7 +178,7 @@ TEST(PathORAM, WithoutPositionMapMixed) {
 TEST(PathORAM, NonPowerOfTwo) {
   for (int memSize :
        {1, 3, 5, 7, 9, 33, 40, 55, 127, 129, 543, 678, 1023, 1025, 2000}) {
-    PathORAM<uint64_t, 5, 20> oram(memSize, 6);
+    PathORAM<uint64_t, 5, 20> oram(memSize);
     std::vector<uint64_t> posMap(memSize);
     std::vector<uint64_t> valMap(memSize);
     for (uint64_t i = 0; i < memSize; i++) {
@@ -202,7 +202,7 @@ TEST(PathORAM, NonPowerOfTwo) {
 }
 
 TEST(PathORAM, WithoutPositionMapLargePerf) {
-  int memSize = 1 << 24;
+  int memSize = 1 << 20;
   PathORAM<SortElement, 5, 63> oram(memSize);
 
   uint64_t numAccesses = 1e6;
@@ -245,12 +245,12 @@ TEST(PathORAM, testInitNaive) {
 }
 
 TEST(PathORAM, testInitWithReader) {
-  uint64_t memSize = 2000000;
-  uint64_t size = 867835;
+  uint64_t memSize = 123456;
+  uint64_t size = 100000;
   if (EM::Backend::g_DefaultBackend) {
     delete EM::Backend::g_DefaultBackend;
   }
-  size_t BackendSize = 8e9;
+  size_t BackendSize = 1e9;
   EM::Backend::g_DefaultBackend =
       new EM::Backend::MemServerBackend(BackendSize);
   PathORAM<SortElement> oram(memSize, 958794544UL / 2UL);

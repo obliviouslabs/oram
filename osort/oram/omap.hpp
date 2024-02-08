@@ -55,8 +55,9 @@ struct OMap {
   using UidPosition = UidBlock<PositionType, UidType>;
   using BPlusNode_ = BPlusNode<K, max_fan_out, PositionType, UidType>;
 
-  static constexpr short max_chunk_size =
-      std::max(2UL, sizeof(BPlusNode_) / (sizeof(K) + sizeof(V)));
+  // ensure each leaf contains odd number of elements for performance
+  static constexpr short max_chunk_size = std::max(
+      3UL, 2 * ((sizeof(BPlusNode_) / (sizeof(K) + sizeof(V))) / 2) + 1);
   using BPlusLeaf_ = BPlusLeaf<K, V, max_chunk_size>;
   using LeafORAM_ = ORAM<BPlusLeaf_, PositionType, UidType>;
   using InternalORAM_ = ORAM<BPlusNode_, PositionType, UidType>;
@@ -460,5 +461,7 @@ struct OMap {
     Assert(!splitFlag);  // root should not split
     return foundFlag;
   }
+
+  bool erase(const K& key) { return false; }
 };
 }  // namespace ORAM

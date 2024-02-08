@@ -9,11 +9,9 @@ struct Vector {
   using pointer = VT*;
   using const_pointer = const VT*;
   size_t _size;
-  std::function<VT(size_t)> virtualize;
-  std::function<void(size_t)> devirtualize;
-  Vector(size_t size, std::function<VT(size_t)> virtualize,
-         std::function<void(size_t, const VT&)> devirtualize)
-      : _size(size), virtualize(virtualize), devirtualize(devirtualize) {}
+  std::function<VT&(size_t)> virtualize;
+  Vector(size_t size, std::function<VT&(size_t)> virtualize)
+      : _size(size), virtualize(virtualize) {}
 
   struct Iterator {
     using iterator_category = std::random_access_iterator_tag;
@@ -47,7 +45,7 @@ struct Vector {
     Vector* get_vec_ptr() const { return vec_ptr; }
 
     // Custom functions
-    VT operator*() const { return vec_ptr->virtualize(m_ptr); }
+    VT& operator*() const { return vec_ptr->virtualize(m_ptr); }
     pointer operator->() { return m_ptr; }
     const_pointer operator->() const { return m_ptr; }
     Iterator& operator++() {
@@ -137,7 +135,8 @@ struct Vector {
     }
 
     void write(const VT& element) {
-      return it.get_vec_ptr()->devirtualize(it.get_m_ptr(), element);
+      *it = element;
+      ++it;
     }
 
     bool eof() { return it.get_m_ptr() == end.get_m_ptr(); }

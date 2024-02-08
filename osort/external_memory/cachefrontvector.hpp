@@ -31,6 +31,10 @@ struct Vector {
 
   Vector(uint64_t N, uint64_t cacheSize) { SetSize(N, cacheSize); }
 
+  Vector(uint64_t N, uint64_t cacheSize, const T& initVal) {
+    SetSize(N, cacheSize, initVal);
+  }
+
   ~Vector() {
     if (extVec) {
       delete extVec;
@@ -53,6 +57,17 @@ struct Vector {
     intVec.resize(this->cacheSize);
     if (this->cacheSize < N) {
       extVec = new ExtVec(N - this->cacheSize);
+    }
+  }
+
+  void SetSize(uint64_t N, uint64_t cacheSize, const T& initVal) {
+    if (this->cacheSize != 0 || extVec != NULL) {
+      throw std::runtime_error("SetSize can only be called on empty vector");
+    }
+    this->cacheSize = std::min(cacheSize, N);
+    intVec.resize(this->cacheSize, initVal);
+    if (this->cacheSize < N) {
+      extVec = new ExtVec(N - this->cacheSize, initVal);
     }
   }
 
@@ -180,6 +195,15 @@ struct Vector {
     } else {
       Assert(extVec);
       return extVec->Get(i - cacheSize);
+    }
+  }
+
+  T& GetMutable(size_t i) {
+    if (i < cacheSize) {
+      return intVec[i];
+    } else {
+      Assert(extVec);
+      return extVec->At(i - cacheSize);
     }
   }
 };

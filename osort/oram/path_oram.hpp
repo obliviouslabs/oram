@@ -57,7 +57,11 @@ struct PathORAM {
     //     "tree size = %lu, cacheBytes = %lu, cacheLevel = %d, element size = "
     //     "%d\n",
     //     size, cacheBytes, cacheLevel, sizeof(T));
-    tree.Init(size, cacheLevel);
+    Bucket_ dummyBucket;
+    for (int i = 0; i < Z; ++i) {
+      dummyBucket.blocks[i].uid = DUMMY<UidType>();
+    }
+    tree.InitWithDefault(size, dummyBucket, cacheLevel);
     depth = GetLogBaseTwo(size - 1) + 2;
     stash = new Stash();
   }
@@ -101,7 +105,7 @@ struct PathORAM {
   void InitFromReader(Reader& reader, PosMapWriter& posMapWriter) {
     PositionType initSize = reader.size();
     // printf("initSize = %lu\n", initSize);
-    if (initSize < size()) {
+    if (initSize * 5 < size()) {
       for (UidType uid = 0; uid != (UidType)initSize; ++uid) {
         PositionType newPos = Write(uid, reader.read());
         posMapWriter.write(UidBlock<PositionType, UidType>(newPos, uid));
@@ -190,56 +194,46 @@ struct PathORAM {
     if (prefixSum[numBlock] != initSize) {
       throw std::runtime_error("Stash overflows.");
     }
+
+    EM::Algorithm::OrCompactSeparateMark(positionVec.begin(), positionVec.end(),
+                                         prefixSum.begin());
+
+    typename PosVec::Reader positionReader(positionVec.begin(),
+                                           positionVec.begin() + initSize);
+
     // using DistributeVec = StdVector<UidBlock_>;
-    using DistributeVec =
-        EM::ExtVector::Vector<UidBlock_, std::max(8192UL, sizeof(UidBlock_)),
-                              true, true, 1024UL>;
+    using DistributeVec = typename EM::VirtualVector::Vector<Block_>;
     using DistributeReader = typename DistributeVec::Reader;
     using DistributeWriter = typename DistributeVec::Writer;
     using UidVec = StdVector<UidType>;
     using UidReader = typename UidVec::Reader;
     using UidWriter = typename UidVec::Writer;
     UidVec uidVec(initSize);
-    {
-      printf("create distributeVec\n");
-      DistributeVec distributeVec(numBlock);
-      printf("create distributeVec done\n");
-      DistributeWriter distributeInputWriter(distributeVec.begin(),
-                                             distributeVec.begin() + initSize);
 
-      UidWriter uidWriter(uidVec.begin(), uidVec.end());
-      PositionType inputIdx = 0;
-      EM::VirtualVector::WrappedReader<UidBlock_, Reader> shuffleReader(
-          reader, [&](const T& val) { return UidBlock_(val, inputIdx++); });
-      EM::VirtualVector::WrappedWriter<UidBlock_, UidWriter> shuffleWriter(
-          uidWriter, [&](const UidBlock_& block) {
-            distributeInputWriter.write(block);
-            return block.uid;
-          });
-      EM::Algorithm::KWayButterflyOShuffle(shuffleReader, shuffleWriter);
-      // for (PositionType i = 0; i < initSize; ++i) {
-      //   shuffleWriter.write(shuffleReader.read());
-      // }
-      distributeInputWriter.flush();
-      EM::Algorithm::OrDistributeSeparateMark(
-          distributeVec.begin(), distributeVec.end(), prefixSum.begin());
-      DistributeReader distributeOutputReader(distributeVec.begin(),
-                                              distributeVec.end());
-      for (PositionType i = 0; i < numBucket; ++i) {
-        Bucket_ bucket;
-        for (int j = 0; j < Z; ++j) {
-          const UidBlock_& uidBlock = distributeOutputReader.read();
-          PositionType pos = positionVec[i * Z + j];
-          UidType uid = uidBlock.uid;
-          // obliMove(pos == DUMMY<PositionType>(), uid, DUMMY<UidType>());
-          bucket.blocks[j] = Block_(uidBlock.data, pos, uid);
-        }
-        tree.SetByInternalIdx(i, bucket);
-      }
-    }
+    std::function<Block_&(size_t)> virtualize = [&](size_t idx) -> Block_& {
+      return tree.GetMutableByInternalIdx(idx / Z).blocks[idx % Z];
+    };
+    // std::function<Block_&(size_t)> virtualize;
+    DistributeVec distributeVec(numBlock, virtualize);
 
-    EM::Algorithm::OrCompactSeparateMark(positionVec.begin(), positionVec.end(),
-                                         prefixSum.begin());
+    DistributeWriter distributeInputWriter(distributeVec.begin(),
+                                           distributeVec.begin() + initSize);
+
+    UidWriter uidWriter(uidVec.begin(), uidVec.end());
+    PositionType inputIdx = 0;
+    EM::VirtualVector::WrappedReader<UidBlock_, Reader> shuffleReader(
+        reader, [&](const T& val) { return UidBlock_(val, inputIdx++); });
+    EM::VirtualVector::WrappedWriter<UidBlock_, UidWriter> shuffleWriter(
+        uidWriter, [&](const UidBlock_& uidBlock) {
+          Block_ block(uidBlock.data, positionReader.read(), uidBlock.uid);
+          distributeInputWriter.write(block);
+          return uidBlock.uid;
+        });
+    EM::Algorithm::KWayButterflyOShuffle(shuffleReader, shuffleWriter);
+    distributeInputWriter.flush();
+
+    EM::Algorithm::OrDistributeSeparateMark(
+        distributeVec.begin(), distributeVec.end(), prefixSum.begin());
 
     PositionType posMapIdx = 0;
 
