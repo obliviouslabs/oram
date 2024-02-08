@@ -149,32 +149,8 @@ void handleEncryptedQuery(const std::string& encryptedQueryBase64,
 
 std::string getServerPublicKeyBase64() { return publicKeyBase64; }
 
-void ActualMain(void) {
+void InitKeys(DB_* db) {
   sgx_status_t ret = SGX_ERROR_UNEXPECTED;
-
-  try {
-    db = new DB_("./db_rcc");
-    dbIt = db->getIterator();
-    dbIt.seekToFirst();
-    if (!dbIt.isValid()) {
-      printf("db is empty\n");
-      return;
-    }
-    // Example: Insert a key-value pair
-    // db->put("0xb0255cc0ad302545bd1dad0b39af5b1492f7a4b3",
-    // "4348029885273000000000000");
-
-    // Example: Iterate over database entries
-  } catch (const std::runtime_error& e) {
-    dbIt.reset();
-    if (db) {
-      delete db;
-      db = NULL;
-    }
-    std::cerr << e.what() << std::endl;
-    return;
-  }
-
   std::string sealedPrivateKeyBase64;
   if (db->get("public_key", publicKeyBase64) &&
       db->get("sealed_private_key", sealedPrivateKeyBase64)) {
@@ -200,8 +176,42 @@ void ActualMain(void) {
     sealedPrivateKeyBase64 = base64_encode(sealedData, sealedDataSize);
     db->put("public_key", publicKeyBase64);
     db->put("sealed_private_key", sealedPrivateKeyBase64);
-    dbIt.seekToFirst();
   }
+}
+
+void InitDB(void) {
+  try {
+    db = new DB_("./db_rcc");
+    dbIt = db->getIterator();
+    dbIt.seekToFirst();
+    if (!dbIt.isValid()) {
+      printf("db is empty\n");
+      return;
+    }
+  } catch (const std::runtime_error& e) {
+    dbIt.reset();
+    if (db) {
+      delete db;
+      db = NULL;
+    }
+    std::cerr << e.what() << std::endl;
+    return;
+  }
+}
+
+void DeleteDB(void) {
+  if (db) {
+    delete db;
+    db = NULL;
+  }
+}
+
+std::string GetPublicKeyBase64(void) { return publicKeyBase64; }
+
+void ActualMain(void) {
+  sgx_status_t ret = SGX_ERROR_UNEXPECTED;
+  InitDB();
+  InitKeys(db);
 
   DBMetaData metaData;
   try {
@@ -261,10 +271,7 @@ void ActualMain(void) {
   printf("Server listening ends.\n");
   updateThread.join();
 
-  if (db) {
-    delete db;
-    db = NULL;
-  }
+  DeleteDB();
 
   // printf("Did not abort\n");
 }

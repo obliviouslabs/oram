@@ -115,7 +115,7 @@ ifeq ($(DISK_IO), 1)
 	App_Cpp_Flags += -DDISK_IO
 endif
 
-App_Link_Flags := -L$(SGX_LIBRARY_PATH) -L/usr/local/lib -l$(Urts_Library_Name) -lrocksdb -lpthread -lssl -lcrypto
+App_Link_Flags := -L$(SGX_LIBRARY_PATH) -L/usr/local/lib -l$(Urts_Library_Name) -lsgx_dcap_ql -lsgx_urts -lrocksdb -lpthread -lssl -lcrypto
 
 App_Cpp_Objects := $(App_Cpp_Files:.cpp=.o)
 
