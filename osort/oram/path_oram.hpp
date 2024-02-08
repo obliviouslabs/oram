@@ -1,15 +1,7 @@
 #pragma once
-#include <functional>
-#include <vector>
 
-#include "bucket.hpp"
-#include "common/probability.hpp"
 #include "external_memory/algorithm/bitonic.hpp"
-#include "external_memory/algorithm/kway_butterfly_sort.hpp"
-#include "external_memory/algorithm/or_compact_shuffle.hpp"
-#include "external_memory/noncachedvector.hpp"
-#include "external_memory/stdvector.hpp"
-#include "external_memory/virtualvector.hpp"
+#include "oram_common.hpp"
 #include "tree.hpp"
 
 namespace ORAM::PathORAM {
@@ -95,16 +87,10 @@ struct PathORAM {
   size_t GetMemoryUsage() const {
     return sizeof(Stash) + tree.GetMemoryUsage();
   }
-  // template <class PositionVec>
-  // void externalDistributeBlocks(PositionType initSize,
-  //                               const PositionVec& positions) {
-  //   PositionType maxIdx = initSize;
-  // }
 
   template <typename Reader, class PosMapWriter>
   void InitFromReader(Reader& reader, PosMapWriter& posMapWriter) {
-    PositionType initSize = reader.size();
-    // printf("initSize = %lu\n", initSize);
+    size_t initSize = reader.size();
     if (initSize * 5 < size()) {
       for (UidType uid = 0; uid != (UidType)initSize; ++uid) {
         PositionType newPos = Write(uid, reader.read());
@@ -112,139 +98,8 @@ struct PathORAM {
       }
       return;
     }
-    PositionType numBucket = 2 * size() - 1;
-    PositionType numBlock = numBucket * Z;
-    // StdVector<char> loadVec(numBucket);
-    struct Positions {
-      PositionType pos[Z];
-      Positions() {
-        for (int i = 0; i < Z; ++i) {
-          pos[i] = DUMMY<PositionType>();
-        }
-      }
-    };
-    struct PositionStash {
-      PositionType pos[16 - Z];
-      PositionStash() {
-        for (int i = 0; i < 16 - Z; ++i) {
-          pos[i] = DUMMY<PositionType>();
-        }
-      }
-    };
-    // HeapTree<
-    NoReplaceSampler sampler(initSize, size());
-    std::function<PositionStash(Positions&, const PositionStash&,
-                                const PositionStash&)>
-        reduceFunc = [](Positions& root, const PositionStash& left,
-                        const PositionStash& right) -> PositionStash {
-      PositionType combinedStash[16];
-      for (int i = 0; i < 16; ++i) {
-        combinedStash[i] = DUMMY<PositionType>();
-      }
-      for (int i = 0; i < 16 - Z; ++i) {
-        obliMove(left.pos[i] != DUMMY<PositionType>(), combinedStash[i],
-                 left.pos[i]);
-      }
-      for (int i = 0; i < 16 - Z; ++i) {
-        obliMove(right.pos[i] != DUMMY<PositionType>(), combinedStash[15 - i],
-                 right.pos[i]);
-      }
-      // TODO check that no element is lost
-
-      EM::Algorithm::BitonicMergePow2(
-          combinedStash, combinedStash + 16,
-          [](auto a, auto b) { return a < b; }, true);
-      memcpy(root.pos, combinedStash, sizeof(PositionType) * Z);
-      return *(PositionStash*)(combinedStash + Z);
-    };
-
-    std::function<PositionStash(Positions&, PositionType)> leafFunc =
-        [&](Positions& leaf, PositionType path) {
-          for (int i = 0; i < Z; ++i) {
-            leaf.pos[i] = DUMMY<PositionType>();
-          }
-          int num = sampler.Sample();
-          PositionStash stash;
-          for (int i = 0; i < Z; ++i) {
-            obliMove(i < num, leaf.pos[i], path);
-          }
-          for (int i = Z; i < 16; ++i) {
-            obliMove(i < num, stash.pos[i - Z], path);
-          }
-          return stash;
-        };
-    using PosVec = StdVector<PositionType>;
-    PosVec positionVec(numBlock);
-    PosVec prefixSum(numBlock + 1);
-    {
-      HeapTree<Positions> positions(size(), tree.GetCacheLevel(), 1, 1UL << 62);
-      positions.template BuildBottomUp<PositionStash>(reduceFunc, leafFunc);
-      prefixSum[0] = 0;
-      for (PositionType i = 0; i < numBucket; ++i) {
-        const Positions& posBucket = positions.GetByInternalIdx(i);
-        for (PositionType j = 0; j < Z; ++j) {
-          prefixSum[i * Z + j + 1] =
-              prefixSum[i * Z + j] +
-              (posBucket.pos[j] != DUMMY<PositionType>());
-          positionVec[i * Z + j] = posBucket.pos[j];
-        }
-      }
-    }
-    // EM::Algorithm::OrDistributeSeparateMark(
-    if (prefixSum[numBlock] != initSize) {
-      throw std::runtime_error("Stash overflows.");
-    }
-
-    EM::Algorithm::OrCompactSeparateMark(positionVec.begin(), positionVec.end(),
-                                         prefixSum.begin());
-
-    typename PosVec::Reader positionReader(positionVec.begin(),
-                                           positionVec.begin() + initSize);
-
-    // using DistributeVec = StdVector<UidBlock_>;
-    using DistributeVec = typename EM::VirtualVector::Vector<Block_>;
-    using DistributeReader = typename DistributeVec::Reader;
-    using DistributeWriter = typename DistributeVec::Writer;
-    using UidVec = StdVector<UidType>;
-    using UidReader = typename UidVec::Reader;
-    using UidWriter = typename UidVec::Writer;
-    UidVec uidVec(initSize);
-
-    std::function<Block_&(size_t)> virtualize = [&](size_t idx) -> Block_& {
-      return tree.GetMutableByInternalIdx(idx / Z).blocks[idx % Z];
-    };
-    // std::function<Block_&(size_t)> virtualize;
-    DistributeVec distributeVec(numBlock, virtualize);
-
-    DistributeWriter distributeInputWriter(distributeVec.begin(),
-                                           distributeVec.begin() + initSize);
-
-    UidWriter uidWriter(uidVec.begin(), uidVec.end());
-    PositionType inputIdx = 0;
-    EM::VirtualVector::WrappedReader<UidBlock_, Reader> shuffleReader(
-        reader, [&](const T& val) { return UidBlock_(val, inputIdx++); });
-    EM::VirtualVector::WrappedWriter<UidBlock_, UidWriter> shuffleWriter(
-        uidWriter, [&](const UidBlock_& uidBlock) {
-          Block_ block(uidBlock.data, positionReader.read(), uidBlock.uid);
-          distributeInputWriter.write(block);
-          return uidBlock.uid;
-        });
-    EM::Algorithm::KWayButterflyOShuffle(shuffleReader, shuffleWriter);
-    distributeInputWriter.flush();
-
-    EM::Algorithm::OrDistributeSeparateMark(
-        distributeVec.begin(), distributeVec.end(), prefixSum.begin());
-
-    PositionType posMapIdx = 0;
-
-    UidReader uidReader(uidVec.begin(), uidVec.end());
-
-    EM::VirtualVector::WrappedReader<UidBlock<PositionType, UidType>, UidReader>
-        posMapReader(uidReader, [&](const UidType& uid) {
-          return UidBlock<PositionType, UidType>(positionVec[posMapIdx++], uid);
-        });
-
-    EM::Algorithm::KWayButterflySort(posMapReader, posMapWriter);
+    FastInitFromReader<Reader, PosMapWriter, T, Z, stashSize, PositionType,
+                       UidType>(reader, posMapWriter, tree);
   }
 
   PositionType size() const { return _size; }
@@ -361,25 +216,6 @@ struct PathORAM {
     tree.WritePath(pos, (Bucket_*)(&path[stashSize]));
   }
 
-  static void ReadElementAndRemoveFromPath(std::vector<Block_>& path,
-                                           const UidType& uid, T& out) {
-    for (Block_& b : path) {
-      b.invalidateAndCopyDataIfUidMatch(uid, out);
-    }
-  }
-
-  template <const bool toStashOnly = false>
-  static void WriteNewBlockToPath(std::vector<Block_>& path,
-                                  const Block_& block) {
-    int endIdx = toStashOnly ? stashSize + Z : path.size();
-    bool cond = true;
-    // fill the first slot that's empty
-    for (int i = 0; i < endIdx; i++) {
-      cond &= !path[i].conditionalFillIfDummy(cond, block);
-    }
-    Assert(!cond, "No empty slot in path");
-  }
-
   static void EvictPath(std::vector<Block_>& path, PositionType pos) {
     std::vector<int> deepest(path.size());
     std::vector<int> deeperDummyCount(path.size());
@@ -432,11 +268,5 @@ struct PathORAM {
     EM::Algorithm::OrDistributeSeparateMark(path.rbegin(), path.rend(),
                                             markArr.rbegin());
   }
-
-  static int commonSuffixLength(PositionType a, PositionType b) {
-    return std::countr_zero(a ^ b);
-  }
-
- private:
 };
 }  // namespace ORAM::PathORAM

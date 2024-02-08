@@ -1,7 +1,7 @@
 #pragma once
 #include "block.hpp"
 
-namespace ORAM::PathORAM {
+namespace ORAM {
 template <typename T, const int Z = 4, typename PositionType = uint64_t,
           typename UidType = uint64_t>
 struct Bucket {
@@ -33,4 +33,4 @@ struct Bucket {
     return cond;
   }
 };
-};  // namespace ORAM::PathORAM
+};  // namespace ORAM

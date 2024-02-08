@@ -24,7 +24,7 @@ TEST(PathORAM, ExtractFromPath) {
   PathORAM<int> oram(32);
   std::vector<PathORAM<int>::Block_> path = oram.ReadPath(UniformRandom(31));
   int out;
-  PathORAM<int>::ReadElementAndRemoveFromPath(path, UniformRandom(31), out);
+  ORAM::ReadElementAndRemoveFromPath(path, UniformRandom(31), out);
 }
 
 TEST(PathORAM, EvictPath) {
@@ -41,8 +41,7 @@ TEST(PathORAM, EvictPath) {
       while (true) {
         blocks[i].uid = UniformRandom() % 5 ? 1 : DUMMY<uint64_t>();
         blocks[i].position = UniformRandom(maxPos);
-        int suffixLen =
-            PathORAM<int>::commonSuffixLength(blocks[i].position, pos);
+        int suffixLen = ORAM::commonSuffixLength(blocks[i].position, pos);
         int level = (i - stashSize) / Z;
         if (blocks[i].isDummy() || suffixLen == 64 || suffixLen >= level) {
           break;
@@ -52,9 +51,9 @@ TEST(PathORAM, EvictPath) {
     PathORAM_::EvictPath(blocks, pos);
     int maxCommonSuffix = -1;
     for (int i = 0; i < pathSize; i++) {
-      int suffixLen = blocks[i].isDummy() ? -1
-                                          : PathORAM<int>::commonSuffixLength(
-                                                blocks[i].position, pos);
+      int suffixLen = blocks[i].isDummy()
+                          ? -1
+                          : ORAM::commonSuffixLength(blocks[i].position, pos);
       maxCommonSuffix = std::max(maxCommonSuffix, suffixLen);
       int level = std::max(0, (i - stashSize) / Z);
       if (!blocks[i].isDummy()) {
@@ -83,7 +82,7 @@ TEST(PathORAM, EvictPathPerf) {
 TEST(PathORAM, CommonSuffixLen) {
   uint64_t a = 3;
   uint64_t b = 5;
-  ASSERT_EQ(PathORAM<int>::commonSuffixLength(a, b), 1);
+  ASSERT_EQ(ORAM::commonSuffixLength(a, b), 1);
 }
 
 TEST(PathORAM, WithoutPositionMap1) {

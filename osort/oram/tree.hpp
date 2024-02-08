@@ -46,6 +46,10 @@ struct HeapTree {
 
   int GetCacheLevel() const { return cacheLevel; }
 
+  size_t GetLeafCount() const { return leafCount; }
+
+  size_t GetNodeCount() const { return totalSize; }
+
   static uint64_t GetMemoryUsage(PositionType _size, int _cacheLevel = 62,
                                  PositionType realCacheSize = -1) {
     size_t totalSize = 2 * _size - 1;
