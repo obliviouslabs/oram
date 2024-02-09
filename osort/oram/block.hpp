@@ -2,7 +2,7 @@
 #include "common/cpp_extended.hpp"
 #include "common/dummy.hpp"
 #include "common/mov_intrinsics.hpp"
-namespace ORAM {
+namespace ODSL {
 template <typename T, typename PositionType = uint64_t,
           typename UidType = uint64_t>
 struct Block {
@@ -67,4 +67,4 @@ struct UidBlock {
   INLINE bool isDummy() const { return uid == DUMMY<UidType>(); }
 };
 
-};  // namespace ORAM
+};  // namespace ODSL

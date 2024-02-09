@@ -2,7 +2,7 @@
 
 #include "oram.hpp"
 
-namespace ORAM {
+namespace ODSL {
 
 template <typename K, const short max_fan_out = 9,
           typename PositionType = uint64_t, typename UidType = uint64_t>
@@ -464,4 +464,4 @@ struct OMap {
 
   bool erase(const K& key) { return false; }
 };
-}  // namespace ORAM
+}  // namespace ODSL

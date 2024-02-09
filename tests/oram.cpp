@@ -3,57 +3,58 @@
 #include <unordered_map>
 
 #include "external_memory/algorithm/sort_def.hpp"
+#include "oram/circuit_oram.hpp"
 #include "oram/path_oram.hpp"
 #include "testutils.hpp"
 
-using namespace ORAM::PathORAM;
+using namespace ODSL::PathORAM;
 
-TEST(PathORAM, Init) { PathORAM<int> oram(1024); }
+TEST(ORAM, Init) { ORAM<int> oram(1024); }
 
-TEST(PathORAM, ReadPath) {
-  PathORAM<int> oram(32);
-  std::vector<PathORAM<int>::Block_> path = oram.ReadPath(UniformRandom(31));
+TEST(ORAM, ReadPath) {
+  ORAM<int> oram(32);
+  std::vector<ORAM<int>::Block_> path = oram.ReadPath(UniformRandom(31));
 }
 
-TEST(PathORAM, ReadPath2) {
-  PathORAM<int> oram(1e7);
-  std::vector<PathORAM<int>::Block_> path = oram.ReadPath(1801922);
+TEST(ORAM, ReadPath2) {
+  ORAM<int> oram(1e7);
+  std::vector<ORAM<int>::Block_> path = oram.ReadPath(1801922);
 }
 
-TEST(PathORAM, ExtractFromPath) {
-  PathORAM<int> oram(32);
-  std::vector<PathORAM<int>::Block_> path = oram.ReadPath(UniformRandom(31));
+TEST(ORAM, ExtractFromPath) {
+  ORAM<int> oram(32);
+  std::vector<ORAM<int>::Block_> path = oram.ReadPath(UniformRandom(31));
   int out;
-  ORAM::ReadElementAndRemoveFromPath(path, UniformRandom(31), out);
+  ODSL::ReadElementAndRemoveFromPath(path, UniformRandom(31), out);
 }
 
-TEST(PathORAM, EvictPath) {
+TEST(ORAM, EvictPath) {
   constexpr int Z = 5;
   constexpr int stashSize = 10;
   int depth = 4;
   int pathSize = stashSize + Z * depth;
   uint64_t maxPos = (1UL << (depth - 1)) - 1;
-  using PathORAM_ = PathORAM<int, Z, stashSize>;
+  using ORAM_ = ORAM<int, Z, stashSize>;
   for (int r = 0; r < 100; ++r) {
-    std::vector<PathORAM_::Block_> blocks(pathSize);
+    std::vector<ORAM_::Block_> blocks(pathSize);
     uint64_t pos = UniformRandom(maxPos);
     for (int i = 0; i < pathSize; i++) {
       while (true) {
         blocks[i].uid = UniformRandom() % 5 ? 1 : DUMMY<uint64_t>();
         blocks[i].position = UniformRandom(maxPos);
-        int suffixLen = ORAM::commonSuffixLength(blocks[i].position, pos);
+        int suffixLen = ODSL::commonSuffixLength(blocks[i].position, pos);
         int level = (i - stashSize) / Z;
         if (blocks[i].isDummy() || suffixLen == 64 || suffixLen >= level) {
           break;
         }
       }
     }
-    PathORAM_::EvictPath(blocks, pos);
+    ORAM_::EvictPath(blocks, pos);
     int maxCommonSuffix = -1;
     for (int i = 0; i < pathSize; i++) {
       int suffixLen = blocks[i].isDummy()
                           ? -1
-                          : ORAM::commonSuffixLength(blocks[i].position, pos);
+                          : ODSL::commonSuffixLength(blocks[i].position, pos);
       maxCommonSuffix = std::max(maxCommonSuffix, suffixLen);
       int level = std::max(0, (i - stashSize) / Z);
       if (!blocks[i].isDummy()) {
@@ -67,27 +68,27 @@ TEST(PathORAM, EvictPath) {
   }
 }
 
-TEST(PathORAM, EvictPathPerf) {
+TEST(ORAM, EvictPathPerf) {
   constexpr int Z = 5;
   constexpr int stashSize = 10;
   int depth = 4;
   int pathSize = stashSize + Z * depth;
-  using PathORAM_ = PathORAM<int, Z, stashSize>;
+  using ORAM_ = ORAM<int, Z, stashSize>;
   for (int r = 0; r < 1000000; ++r) {
-    std::vector<PathORAM_::Block_> blocks(pathSize);
-    PathORAM_::EvictPath(blocks, 0);
+    std::vector<ORAM_::Block_> blocks(pathSize);
+    ORAM_::EvictPath(blocks, 0);
   }
 }
 
-TEST(PathORAM, CommonSuffixLen) {
+TEST(ORAM, CommonSuffixLen) {
   uint64_t a = 3;
   uint64_t b = 5;
-  ASSERT_EQ(ORAM::commonSuffixLength(a, b), 1);
+  ASSERT_EQ(ODSL::commonSuffixLength(a, b), 1);
 }
 
-TEST(PathORAM, WithoutPositionMap1) {
-  int memSize = 10;
-  PathORAM<uint64_t, 5, 63> oram(memSize);
+TEST(ORAM, WithoutPositionMap1) {
+  int memSize = 1000;
+  ODSL::CircuitORAM::ORAM<uint64_t, 2, 20> oram(memSize);
   std::vector<uint64_t> posMap(memSize);
   std::vector<uint64_t> valMap(memSize);
   for (uint64_t i = 0; i < memSize; i++) {
@@ -125,9 +126,9 @@ TEST(PathORAM, WithoutPositionMap1) {
   }
 }
 
-TEST(PathORAM, WithoutPositionMapMixed) {
-  int memSize = 123;
-  PathORAM<uint64_t, 5, 63> oram(memSize);
+TEST(ORAM, WithoutPositionMapMixed) {
+  int memSize = 1234;
+  ODSL::CircuitORAM::ORAM<uint64_t> oram(memSize);
   std::vector<uint64_t> posMap(memSize, -1);
   std::vector<uint64_t> valMap(memSize);
   int opCount = 1e5;
@@ -174,10 +175,10 @@ TEST(PathORAM, WithoutPositionMapMixed) {
   }
 }
 
-TEST(PathORAM, NonPowerOfTwo) {
+TEST(ORAM, NonPowerOfTwo) {
   for (int memSize :
        {2, 3, 5, 7, 9, 33, 40, 55, 127, 129, 543, 678, 1023, 1025, 2000}) {
-    PathORAM<uint64_t> oram(memSize);
+    ORAM<uint64_t> oram(memSize);
     std::vector<uint64_t> posMap(memSize);
     std::vector<uint64_t> valMap(memSize);
     for (uint64_t i = 0; i < memSize; i++) {
@@ -200,9 +201,9 @@ TEST(PathORAM, NonPowerOfTwo) {
   }
 }
 
-TEST(PathORAM, WithoutPositionMapLargePerf) {
+TEST(ORAM, WithoutPositionMapLargePerf) {
   int memSize = 1 << 20;
-  PathORAM<SortElement, 5, 63> oram(memSize);
+  ODSL::CircuitORAM::ORAM<SortElement> oram(memSize);
 
   uint64_t numAccesses = 1e6;
   auto start = std::chrono::system_clock::now();
@@ -215,9 +216,9 @@ TEST(PathORAM, WithoutPositionMapLargePerf) {
   printf("Time per access: %f us\n", diff.count() * 1e6 / numAccesses);
 }
 
-// TEST(PathORAM, testInit) {
+// TEST(ORAM, testInit) {
 //   uint64_t size = 1024;
-//   PathORAM<SortElement> oram(size);
+//   ORAM<SortElement> oram(size);
 //   StdVector<SortElement> vec(size);
 //   for (int i = 0; i < size; ++i) {
 //     vec[i] = SortElement();
@@ -235,16 +236,16 @@ TEST(PathORAM, WithoutPositionMapLargePerf) {
 //   }
 // }
 
-TEST(PathORAM, testInitNaive) {
+TEST(ORAM, testInitNaive) {
   uint64_t memSize = 123456;
   uint64_t size = 100000;
-  PathORAM<SortElement> oram(memSize);
+  ORAM<SortElement> oram(memSize);
   for (uint64_t i = 0; i < size; i++) {
     oram.Write(i, SortElement());
   }
 }
 
-TEST(PathORAM, testInitWithReader) {
+TEST(ORAM, testInitWithReader) {
   uint64_t memSize = 123456;
   uint64_t size = 100000;
   if (EM::Backend::g_DefaultBackend) {
@@ -253,14 +254,14 @@ TEST(PathORAM, testInitWithReader) {
   size_t BackendSize = 1e9;
   EM::Backend::g_DefaultBackend =
       new EM::Backend::MemServerBackend(BackendSize);
-  PathORAM<SortElement> oram(memSize);
+  ORAM<SortElement> oram(memSize);
   std::vector<uint64_t> valMap(size);
   StdVector<SortElement> vec(size);
   for (int i = 0; i < size; ++i) {
     valMap[i] = UniformRandom();
     vec[i].key = valMap[i];
   }
-  using ORAM::UidBlock;
+  using ODSL::UidBlock;
   StdVector<UidBlock<uint64_t>> posMap(size);
   StdVector<SortElement>::Reader reader(vec.begin(), vec.end());
   StdVector<UidBlock<uint64_t>>::Writer posMapWriter(posMap.begin(),

@@ -7,7 +7,7 @@
 #include "external_memory/algorithm/sort_def.hpp"
 #include "testutils.hpp"
 
-using namespace ORAM;
+using namespace ODSL;
 
 TEST(OMap, Init) {
   OMap<uint64_t, SortElement> omap(512);

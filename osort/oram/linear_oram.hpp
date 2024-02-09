@@ -5,7 +5,7 @@
 #include "external_memory/stdvector.hpp"
 #include "oram/block.hpp"
 
-namespace ORAM::LinearORAM {
+namespace ODSL::LinearORAM {
 template <typename T, typename PositionType = uint64_t,
           typename UidType = uint64_t>
 struct LinearORAM {
@@ -88,5 +88,5 @@ struct LinearORAM {
     return pos;
   }
 };
-};  // namespace ORAM::LinearORAM
-    // namespace ORAM::LinearORAM
+};  // namespace ODSL::LinearORAM
+    // namespace ODSL::LinearORAM

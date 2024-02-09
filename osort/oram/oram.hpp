@@ -1,16 +1,17 @@
 #pragma once
 
+#include "circuit_oram.hpp"
 #include "linear_oram.hpp"
 #include "path_oram.hpp"
 
-namespace ORAM {
+namespace ODSL {
 template <typename T, typename PositionType = uint64_t,
           typename UidType = uint64_t>
 struct ORAM {
   using LinearORAM_ = LinearORAM::LinearORAM<T, PositionType, UidType>;
-  using PathORAM_ = PathORAM::PathORAM<T, 5, 63, PositionType, UidType>;
+  using ORAM_ = CircuitORAM::ORAM<T, 2, 50, PositionType, UidType>;
   LinearORAM_* linearOram = NULL;
-  PathORAM_* pathOram = NULL;
+  ORAM_* pathOram = NULL;
   UidType nextUid = 0;
   bool isLinear = false;
   static constexpr PositionType linear_oram_threshold = 100;
@@ -64,7 +65,7 @@ struct ORAM {
       }
       linearOram = new LinearORAM_(size);
     } else {
-      pathOram = new PathORAM_(size, cacheBytes);
+      pathOram = new ORAM_(size, cacheBytes);
     }
   }
 
@@ -72,7 +73,7 @@ struct ORAM {
     if (size <= linear_oram_threshold) {
       return LinearORAM_::GetMemoryUsage(size);
     } else {
-      return PathORAM_::GetMemoryUsage(size, cacheBytes);
+      return ORAM_::GetMemoryUsage(size, cacheBytes);
     }
   }
 
@@ -183,4 +184,4 @@ struct ORAM {
   }
 };
 
-}  // namespace ORAM
+}  // namespace ODSL

@@ -6,7 +6,7 @@
 
 #include "oram/omap.hpp"
 
-using namespace ORAM;
+using namespace ODSL;
 EM::Backend::MemServerBackend* EM::Backend::g_DefaultBackend = nullptr;
 
 #define ASSERT_EQ(a, b)                             \
@@ -19,7 +19,7 @@ EM::Backend::MemServerBackend* EM::Backend::g_DefaultBackend = nullptr;
 void testORAMReadWrite() {
   for (int memSize : {1, 3, 5, 7, 9, 33, 40, 55, 127, 129, 543, 678, 1023, 1025,
                       2000, 10000, 50000}) {
-    PathORAM::PathORAM<uint64_t> oram(memSize, 6);
+    PathORAM::ORAM<uint64_t> oram(memSize, 6);
     std::vector<uint64_t> posMap(memSize);
     std::vector<uint64_t> valMap(memSize);
     for (uint64_t i = 0; i < memSize; i++) {
@@ -70,7 +70,7 @@ void testORAMInit() {
   uint64_t memSize = 4321;
   uint64_t size = 1234;
 
-  PathORAM::PathORAM<SortElement> oram(memSize);
+  PathORAM::ORAM<SortElement> oram(memSize);
   std::vector<uint64_t> valMap(size);
   StdVector<SortElement> vec(size);
   for (int i = 0; i < size; ++i) {

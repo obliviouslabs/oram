@@ -11,7 +11,7 @@
 #include "external_memory/stdvector.hpp"
 #include "external_memory/virtualvector.hpp"
 #include "tree.hpp"
-namespace ORAM {
+namespace ODSL {
 template <typename Reader, class PosMapWriter, typename T, const int Z = 5,
           const int stashSize = 63, typename PositionType = uint64_t,
           typename UidType = uint64_t>
@@ -183,7 +183,45 @@ void WriteNewBlockToPath(PathVec& path, const Block_& block) {
   for (int i = 0; i < endIdx; i++) {
     cond &= !path[i].conditionalFillIfDummy(cond, block);
   }
-  Assert(!cond, "No empty slot in path");
+  if (cond) {
+    throw std::runtime_error("Path overflow");
+  }
 }
 
-}  // namespace ORAM
+template <class PathVec, typename Block_>
+void WriteNewBlockToTreeTop(PathVec& path, const Block_& block, int topSize) {
+  bool cond = true;
+  // fill the first slot that's empty
+  for (int i = 0; i < topSize; i++) {
+    cond &= !path[i].conditionalFillIfDummy(cond, block);
+  }
+  if (cond) {
+    throw std::runtime_error("Stash overflow");
+  }
+}
+
+template <typename T, const int Z, const int stashSize,
+          typename PositionType = uint64_t, typename UidType = uint64_t>
+int GetMaxCacheLevel(PositionType size, size_t cacheBytes = 1UL << 62) {
+  using Bucket_ = Bucket<T, Z, PositionType, UidType>;
+  using Stash = Bucket<T, stashSize, PositionType, UidType>;
+  using HeapTree_ = HeapTree<Bucket_, PositionType>;
+  int maxCacheLevel = 0;
+  if (cacheBytes >= HeapTree_::GetMemoryUsage(size, 62)) {
+    // default value
+    return 62;
+  }
+  if (cacheBytes < sizeof(Stash)) {
+    return -1;
+  }
+  cacheBytes -= sizeof(Stash);
+  for (;; ++maxCacheLevel) {
+    size_t treeUsage = HeapTree_::GetMemoryUsage(size, maxCacheLevel);
+    if (cacheBytes < treeUsage) {
+      break;
+    }
+  }
+  return maxCacheLevel - 1;
+}
+
+}  // namespace ODSL

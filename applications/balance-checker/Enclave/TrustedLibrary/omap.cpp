@@ -21,7 +21,7 @@ uint32_t enclave_create_report(const sgx_target_info_t* p_qe3_target,
   return sgx_create_report(p_qe3_target, p_data, p_report);
 }
 
-using namespace ORAM;
+using namespace ODSL;
 EM::Backend::MemServerBackend* EM::Backend::g_DefaultBackend = nullptr;
 OMap<key_type, val_type> omap;
 // lock for the global OMAP

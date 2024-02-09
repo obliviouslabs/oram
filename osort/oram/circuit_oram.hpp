@@ -1,11 +1,9 @@
 #pragma once
 
-#include "external_memory/algorithm/bitonic.hpp"
 #include "oram_common.hpp"
-#include "tree.hpp"
 
-namespace ODSL::PathORAM {
-template <typename T, const int Z = 5, const int stashSize = 63,
+namespace ODSL::CircuitORAM {
+template <typename T, const int Z = 2, const int stashSize = 63,
           typename PositionType = uint64_t, typename UidType = uint64_t>
 struct ORAM {
   // using Node_ = Node<T, Z, PositionType, UidType>;
@@ -19,6 +17,8 @@ struct ORAM {
   Stash* stash = nullptr;
   int depth = 0;
   PositionType _size = 0;
+
+  PositionType evictCounter = 0;
 
   ORAM() {}
 
@@ -104,10 +104,22 @@ struct ORAM {
     ReadElementAndRemoveFromPath(path, uid, out);
 
     Block_ newBlock(out, newPos, uid);
-    WriteNewBlockToPath(path, newBlock);
+    WriteNewBlockToTreeTop(path, newBlock, stashSize + Z);
     EvictPath(path, pos);
     WriteBackPath(path, pos);
+    Evict();
     return newPos;
+  }
+
+  void Evict(PositionType pos) {
+    std::vector<Block_> path = ReadPath(pos);
+    EvictPath(path, pos);
+    WriteBackPath(path, pos);
+  }
+
+  void Evict() {
+    Evict(evictCounter++);
+    Evict(evictCounter++);
   }
 
   PositionType Read(PositionType pos, const UidType& uid, T& out) {
@@ -119,9 +131,10 @@ struct ORAM {
     PositionType pos = UniformRandom(size() - 1);
     std::vector<Block_> path = ReadPath(pos);
     Block_ newBlock(in, newPos, uid);
-    WriteNewBlockToPath(path, newBlock);
+    WriteNewBlockToTreeTop(path, newBlock, stashSize + Z);
     EvictPath(path, pos);
     WriteBackPath(path, pos);
+    Evict();
     return newPos;
   }
 
@@ -168,10 +181,11 @@ struct ORAM {
     ReadElementAndRemoveFromPath(path, uid, out);
     updateFunc(out);
     Block_ newBlock(out, newPos, updatedUid);
-    WriteNewBlockToPath(path, newBlock);
+    WriteNewBlockToTreeTop(path, newBlock, stashSize + Z);
     EvictPath(path, pos);
 
     WriteBackPath(path, pos);
+    Evict();
     return newPos;
   }
 
@@ -200,56 +214,83 @@ struct ORAM {
   }
 
   static void EvictPath(std::vector<Block_>& path, PositionType pos) {
-    std::vector<int> deepest(path.size());
-    std::vector<int> deeperDummyCount(path.size());
-    int depth_ = (path.size() - stashSize) / Z;
-    for (int i = 0; i < path.size(); i++) {
-      deepest[i] = commonSuffixLength(path[i].position, pos);
-      obliMove(path[i].isDummy(), deepest[i], -1);
-      obliMove(deepest[i] >= depth_, deepest[i], depth_ - 1);
-    }
-    EM::Algorithm::BitonicSortSepPayload(deepest.begin(), deepest.end(),
-                                         path.begin());
-    int rank = 0;
-    int numDummy = 0;
-    for (int i = path.size() - 1; i >= 0; i--) {
-      numDummy += path[i].isDummy();
-      // least number of blocks deeper than this block
-      int minRank = (depth_ - 1 - deepest[i]) * Z;
-      obliMove(rank < minRank, rank, minRank);
-      // # dummies that needs to be added deeper than this block
-      deeperDummyCount[i] = rank - (path.size() - 1 - i);
-      if ((deepest[i] >= 0) & (rank >= path.size())) {
-        throw std::runtime_error("Stash overflow");
+    int depth = (path.size() - stashSize) / Z;
+    std::vector<int> deepest(depth, -1);
+    std::vector<int> deepestIdx(depth, 0);
+    int src = -1;
+    int goal = -1;
+
+    for (int i = 0; i < depth; ++i) {
+      obliMove(goal >= i, deepest[i], src);
+      int bucketDeepestLevel = -1;
+      for (int j = (i == 0 ? -stashSize : 0); j < Z; ++j) {
+        int idx = stashSize + i * Z + j;
+        int deepestLevel = commonSuffixLength(path[idx].position, pos);
+        bool deeperFlag =
+            !path[idx].isDummy() & (deepestLevel > bucketDeepestLevel);
+        obliMove(deeperFlag, bucketDeepestLevel, deepestLevel);
+        obliMove(deeperFlag, deepestIdx[i], idx);
       }
-      obliMove(deepest[i] == -1, deeperDummyCount[i],
-               0);  // mark dummy as 0, so that it won't be moved
-      ++rank;
+      bool deeperFlag = bucketDeepestLevel > goal;
+      obliMove(deeperFlag, goal, bucketDeepestLevel);
+      obliMove(deeperFlag, src, i);
     }
 
-    int distriLevel = GetLogBaseTwo(path.size() - 1) + 1;
+    int dest = -1;
+    src = -1;
+    std::vector<int> target(depth, -1);
+    for (int i = depth - 1; i > 0; --i) {
+      obliMove(i == src, target[i], dest);
+      obliMove(i == src, dest, -1);
+      obliMove(i == src, src, -1);
+      bool hasEmpty = false;
+      for (int j = 0; j < Z; ++j) {
+        int idx = stashSize + i * Z + j;
+        hasEmpty |= path[idx].isDummy();
+      }
+      bool changeFlag =
+          (((dest == -1) & hasEmpty) | (target[i] != -1)) & (deepest[i] != -1);
+      obliMove(changeFlag, src, deepest[i]);
+      obliMove(changeFlag, dest, i);
+    }
+    obliMove(0 == src, target[0], dest);
 
-    for (int level = distriLevel - 1; level >= 0; --level) {
-      int pow2Level = 1 << level;
-      for (int i = pow2Level; i < path.size(); ++i) {
-        bool shiftFlag =
-            (deeperDummyCount[i] & (2 * pow2Level - 1)) >= pow2Level;
-        obliSwap(shiftFlag, deeperDummyCount[i - pow2Level],
-                 deeperDummyCount[i]);
-        // could uncomment this instead of OrDistribute
-        // causes twice the swap
-        // obliSwap(shiftFlag, path[i - pow2Level], path[i]);
+    Block_ hold;
+    hold.uid = DUMMY<UidType>();
+    dest = -1;
+
+    for (int i = 0; i < depth; ++i) {
+      Block_ toWrite = hold;
+      bool placeFlag = !hold.isDummy() & (i == dest);
+      obliMove(!placeFlag, toWrite.uid, DUMMY<UidType>());
+      obliMove(placeFlag, hold.uid, DUMMY<UidType>());
+      obliMove(placeFlag, dest, -1);
+      bool hasTargetFlag = target[i] != -1;
+      for (int j = (i == 0 ? -stashSize : 0); j < Z; ++j) {
+        int idx = stashSize + i * Z + j;
+        bool isDeepest = (idx == deepestIdx[i]);
+        bool readAndRemoveFlag = isDeepest & hasTargetFlag;
+        obliMove(readAndRemoveFlag, hold, path[idx]);
+        obliMove(readAndRemoveFlag, path[idx].uid, DUMMY<UidType>());
+      }
+      obliMove(hasTargetFlag, dest, target[i]);
+      if (i == 0) {
+        continue;  // no need to write to stash
+      }
+      bool needWriteFlag = !toWrite.isDummy();
+      for (int j = 0; j < Z; ++j) {
+        int idx = stashSize + i * Z + j;
+        bool writeFlag = needWriteFlag & path[idx].isDummy();
+        obliMove(writeFlag, path[idx], toWrite);
+        needWriteFlag &= !writeFlag;
       }
     }
-    std::vector<int> markArr(path.size() + 1);
-    markArr[0] = path.size() - numDummy;
-    for (int i = 0; i < path.size(); ++i) {
-      --numDummy;
-      obliMove(numDummy < deeperDummyCount[i], numDummy, deeperDummyCount[i]);
-      markArr[i + 1] = path.size() - 1 - i - numDummy;
-    }
-    EM::Algorithm::OrDistributeSeparateMark(path.rbegin(), path.rend(),
-                                            markArr.rbegin());
+    // for (int i = 0; i < path.size(); ++i) {
+    //   printf("%ld ", path[i].isDummy() ? -1UL : (int64_t)path[i].position);
+    //   if (i >= stashSize + Z && (path.size() - i) % Z == 1) {
+    //     printf("\n");
+    //   }
+    // }
   }
 };
-}  // namespace ODSL::PathORAM
+}  // namespace ODSL::CircuitORAM
