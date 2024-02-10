@@ -42,30 +42,6 @@ void testORAMReadWrite() {
   }
 }
 
-void testBuildBottomUp() {
-  for (size_t leafCount = 2; leafCount < 1000; ++leafCount) {
-    int totalLevel = GetLogBaseTwo(leafCount - 1) + 2;
-    for (int cacheLevel = 1; cacheLevel <= totalLevel; ++cacheLevel) {
-      for (int packLevel = 1; packLevel <= totalLevel; ++packLevel) {
-        // printf("leafCount: %lu, cacheLevel: %d, packLevel: %d\n", leafCount,
-        //        cacheLevel, packLevel);
-        size_t size = leafCount * 2 - 1;
-        std::vector<uint64_t> heap(size);
-        std::function<uint64_t(uint64_t&, const uint64_t&, const uint64_t&)>
-            reduceFunc =
-                [](uint64_t& val, const uint64_t& i,
-                   const uint64_t& j) -> uint64_t { return val = i + j; };
-        std::function<uint64_t(uint64_t&, size_t)> leafFunc =
-            [](uint64_t& i, size_t idx) { return i = idx; };
-        ASSERT_EQ(HeapTree<uint64_t>::BuildBottomUp<uint64_t>(
-                      heap.begin(), heap.end(), reduceFunc, leafFunc,
-                      cacheLevel, packLevel),
-                  leafCount * (leafCount - 1) / 2);
-      }
-    }
-  }
-}
-
 void testORAMInit() {
   uint64_t memSize = 4321;
   uint64_t size = 1234;

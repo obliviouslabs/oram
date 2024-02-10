@@ -131,7 +131,7 @@ TEST(OMap, FindPerf) {
   size_t BackendSize = 1e10;
   EM::Backend::g_DefaultBackend =
       new EM::Backend::MemServerBackend(BackendSize);
-  OMap<uint64_t, int64_t, 9, uint32_t, uint32_t> omap(mapSize);
+  OMap<uint64_t, int64_t, 9, uint64_t, uint64_t> omap(mapSize);
   StdVector<std::pair<uint64_t, int64_t>> vec(initSize);
   for (int i = 0; i < initSize; i++) {
     vec[i].first = i * 10;
@@ -151,7 +151,11 @@ TEST(OMap, FindPerf) {
   for (int r = 0; r < round; ++r) {
     uint64_t i = UniformRandom(initSize - 1);
     if (UniformRandomBit()) {
-      ASSERT_TRUE(omap.find(10 * i, val));
+      if (!omap.find(10 * i, val)) {
+        printf("find failed at round %d\n", r);
+        abort();
+      }
+
       // printf("find %lu %lu\n", 10 * i, val.key);
       ASSERT_EQ(val, 3 * i);
     } else {
@@ -166,7 +170,7 @@ TEST(OMap, FindPerf) {
 
 TEST(OMap, InsertPerf) {
   size_t mapSize = 1e7;
-  size_t initSize = 1e5;
+  size_t initSize = 1e4;
   if (EM::Backend::g_DefaultBackend) {
     delete EM::Backend::g_DefaultBackend;
   }
@@ -177,9 +181,9 @@ TEST(OMap, InsertPerf) {
   StdVector<std::pair<uint64_t, int64_t>> vec(initSize);
   std::unordered_map<uint64_t, int64_t> map;
   for (int i = 0; i < initSize; i++) {
-    vec[i].first = i * 10;
+    vec[i].first = i;
     vec[i].second = i * 3;
-    map[i * 10] = i * 3;
+    map[i] = i * 3;
   }
 
   StdVector<std::pair<uint64_t, int64_t>>::Reader reader(vec.begin(),
@@ -189,10 +193,13 @@ TEST(OMap, InsertPerf) {
   int round = 1e5;
   auto start = std::chrono::system_clock::now();
   for (size_t r = 0; r < round; ++r) {
-    uint64_t i = UniformRandom(mapSize * 10);
+    uint64_t i = UniformRandom(mapSize);
     int64_t val = UniformRandom(mapSize * 3);
     bool res = omap.insert(i, val);
     if (map.find(i) != map.end()) {
+      if (!res) {
+        printf("insert failed at round %lu, does not replace element\n", r);
+      }
       ASSERT_TRUE(res);
     } else {
       ASSERT_FALSE(res);

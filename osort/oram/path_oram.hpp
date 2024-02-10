@@ -1,8 +1,8 @@
 #pragma once
 
 #include "external_memory/algorithm/bitonic.hpp"
+#include "heap_tree.hpp"
 #include "oram_common.hpp"
-#include "tree.hpp"
 
 namespace ODSL::PathORAM {
 template <typename T, const int Z = 5, const int stashSize = 63,
@@ -81,8 +81,8 @@ struct ORAM {
       }
       return;
     }
-    FastInitFromReader<Reader, PosMapWriter, T, Z, stashSize, PositionType,
-                       UidType>(reader, posMapWriter, tree);
+    FastInitFromReader<T, Z, stashSize, PositionType, UidType>(
+        reader, posMapWriter, tree);
   }
 
   PositionType size() const { return _size; }

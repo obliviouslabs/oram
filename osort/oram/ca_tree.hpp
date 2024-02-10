@@ -60,8 +60,8 @@ struct HeapTree {
 
   uint64_t GetMemoryUsage() const { return arr.GetMemoryUsage(); }
 
-  static PositionType GetCAIdxPow2(PositionType idx, int level, int totalLevel,
-                                   int packLevel = 1, int topLevel = 0) {
+  static PositionType GetIdxPow2(PositionType idx, int level, int totalLevel,
+                                 int packLevel = 1, int topLevel = 0) {
     if (totalLevel == 1) {
       return 0;
     }
@@ -74,7 +74,7 @@ struct HeapTree {
     int botLevel = totalLevel - topLevel;
 
     if (level < topLevel) {
-      return GetCAIdxPow2(idx, level, topLevel, packLevel);
+      return GetIdxPow2(idx, level, topLevel, packLevel);
     }
     // the idx of the bottom subtree
     PositionType bottomIdx = reverseBits(idx, topLevel);
@@ -82,7 +82,7 @@ struct HeapTree {
         (1UL << topLevel) - 1 + bottomIdx * ((1UL << botLevel) - 1);
 
     return offset +
-           GetCAIdxPow2(idx >> topLevel, level - topLevel, botLevel, packLevel);
+           GetIdxPow2(idx >> topLevel, level - topLevel, botLevel, packLevel);
   }
 
   static PositionType getCABottomOffset(PositionType idx,
@@ -108,9 +108,9 @@ struct HeapTree {
     return offset;
   }
 
-  static PositionType GetCAIdx(PositionType idx, PositionType leafCount,
-                               int level, int totalLevel, int packLevel = 1,
-                               int topLevel = 0) {
+  static PositionType GetIdx(PositionType idx, PositionType leafCount,
+                             int level, int totalLevel, int packLevel = 1,
+                             int topLevel = 0) {
     if (totalLevel == 1) {
       return 0;
     }
@@ -123,21 +123,21 @@ struct HeapTree {
     int botLevel = totalLevel - topLevel;
 
     if (level < topLevel) {
-      return GetCAIdxPow2(idx, level, topLevel, packLevel);
+      return GetIdxPow2(idx, level, topLevel, packLevel);
     }
     // the idx of the bottom subtree
     PositionType bottomLeafCount;
     PositionType offset =
         getCABottomOffset(idx, leafCount, topLevel, bottomLeafCount);
 
-    return offset + GetCAIdx(idx >> topLevel, bottomLeafCount, level - topLevel,
-                             botLevel, packLevel);
+    return offset + GetIdx(idx >> topLevel, bottomLeafCount, level - topLevel,
+                           botLevel, packLevel);
   }
 
   template <typename Iterator>
-  static int GetCAPathIdxPow2(Iterator outputBegin, Iterator outputEnd,
-                              PositionType idx, int packLevel = 1,
-                              int topLevel = 0) {
+  static int GetPathIdxPow2(Iterator outputBegin, Iterator outputEnd,
+                            PositionType idx, int packLevel = 1,
+                            int topLevel = 0) {
     int totalLevel = outputEnd - outputBegin;
     if (totalLevel == 1) {
       *outputBegin = 0;
@@ -149,18 +149,18 @@ struct HeapTree {
         topLevel = topLevel / packLevel * packLevel;
       }
     } else if (topLevel >= totalLevel) {
-      return GetCAPathIdxPow2(outputBegin, outputEnd, idx, packLevel);
+      return GetPathIdxPow2(outputBegin, outputEnd, idx, packLevel);
     }
     int botLevel = totalLevel - topLevel;
 
-    GetCAPathIdxPow2(outputBegin, outputBegin + topLevel, idx, packLevel);
+    GetPathIdxPow2(outputBegin, outputBegin + topLevel, idx, packLevel);
 
     // the idx of the bottom subtree
     PositionType bottomIdx = reverseBits(idx, topLevel);
     PositionType offset =
         (1UL << topLevel) - 1 + bottomIdx * ((1UL << botLevel) - 1);
-    GetCAPathIdxPow2(outputBegin + topLevel, outputEnd, idx >> topLevel,
-                     packLevel);
+    GetPathIdxPow2(outputBegin + topLevel, outputEnd, idx >> topLevel,
+                   packLevel);
     for (auto it = outputBegin + topLevel; it != outputEnd; ++it) {
       *it += offset;
     }
@@ -168,9 +168,9 @@ struct HeapTree {
   }
 
   template <typename Iterator>
-  static int GetCAPathIdx(Iterator outputBegin, Iterator outputEnd,
-                          PositionType idx, PositionType leafCount,
-                          int packLevel = 1, int topLevel = 0) {
+  static int GetPathIdx(Iterator outputBegin, Iterator outputEnd,
+                        PositionType idx, PositionType leafCount,
+                        int packLevel = 1, int topLevel = 0) {
     Assert(leafCount > 0);
     if (leafCount <= 1) {
       *outputBegin = 0;
@@ -188,11 +188,11 @@ struct HeapTree {
         topLevel = topLevel / packLevel * packLevel;
       }
     } else if (topLevel >= totalLevel) {
-      return GetCAPathIdx(outputBegin, outputEnd, idx, leafCount, packLevel);
+      return GetPathIdx(outputBegin, outputEnd, idx, leafCount, packLevel);
     }
     int botLevel = totalLevel - topLevel;
 
-    GetCAPathIdxPow2(outputBegin, outputBegin + topLevel, idx, packLevel);
+    GetPathIdxPow2(outputBegin, outputBegin + topLevel, idx, packLevel);
     if (botLevel == 1 && (idx | (1UL << (topLevel - 1))) >= leafCount) {
       return topLevel;
     }
@@ -203,8 +203,8 @@ struct HeapTree {
         getCABottomOffset(idx, leafCount, topLevel, bottomLeafCount);
 
     int actualBottomLevel =
-        GetCAPathIdx(outputBegin + topLevel, outputEnd, idx >> topLevel,
-                     bottomLeafCount, packLevel);
+        GetPathIdx(outputBegin + topLevel, outputEnd, idx >> topLevel,
+                   bottomLeafCount, packLevel);
     int actualLevel = topLevel + actualBottomLevel;
     for (auto it = outputBegin + topLevel; it != outputBegin + actualLevel;
          ++it) {
@@ -215,13 +215,13 @@ struct HeapTree {
 
   const T& Get(PositionType pos, int level) const {
     PositionType idx =
-        GetCAIdx(pos, cacheSize, level, totalLevel, packLevel, cacheLevel);
+        GetIdx(pos, cacheSize, level, totalLevel, packLevel, cacheLevel);
     return GetByInternalIdx(idx);
   }
 
   void Set(PositionType pos, int level, const T& val) {
     PositionType idx =
-        GetCAIdx(pos, cacheSize, level, totalLevel, packLevel, cacheLevel);
+        GetIdx(pos, cacheSize, level, totalLevel, packLevel, cacheLevel);
     SetByInternalIdx(idx, val);
   }
 
@@ -231,18 +231,18 @@ struct HeapTree {
 
   void SetByInternalIdx(PositionType idx, const T& val) { arr[idx] = val; }
 
-  typename Vec::Iterator beginInteranl() { return arr.begin(); }
+  typename Vec::Iterator beginInternal() { return arr.begin(); }
 
-  typename Vec::Iterator endInteranl() { return arr.end(); }
+  typename Vec::Iterator endInternal() { return arr.end(); }
 
   template <typename Iterator>
   int ReadPath(PositionType pos, Iterator pathBegin) {
     std::vector<PositionType> pathIdx(totalLevel);
 
-    int actualLevel = isPow2 ? GetCAPathIdxPow2(pathIdx.begin(), pathIdx.end(),
-                                                pos, packLevel, cacheLevel)
-                             : GetCAPathIdx(pathIdx.begin(), pathIdx.end(), pos,
-                                            leafCount, packLevel, cacheLevel);
+    int actualLevel = isPow2 ? GetPathIdxPow2(pathIdx.begin(), pathIdx.end(),
+                                              pos, packLevel, cacheLevel)
+                             : GetPathIdx(pathIdx.begin(), pathIdx.end(), pos,
+                                          leafCount, packLevel, cacheLevel);
 
     for (int i = 0; i < actualLevel; ++i) {
       PositionType idx = pathIdx[i];
@@ -254,10 +254,10 @@ struct HeapTree {
   template <typename Iterator>
   int WritePath(PositionType pos, const Iterator pathBegin) {
     std::vector<PositionType> pathIdx(totalLevel);
-    int actualLevel = isPow2 ? GetCAPathIdxPow2(pathIdx.begin(), pathIdx.end(),
-                                                pos, packLevel, cacheLevel)
-                             : GetCAPathIdx(pathIdx.begin(), pathIdx.end(), pos,
-                                            leafCount, packLevel, cacheLevel);
+    int actualLevel = isPow2 ? GetPathIdxPow2(pathIdx.begin(), pathIdx.end(),
+                                              pos, packLevel, cacheLevel)
+                             : GetPathIdx(pathIdx.begin(), pathIdx.end(), pos,
+                                          leafCount, packLevel, cacheLevel);
 
     for (int i = 0; i < actualLevel; ++i) {
       PositionType idx = pathIdx[i];

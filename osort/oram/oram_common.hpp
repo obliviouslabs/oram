@@ -10,19 +10,17 @@
 #include "external_memory/noncachedvector.hpp"
 #include "external_memory/stdvector.hpp"
 #include "external_memory/virtualvector.hpp"
-#include "tree.hpp"
+#include "heap_tree.hpp"
 namespace ODSL {
-template <typename Reader, class PosMapWriter, typename T, const int Z = 5,
-          const int stashSize = 63, typename PositionType = uint64_t,
-          typename UidType = uint64_t>
-void FastInitFromReader(
-    Reader& reader, PosMapWriter& posMapWriter,
-    HeapTree<Bucket<T, Z, PositionType, UidType>, PositionType>& tree) {
+template <typename T, const int Z = 5, const int stashSize = 63,
+          typename PositionType = uint64_t, typename UidType = uint64_t,
+          typename Reader, class PosMapWriter, class HeapTree_>
+void FastInitFromReader(Reader& reader, PosMapWriter& posMapWriter,
+                        HeapTree_& tree) {
   using Stash = Bucket<T, stashSize, PositionType, UidType>;
   using Block_ = Block<T, PositionType, UidType>;
   using Bucket_ = Bucket<T, Z, PositionType, UidType>;
   using UidBlock_ = UidBlock<T, UidType>;
-  using HeapTree_ = HeapTree<Bucket_, PositionType>;
 
   PositionType initSize = reader.size();
   // printf("initSize = %lu\n", initSize);
@@ -92,8 +90,12 @@ void FastInitFromReader(
   PosVec positionVec(numBlock);
   PosVec prefixSum(numBlock + 1);
   {
-    HeapTree<Positions> positions(tree.GetLeafCount(), tree.GetCacheLevel(), 1,
-                                  1UL << 62);
+    constexpr size_t max_node_per_page = HeapTree_::max_node_per_page;
+    static constexpr int page_size = max_node_per_page * sizeof(Positions);
+    constexpr int evict_freq = HeapTree_::evict_freq_;
+    HeapTree<Positions, PositionType, page_size, evict_freq> positions(
+        tree.GetLeafCount(), tree.GetCacheLevel(),
+        2 * tree.GetLeafCount());  // ensure the structure is the same
     positions.template BuildBottomUp<PositionStash>(reduceFunc, leafFunc);
     prefixSum[0] = 0;
     for (PositionType i = 0; i < numBucket; ++i) {

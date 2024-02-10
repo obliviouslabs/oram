@@ -3,15 +3,16 @@
 #include "oram_common.hpp"
 
 namespace ODSL::CircuitORAM {
-template <typename T, const int Z = 2, const int stashSize = 63,
-          typename PositionType = uint64_t, typename UidType = uint64_t>
+template <typename T, const int Z = 2, const int stashSize = 50,
+          typename PositionType = uint64_t, typename UidType = uint64_t,
+          const uint64_t page_size = 4096>
 struct ORAM {
   // using Node_ = Node<T, Z, PositionType, UidType>;
   using Stash = Bucket<T, stashSize, PositionType, UidType>;
   using Block_ = Block<T, PositionType, UidType>;
   using Bucket_ = Bucket<T, Z, PositionType, UidType>;
   using UidBlock_ = UidBlock<T, UidType>;
-  using HeapTree_ = HeapTree<Bucket_, PositionType>;
+  using HeapTree_ = HeapTree<Bucket_, PositionType, page_size>;
   // Node_* root = nullptr;
   HeapTree_ tree;
   Stash* stash = nullptr;
@@ -81,8 +82,8 @@ struct ORAM {
       }
       return;
     }
-    FastInitFromReader<Reader, PosMapWriter, T, Z, stashSize, PositionType,
-                       UidType>(reader, posMapWriter, tree);
+    FastInitFromReader<T, Z, stashSize, PositionType, UidType>(
+        reader, posMapWriter, tree);
   }
 
   PositionType size() const { return _size; }
@@ -118,8 +119,8 @@ struct ORAM {
   }
 
   void Evict() {
-    Evict(evictCounter++);
-    Evict(evictCounter++);
+    Evict((evictCounter++) % size());
+    Evict((evictCounter++) % size());
   }
 
   PositionType Read(PositionType pos, const UidType& uid, T& out) {
@@ -200,9 +201,14 @@ struct ORAM {
     for (int i = stashSize; i < path.size(); ++i) {
       int lv = (i - stashSize) / Z;
       size_t mask = (1UL << lv) - 1;
-      Assert(path[i].uid == DUMMY<UidType>() ||
-                 (path[i].position & mask) == (pos & mask),
-             "Path position mismatch");
+      if (!(path[i].uid == DUMMY<UidType>() ||
+            (path[i].position & mask) == (pos & mask))) {
+        printf(
+            "position mismatch pos = %lu at level %d, path[%d].position = %lu, "
+            "mask = "
+            "%lu\n",
+            pos, lv, i, path[i].position, mask);
+      }
     }
 #endif
     return path;

@@ -33,6 +33,22 @@ INLINE uint64_t GetLogBaseTwo(uint64_t n) {
   return r;
 }
 
+constexpr INLINE uint64_t GetLogBaseTwoConstexpr(uint64_t n) {
+  const uint64_t masks[6] = {0x2,    0xC,         0xF0,
+                             0xFF00, 0xFFFF'0000, 0xFFFF'FFFF'0000'0000};
+  uint64_t c = 32;
+  uint64_t r = 0;
+  for (int32_t i = 5; i >= 0; i--) {
+    const bool cond = n & masks[i];
+    if (cond) {
+      n >>= c;
+      r |= c;
+    }
+    c >>= 1;
+  }
+  return r;
+}
+
 INLINE uint64_t CeilLog2(uint64_t x) {
   static const uint64_t t[6] = {0xFFFFFFFF00000000ull, 0x00000000FFFF0000ull,
                                 0x000000000000FF00ull, 0x00000000000000F0ull,
@@ -86,7 +102,9 @@ INLINE void GetRand16(uint8_t* out) {
 }
 
 // x/y round up
-INLINE uint64_t divRoundUp(size_t x, size_t y) { return (x + y - 1) / y; }
+INLINE constexpr uint64_t divRoundUp(size_t x, size_t y) {
+  return (x + y - 1) / y;
+}
 
 template <typename Iterator>
 static auto getVecProduct(Iterator begin, Iterator end) {
