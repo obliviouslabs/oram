@@ -4,8 +4,8 @@ source /startsgxenv.sh
 SGX_MODE=SIM # HW or SIM
 
 # Algorithms:
-MIN_ENCLAVE_SIZE=8192 # enclave size in MB
-MAX_ENCLAVE_SIZE=8192
+MIN_ENCLAVE_SIZE=2048 # enclave size in MB
+MAX_ENCLAVE_SIZE=2048
 IO_ROUNDs=(1) # number of rounds encryption/decryption is performed, used to get breakdown
 CORE_ID=5 # the cpu core id to run the program
 DISK_IO=0 # 0: no disk IO, 1: disk IO
