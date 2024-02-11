@@ -182,8 +182,8 @@ struct ERC20_Balance {
 };
 
 void testOMapPerf() {
-  size_t mapSize = 1e6;
-  size_t initSize = 1e6;
+  size_t mapSize = 5e6;
+  size_t initSize = 4e6;
   OMap<ETH_Addr, ERC20_Balance> omap(mapSize);
 
   std::function<std::pair<ETH_Addr, ERC20_Balance>(uint64_t)> readerFunc =
@@ -199,7 +199,7 @@ void testOMapPerf() {
   uint64_t timediff = end - start;
   printf("oram init time %d.%d s\n", timediff / 1'000'000'000,
          timediff % 1'000'000'000);
-  int round = 1e4;
+  int round = 1e6;
   ocall_measure_time(&start);
   for (size_t r = 0; r < round; ++r) {
     ETH_Addr addr;

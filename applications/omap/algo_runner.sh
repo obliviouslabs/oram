@@ -8,7 +8,7 @@ MIN_ENCLAVE_SIZE=2048 # enclave size in MB
 MAX_ENCLAVE_SIZE=2048
 IO_ROUNDs=(1) # number of rounds encryption/decryption is performed, used to get breakdown
 CORE_ID=5 # the cpu core id to run the program
-DISK_IO=0 # 0: no disk IO, 1: disk IO
+DISK_IO=1 # 0: no disk IO, 1: disk IO
 
 for IO_ROUND in ${IO_ROUNDs[@]}; do
 if [ $IO_ROUND = 0 ]

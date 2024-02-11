@@ -10,6 +10,7 @@ template <typename T, typename PositionType = uint64_t,
 struct ORAM {
   using LinearORAM_ = LinearORAM::LinearORAM<T, PositionType, UidType>;
   using ORAM_ = CircuitORAM::ORAM<T, 2, 50, PositionType, UidType>;
+  // using ORAM_ = PathORAM::ORAM<T, 5, 64, PositionType, UidType>;
   LinearORAM_* linearOram = NULL;
   ORAM_* pathOram = NULL;
   UidType nextUid = 0;
