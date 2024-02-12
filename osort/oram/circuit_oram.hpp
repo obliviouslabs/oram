@@ -118,9 +118,11 @@ struct ORAM {
     WriteBackPath(path, pos);
   }
 
+  template <const int evict_freq = 2>
   void Evict() {
-    Evict((evictCounter++) % size());
-    Evict((evictCounter++) % size());
+    for (int i = 0; i < evict_freq; ++i) {
+      Evict((evictCounter++) % size());
+    }
   }
 
   PositionType Read(PositionType pos, const UidType& uid, T& out) {
@@ -128,20 +130,22 @@ struct ORAM {
     return Read(pos, uid, out, newPos);
   }
 
+  template <const int evict_freq = 2>
   PositionType Write(const UidType& uid, const T& in, PositionType newPos) {
-    PositionType pos = UniformRandom(size() - 1);
+    PositionType pos = (evictCounter++) % size();
     std::vector<Block_> path = ReadPath(pos);
     Block_ newBlock(in, newPos, uid);
     WriteNewBlockToTreeTop(path, newBlock, stashSize + Z);
     EvictPath(path, pos);
     WriteBackPath(path, pos);
-    Evict();
+    Evict<evict_freq>();
     return newPos;
   }
 
+  template <const int evict_freq = 2>
   PositionType Write(const UidType& uid, const T& in) {
     PositionType newPos = UniformRandom(size() - 1);
-    return Write(uid, in, newPos);
+    return Write<evict_freq>(uid, in, newPos);
   }
 
   PositionType Update(PositionType pos, const UidType& uid,
@@ -188,6 +192,48 @@ struct ORAM {
     WriteBackPath(path, pos);
     Evict();
     return newPos;
+  }
+
+  std::vector<PositionType> BatchUpdate(
+      const std::vector<PositionType>& pos, const std::vector<UidType>& uid,
+      std::function<std::vector<bool>(std::vector<T>&)> updateFunc) {
+    std::vector<PositionType> newPos(pos.size());
+    for (int i = 0; i < pos.size(); ++i) {
+      newPos[i] = UniformRandom(size() - 1);
+    }
+    BatchUpdate(pos, uid, newPos, updateFunc);
+    return newPos;
+  }
+
+  void BatchUpdate(
+      const std::vector<PositionType>& pos, const std::vector<UidType>& uid,
+      const std::vector<PositionType>& newPos,
+      std::function<std::vector<bool>(std::vector<T>&)> updateFunc) {
+    std::vector<T> out(pos.size());
+    BatchUpdate(pos, uid, newPos, updateFunc, out);
+  }
+
+  void BatchUpdate(const std::vector<PositionType>& pos,
+                   const std::vector<UidType>& uid,
+                   const std::vector<PositionType>& newPos,
+                   std::function<std::vector<bool>(std::vector<T>&)> updateFunc,
+                   std::vector<T>& out) {
+    uint64_t batchSize = pos.size();
+    Assert(batchSize == uid.size());
+    Assert(batchSize == newPos.size());
+    Assert(batchSize == out.size());
+    for (uint64_t i = 0; i < batchSize; ++i) {
+      std::vector<Block_> path = ReadPath(pos[i]);
+      ReadElementAndRemoveFromPath(path, uid[i], out[i]);
+      EvictPath(path, pos[i]);
+      WriteBackPath(path, pos[i]);
+    }
+    const std::vector<bool>& writeBackFlags = updateFunc(out);
+    for (uint64_t i = 0; i < batchSize; ++i) {
+      UidType u = DUMMY<UidType>();
+      obliMove(writeBackFlags[i], u, uid[i]);
+      Write<1>(u, out[i], newPos[i]);
+    }
   }
 
   std::vector<Block_> ReadPath(PositionType pos) {

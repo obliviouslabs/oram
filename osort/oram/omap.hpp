@@ -15,7 +15,8 @@ struct BPlusNode {
   friend std::ostream& operator<<(std::ostream& os, const BPlusNode& node) {
     os << "BPlusNode  ";
     for (int i = 0; i < node.numChildren; i++) {
-      os << node.children[i].data;
+      os << (int64_t)node.children[i].uid << " @ "
+         << (int64_t)node.children[i].data;
       if (i != node.numChildren - 1) {
         os << ", (" << node.keys[i] << "), ";
       }
@@ -129,11 +130,19 @@ struct OMap {
     PositionVec positions(initSize);
     KeyVec keys(initSize);
     KeyWriter keyWriter(keys.begin(), keys.end());
+    /**
+      halfFullLeafCount * ((max_chunk_size + 1) / 2) + (initSize -
+      halfFullLeafCount) * max_chunk_size >= reader.size(); */
+    PositionType halfFullLeafCount =
+        (initSize * max_chunk_size - reader.size()) / (max_chunk_size / 2);
+
     EM::VirtualVector::VirtualReader<BPlusLeaf_> leafReader(
-        initSize, [&reader, &keyWriter](PositionType i) {
+        initSize, [&reader, &keyWriter, halfFullLeafCount](PositionType i) {
           BPlusLeaf_ leaf;
           int j = 0;
-          for (; j < max_chunk_size; j++) {
+          int jUpper =
+              i < halfFullLeafCount ? (max_chunk_size + 1) / 2 : max_chunk_size;
+          for (; j < jUpper; j++) {
             if (reader.eof()) {
               break;
             }
@@ -155,18 +164,22 @@ struct OMap {
     // TODO end at a linear oram
     for (auto it = internalOrams.rbegin(); it != internalOrams.rend(); ++it) {
       auto& internalOram = *it;
-      size_t newInitSize = divRoundUp(initSize, max_fan_out);
+      PositionType newInitSize = divRoundUp(initSize, max_fan_out);
+      PositionType halfFullNodeCount =
+          (newInitSize * max_fan_out - initSize) / (max_fan_out / 2);
       PositionVec newPositions(newInitSize);
       KeyVec newKeys(newInitSize);
       KeyWriter newKeyWriter(newKeys.begin(), newKeys.end());
+      PositionType idx = 0;
       EM::VirtualVector::VirtualReader<BPlusNode_> nodeReader(
-          newInitSize,
-          [&newKeyWriter, &keys, &positions, initSize](PositionType i) {
+          newInitSize, [&newKeyWriter, &keys, &positions, &idx, initSize,
+                        halfFullNodeCount](PositionType i) {
             BPlusNode_ node;
             int j = 0;
-            newKeyWriter.write(keys[i * max_fan_out]);
-            for (; j < max_fan_out; j++) {
-              size_t idx = i * max_fan_out + j;
+            newKeyWriter.write(keys[idx]);
+            int jUpper =
+                i < halfFullNodeCount ? (max_fan_out + 1) / 2 : max_fan_out;
+            for (; j < jUpper; ++j, ++idx) {
               if (idx >= initSize) {
                 break;
               }
@@ -177,6 +190,7 @@ struct OMap {
               node.children[j].uid = idx;
             }
             node.numChildren = j;
+            Assert(initSize <= max_fan_out || j >= (max_fan_out + 1) / 2);
             // std::cout << "node: " << node << std::endl;
             return node;
           });
@@ -386,6 +400,163 @@ struct OMap {
     return splitFlag;
   }
 
+  // will update rightParentKey if real
+  static void redistributeNodeLeftToRight(bool real, BPlusNode_& nodeLeft,
+                                          BPlusNode_& nodeRight,
+                                          K& rightParentKey) {
+    Assert(!real | (nodeRight.numChildren == (max_fan_out - 1) / 2));
+    Assert(!real | (nodeLeft.numChildren > (max_fan_out + 1) / 2));
+    for (short i = (max_fan_out - 1) / 2 - 1; i > 0; --i) {
+      obliMove(real, nodeRight.children[i + 1], nodeRight.children[i]);
+      obliMove(real, nodeRight.keys[i], nodeRight.keys[i - 1]);
+    }
+    obliMove(real, nodeRight.children[1], nodeRight.children[0]);
+    obliMove(real, nodeRight.keys[0], rightParentKey);
+    for (short i = (max_fan_out + 1) / 2; i < max_fan_out; ++i) {
+      bool movFlag = real & (i == nodeLeft.numChildren - 1);
+      obliMove(movFlag, nodeRight.children[0], nodeLeft.children[i]);
+      obliMove(movFlag, rightParentKey, nodeLeft.keys[i - 1]);
+    }
+    nodeLeft.numChildren -= (short)real;
+    nodeRight.numChildren += (short)real;
+  }
+
+  static void redistributeNodeRightToLeft(bool real, BPlusNode_& nodeLeft,
+                                          BPlusNode_& nodeRight,
+                                          K& rightParentKey) {
+    // if right count = left count + 1, we move an entry to left,
+    // this makes coalesce easier
+    Assert(!real | (nodeRight.numChildren >= (max_fan_out + 1) / 2));
+    Assert(!real | (nodeLeft.numChildren == (max_fan_out - 1) / 2));
+    Assert(!real | (nodeLeft.numChildren < nodeRight.numChildren));
+    short leftNextSlotIdx = (max_fan_out - 1) / 2;
+    obliMove(real, nodeLeft.children[leftNextSlotIdx], nodeRight.children[0]);
+    obliMove(real, nodeLeft.keys[leftNextSlotIdx - 1], rightParentKey);
+    obliMove(real, rightParentKey, nodeRight.keys[0]);
+    obliMove(real, nodeRight.children[0], nodeRight.children[1]);
+    for (short i = 1; i < max_fan_out - 1; ++i) {
+      obliMove(real, nodeRight.children[i], nodeRight.children[i + 1]);
+      obliMove(real, nodeRight.keys[i - 1], nodeRight.keys[i]);
+    }
+    nodeLeft.numChildren += (short)real;
+    nodeRight.numChildren -= (short)real;
+  }
+
+  // returns if coalesce
+  static bool redistributeOrCoalesceNode(bool real, BPlusNode_& nodeLeft,
+                                         BPlusNode_& nodeRight,
+                                         K& rightParentKey) {
+    Assert(!real |
+           (nodeLeft.numChildren + nodeRight.numChildren >= max_fan_out));
+    bool coalesceFlag =
+        real & (nodeLeft.numChildren + nodeRight.numChildren <= max_fan_out);
+
+    bool leftToRightFlag = real &
+                           (nodeRight.numChildren < (max_fan_out + 1) / 2) &
+                           (nodeLeft.numChildren > (max_fan_out + 1) / 2);
+    bool rightToLeftFlag =
+        real & (nodeLeft.numChildren < (max_fan_out + 1) / 2);
+
+    // std::cout << "nodeLeft: " << nodeLeft << std::endl;
+    // std::cout << "nodeRight: " << nodeRight << std::endl;
+    // std::cout << "flags: leftToRightFlag: " << leftToRightFlag
+    //           << ", rightToLeftFlag: " << rightToLeftFlag << std::endl
+    //           << std::endl;
+    redistributeNodeLeftToRight(leftToRightFlag, nodeLeft, nodeRight,
+                                rightParentKey);
+    redistributeNodeRightToLeft(rightToLeftFlag, nodeLeft, nodeRight,
+                                rightParentKey);
+    Assert(!coalesceFlag | (nodeLeft.numChildren == (max_fan_out + 1) / 2));
+    Assert(!coalesceFlag | (nodeRight.numChildren == max_fan_out / 2));
+    for (short i = 0; i < max_fan_out / 2; ++i) {
+      obliMove(coalesceFlag, nodeLeft.children[i + (max_fan_out + 1) / 2],
+               nodeRight.children[i]);
+      if (i > 0) {
+        obliMove(coalesceFlag, nodeLeft.keys[i + (max_fan_out + 1) / 2 - 1],
+                 nodeRight.keys[i - 1]);
+      }
+    }
+    obliMove(coalesceFlag, nodeLeft.keys[(max_fan_out + 1) / 2 - 1],
+             rightParentKey);
+    obliMove(coalesceFlag, nodeLeft.numChildren, max_fan_out);
+    // std::cout << "After: " << std::endl;
+    // std::cout << "nodeLeft: " << nodeLeft << std::endl;
+    // std::cout << "nodeRight: " << nodeRight << std::endl;
+    // std::cout << "flags: leftToRightFlag: " << leftToRightFlag
+    //           << ", rightToLeftFlag: " << rightToLeftFlag << std::endl
+    //           << std::endl
+    //           << std::endl;
+    return coalesceFlag;
+  }
+
+  // will update rightParentKey if real
+  static void redistributeLeafLeftToRight(bool real, BPlusLeaf_& leafLeft,
+                                          BPlusLeaf_& leafRight,
+                                          K& rightParentKey) {
+    Assert(!real | rightParentKey <= leafRight.kv[0].key);
+    Assert(!real | (leafRight.numElements == (max_chunk_size - 1) / 2));
+    Assert(!real | (leafLeft.numElements > (max_chunk_size + 1) / 2));
+    for (short i = (max_chunk_size - 1) / 2 - 1; i >= 0; --i) {
+      obliMove(real, leafRight.kv[i + 1], leafRight.kv[i]);
+    }
+    for (short i = (max_chunk_size + 1) / 2; i < max_chunk_size; ++i) {
+      bool movFlag = real & (i == leafLeft.numElements - 1);
+      obliMove(movFlag, leafRight.kv[0], leafLeft.kv[i]);
+    }
+    rightParentKey = leafRight.kv[0].key;
+    leafLeft.numElements -= (short)real;
+    leafRight.numElements += (short)real;
+  }
+
+  static void redistributeLeafRightToLeft(bool real, BPlusLeaf_& leafLeft,
+                                          BPlusLeaf_& leafRight,
+                                          K& rightParentKey) {
+    // if right count = left count + 1, we move an entry to left,
+    // this makes coalesce easier
+    Assert(!real | rightParentKey <= leafRight.kv[0].key);
+    Assert(!real | (leafRight.numElements >= (max_chunk_size + 1) / 2));
+    Assert(!real | (leafLeft.numElements == (max_chunk_size - 1) / 2));
+    Assert(!real | (leafLeft.numElements < leafRight.numElements));
+    short leftNextSlotIdx = (max_chunk_size - 1) / 2;
+    obliMove(real, leafLeft.kv[leftNextSlotIdx], leafRight.kv[0]);
+    for (short i = 0; i < max_chunk_size - 1; ++i) {
+      obliMove(real, leafRight.kv[i], leafRight.kv[i + 1]);
+    }
+    rightParentKey = leafRight.kv[0].key;
+    leafLeft.numElements += (short)real;
+    leafRight.numElements -= (short)real;
+  }
+
+  // returns if coalesce
+  static bool redistributeOrCoalesceLeaf(bool real, BPlusLeaf_& leafLeft,
+                                         BPlusLeaf_& leafRight,
+                                         K& rightParentKey) {
+    // std::cout << "leafLeft: " << leafLeft << std::endl;
+    // std::cout << "leafRight: " << leafRight << std::endl;
+    Assert(!real |
+           (leafLeft.numElements + leafRight.numElements >= max_chunk_size));
+    bool coalesceFlag =
+        real & (leafLeft.numElements + leafRight.numElements <= max_chunk_size);
+
+    bool leftToRightFlag = real &
+                           (leafRight.numElements < (max_chunk_size + 1) / 2) &
+                           (leafLeft.numElements > (max_chunk_size + 1) / 2);
+    bool rightToLeftFlag =
+        real & (leafLeft.numElements < (max_chunk_size + 1) / 2);
+    redistributeLeafLeftToRight(leftToRightFlag, leafLeft, leafRight,
+                                rightParentKey);
+    redistributeLeafRightToLeft(rightToLeftFlag, leafLeft, leafRight,
+                                rightParentKey);
+    Assert(!coalesceFlag | (leafLeft.numElements == (max_chunk_size + 1) / 2));
+    Assert(!coalesceFlag | (leafRight.numElements == max_chunk_size / 2));
+    for (short i = 0; i < max_chunk_size / 2; ++i) {
+      obliMove(coalesceFlag, leafLeft.kv[i + (max_chunk_size + 1) / 2],
+               leafRight.kv[i]);
+    }
+    obliMove(coalesceFlag, leafLeft.numElements, max_chunk_size);
+    return coalesceFlag;
+  }
+
   // insert a key-value pair into the map, if the key already exist, update the
   // value
   bool insert(const K& key, const V& val) {
@@ -462,6 +633,145 @@ struct OMap {
     return foundFlag;
   }
 
-  bool erase(const K& key) { return false; }
+  // return true if the key is found and erased
+  bool eraseEntryFromLeaf(BPlusLeaf_& leaf, const K& key) {
+    bool foundFlag = false;
+    for (short i = 0; i < max_chunk_size; ++i) {
+      bool flag = (i < leaf.numElements) & (key == leaf.kv[i].key);
+      foundFlag |= flag;
+      if (i != max_chunk_size - 1) {
+        obliMove(foundFlag, leaf.kv[i], leaf.kv[i + 1]);
+      }
+    }
+    leaf.numElements -= (short)foundFlag;
+    return foundFlag;
+  }
+
+  void eraseEntryFromNode(bool real, BPlusNode_& node, short idx) {
+    Assert(!real | (idx > 0));
+    for (short i = 1; i < max_fan_out - 1; ++i) {
+      bool movFlag = real & (i >= idx);
+      obliMove(movFlag, node.keys[i - 1], node.keys[i]);
+      obliMove(movFlag, node.children[i], node.children[i + 1]);
+    }
+    node.numChildren -= (short)real;
+  }
+
+  bool erase(const K& key) {
+    auto oramIt = internalOrams.begin();
+    bool foundFlag = false;
+
+    std::function<void(BPlusNode_&)> updateFunc = [&, this](BPlusNode_& node) {
+      UidPosition childInfo = node.children[0];
+
+      short childIdx = 0;
+      for (short i = 1; i < max_fan_out; ++i) {
+        bool flag = (i < node.numChildren) & !(key < node.keys[i - 1]);
+
+        // printf("node.kv[%d].key: \n", i);
+        // for (int partIdx = 0; partIdx < 5; ++partIdx) {
+        //   printf("%X", node.keys[i - 1].part[partIdx]);
+        // }
+        // printf("\n");
+
+        obliMove(flag, childInfo, node.children[i]);
+        childIdx += flag;
+      }
+      bool noNeighborFlag = node.numChildren == 1;
+      bool neighborOnLeftFlag = childIdx == node.numChildren - 1;
+      short childNeighborIdx = childIdx + 1;
+      obliMove(neighborOnLeftFlag, childNeighborIdx, (short)(childIdx - 1));
+      UidPosition childNeighbor = node.children[0];
+      for (short i = 1; i < max_fan_out; ++i) {
+        obliMove(i == childNeighborIdx, childNeighbor, node.children[i]);
+      }
+      ++oramIt;
+      UidPosition dummyNeighbor;
+      dummyNeighbor.data =
+          UniformRandom(oramIt != internalOrams.end() ? (oramIt->size() - 1)
+                                                      : (leafOram.size() - 1));
+      dummyNeighbor.uid = DUMMY<UidType>();  // won't match any real element
+      obliMove(noNeighborFlag, childNeighbor, dummyNeighbor);
+      short rightChildIdx = childIdx + 1;
+      obliMove(neighborOnLeftFlag, rightChildIdx, childIdx);
+      // std::cout << "num children = " << node.numChildren << std::endl;
+      // std::cout << "childIdx = " << childIdx
+      //           << "no neighbor flag = " << noNeighborFlag
+      //           << "neighborOnLeftFlag" << neighborOnLeftFlag << std::endl;
+      // std::cout << "node: " << node << std::endl;
+      PositionType newPos;
+      PositionType newPosNeighbor;
+      K rightParentKey = node.keys[max_fan_out - 2];
+      bool coalesceFlag = false;
+      for (short i = 1; i < max_fan_out - 1; ++i) {
+        bool flag = i == rightChildIdx;
+        obliMove(flag, rightParentKey, node.keys[i - 1]);
+      }  // key in parent that separates child and childNeighbor
+      if (oramIt == internalOrams.end()) {
+        // update leaf to write back, and the new node if split
+
+        auto batchUpdateFunc =
+            [&](std::vector<BPlusLeaf_>& leaves) -> std::vector<bool> {
+          BPlusLeaf_& child = leaves[0];
+          BPlusLeaf_& neighbor = leaves[1];
+          foundFlag = eraseEntryFromLeaf(child, key);
+
+          obliSwap(neighborOnLeftFlag, child, neighbor);
+          coalesceFlag = redistributeOrCoalesceLeaf(!noNeighborFlag, child,
+                                                    neighbor, rightParentKey);
+          obliSwap(neighborOnLeftFlag, child, neighbor);
+          return {bool(!neighborOnLeftFlag | !coalesceFlag),
+                  bool((neighborOnLeftFlag | !coalesceFlag) & !noNeighborFlag)};
+        };
+
+        const auto& newPositions = leafOram.BatchUpdate(
+            {childInfo.data, childNeighbor.data},
+            {childInfo.uid, childNeighbor.uid}, batchUpdateFunc);
+        newPos = newPositions[0];
+        newPosNeighbor = newPositions[1];
+      } else {
+        auto batchUpdateFunc =
+            [&](std::vector<BPlusNode_>& children) -> std::vector<bool> {
+          BPlusNode_& child = children[0];
+          updateFunc(child);
+          BPlusNode_& neighbor = children[1];
+          obliSwap(neighborOnLeftFlag, child, neighbor);
+          coalesceFlag = redistributeOrCoalesceNode(!noNeighborFlag, child,
+                                                    neighbor, rightParentKey);
+          obliSwap(neighborOnLeftFlag, child, neighbor);
+          return {bool(!neighborOnLeftFlag | !coalesceFlag),
+                  bool((neighborOnLeftFlag | !coalesceFlag) & !noNeighborFlag)};
+        };
+
+        const auto& newPositions = oramIt->BatchUpdate(
+            {childInfo.data, childNeighbor.data},
+            {childInfo.uid, childNeighbor.uid}, batchUpdateFunc);
+        newPos = newPositions[0];
+        newPosNeighbor = newPositions[1];
+      }
+
+      for (short i = 0; i < max_fan_out; ++i) {
+        bool flag = i == childIdx;
+        obliMove(flag, node.children[i].data, newPos);
+        bool flagNeighbor = !noNeighborFlag & (i == childNeighborIdx);
+        obliMove(flagNeighbor, node.children[i].data, newPosNeighbor);
+      }
+      // std::cout << "Right parent key in erase: " << rightParentKey <<
+      // std::endl;
+      for (short i = 1; i < max_fan_out; ++i) {
+        obliMove(!noNeighborFlag & (i == rightChildIdx), node.keys[i - 1],
+                 rightParentKey);
+      }
+      eraseEntryFromNode(coalesceFlag, node, rightChildIdx);
+      // redistributeOrCoalesceNode(coalesceFlag, node,
+      // node.children[rightChildIdx],
+      //                            rightParentKey);
+
+      --oramIt;  // maintain invariant
+    };
+
+    oramIt->Update(0, 0, updateFunc);
+    return foundFlag;
+  }
 };
 }  // namespace ODSL

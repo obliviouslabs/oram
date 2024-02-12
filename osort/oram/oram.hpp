@@ -12,8 +12,8 @@ struct ORAM {
   using ORAM_ = CircuitORAM::ORAM<T, 2, 50, PositionType, UidType>;
   // using ORAM_ = PathORAM::ORAM<T, 5, 64, PositionType, UidType>;
   LinearORAM_* linearOram = NULL;
-  ORAM_* pathOram = NULL;
-  UidType nextUid = 0;
+  ORAM_* treeOram = NULL;
+  UidType nextUid = 0;  // uid 0 is reserved for dummy
   bool isLinear = false;
   static constexpr PositionType linear_oram_threshold = 100;
 
@@ -30,9 +30,9 @@ struct ORAM {
       delete linearOram;
       linearOram = NULL;
     }
-    if (pathOram) {
-      delete pathOram;
-      pathOram = NULL;
+    if (treeOram) {
+      delete treeOram;
+      treeOram = NULL;
     }
   }
 
@@ -42,20 +42,22 @@ struct ORAM {
     if (isLinear) {
       linearOram->InitFromReader(reader);
     } else {
-      pathOram->InitFromReader(reader, writer);
+      treeOram->InitFromReader(reader, writer);
     }
   }
 
   PositionType size() const {
     if (isLinear) {
+      Assert(linearOram);
       return linearOram->size();
     } else {
-      return pathOram->size();
+      Assert(treeOram);
+      return treeOram->size();
     }
   }
 
   void SetSize(PositionType size, size_t cacheBytes = 1UL << 62) {
-    if (linearOram || pathOram) {
+    if (linearOram || treeOram) {
       throw std::runtime_error("SetSize can only be called on empty oram");
     }
     isLinear = size <= linear_oram_threshold;
@@ -66,7 +68,7 @@ struct ORAM {
       }
       linearOram = new LinearORAM_(size);
     } else {
-      pathOram = new ORAM_(size, cacheBytes);
+      treeOram = new ORAM_(size, cacheBytes);
     }
   }
 
@@ -83,8 +85,8 @@ struct ORAM {
       Assert(linearOram);
       return linearOram->GetMemoryUsage();
     } else {
-      Assert(pathOram);
-      return pathOram->GetMemoryUsage();
+      Assert(treeOram);
+      return treeOram->GetMemoryUsage();
     }
   }
 
@@ -92,7 +94,7 @@ struct ORAM {
     if (isLinear) {
       return linearOram->Read(pos, uid, out);
     } else {
-      return pathOram->Read(pos, uid, out);
+      return treeOram->Read(pos, uid, out);
     }
   }
 
@@ -100,7 +102,7 @@ struct ORAM {
     if (isLinear) {
       return linearOram->Write(uid, in);
     } else {
-      return pathOram->Write(uid, in);
+      return treeOram->Write(uid, in);
     }
   }
 
@@ -109,7 +111,7 @@ struct ORAM {
     if (isLinear) {
       return linearOram->Update(pos, uid, updateFunc);
     } else {
-      return pathOram->Update(pos, uid, updateFunc);
+      return treeOram->Update(pos, uid, updateFunc);
     }
   }
 
@@ -118,7 +120,7 @@ struct ORAM {
     if (isLinear) {
       return linearOram->Update(pos, uid, updateFunc, out);
     } else {
-      return pathOram->Update(pos, uid, updateFunc, out);
+      return treeOram->Update(pos, uid, updateFunc, out);
     }
   }
 
@@ -128,7 +130,40 @@ struct ORAM {
     if (isLinear) {
       return linearOram->Update(pos, uid, updateFunc, out, updatedUid);
     } else {
-      return pathOram->Update(pos, uid, updateFunc, out, updatedUid);
+      return treeOram->Update(pos, uid, updateFunc, out, updatedUid);
+    }
+  }
+
+  std::vector<PositionType> BatchUpdate(
+      const std::vector<PositionType>& pos, const std::vector<UidType>& uid,
+      std::function<std::vector<bool>(std::vector<T>&)> updateFunc) {
+    if (isLinear) {
+      return linearOram->BatchUpdate(uid, updateFunc);
+    } else {
+      return treeOram->BatchUpdate(pos, uid, updateFunc);
+    }
+  }
+
+  void BatchUpdate(
+      const std::vector<PositionType>& pos, const std::vector<UidType>& uid,
+      const std::vector<PositionType>& newPos,
+      std::function<std::vector<bool>(std::vector<T>&)> updateFunc) {
+    if (isLinear) {
+      linearOram->BatchUpdate(uid, updateFunc);
+    } else {
+      treeOram->BatchUpdate(pos, uid, newPos, updateFunc);
+    }
+  }
+
+  void BatchUpdate(const std::vector<PositionType>& pos,
+                   const std::vector<UidType>& uid,
+                   const std::vector<PositionType>& newPos,
+                   std::function<std::vector<bool>(std::vector<T>&)> updateFunc,
+                   std::vector<T>& out) {
+    if (isLinear) {
+      linearOram->BatchUpdate(uid, updateFunc, out);
+    } else {
+      treeOram->BatchUpdate(pos, uid, newPos, updateFunc, out);
     }
   }
 
@@ -137,7 +172,7 @@ struct ORAM {
     if (isLinear) {
       return linearOram->Read(pos, uid, out);
     } else {
-      return pathOram->Read(pos, uid, out, newPos);
+      return treeOram->Read(pos, uid, out, newPos);
     }
   }
 
@@ -145,7 +180,7 @@ struct ORAM {
     if (isLinear) {
       return linearOram->Write(uid, in);
     } else {
-      return pathOram->Write(uid, in, newPos);
+      return treeOram->Write(uid, in, newPos);
     }
   }
 
@@ -154,7 +189,7 @@ struct ORAM {
     if (isLinear) {
       return linearOram->Update(pos, uid, updateFunc);
     } else {
-      return pathOram->Update(pos, uid, newPos, updateFunc);
+      return treeOram->Update(pos, uid, newPos, updateFunc);
     }
   }
 
@@ -163,7 +198,7 @@ struct ORAM {
     if (isLinear) {
       return linearOram->Update(pos, uid, updateFunc, out);
     } else {
-      return pathOram->Update(pos, uid, newPos, updateFunc, out);
+      return treeOram->Update(pos, uid, newPos, updateFunc, out);
     }
   }
 
@@ -173,7 +208,7 @@ struct ORAM {
     if (isLinear) {
       return linearOram->Update(pos, uid, updateFunc, out, updatedUid);
     } else {
-      return pathOram->Update(pos, uid, newPos, updateFunc, out, updatedUid);
+      return treeOram->Update(pos, uid, newPos, updateFunc, out, updatedUid);
     }
   }
 

@@ -221,6 +221,16 @@ void testOMapPerf() {
   timediff = end - start;
   printf("oram find time %d.%d us\n", timediff / round / 1'000,
          timediff / round % 1'000);
+
+  ocall_measure_time(&start);
+  for (size_t r = 0; r < round; ++r) {
+    ETH_Addr addr;
+    omap.erase(addr);
+  }
+  ocall_measure_time(&end);
+  timediff = end - start;
+  printf("oram erase time %d.%d us\n", timediff / round / 1'000,
+         timediff / round % 1'000);
 }
 
 void ecall_omap() {

@@ -87,6 +87,35 @@ struct LinearORAM {
     }
     return pos;
   }
+
+  std::vector<PositionType> BatchUpdate(
+      const std::vector<UidType>& uid,
+      std::function<std::vector<bool>(std::vector<T>&)> updateFunc) {
+    std::vector<T> out(uid.size());
+    BatchUpdate(uid, updateFunc, out);
+    return std::vector<PositionType>(uid.size(), 0);
+  }
+
+  void BatchUpdate(const std::vector<UidType>& uid,
+                   std::function<std::vector<bool>(std::vector<T>&)> updateFunc,
+                   std::vector<T>& out) {
+    uint64_t batchSize = uid.size();
+    Assert(batchSize == out.size());
+
+    for (uint64_t i = 0; i < batchSize; i++) {
+      Read(0, uid[i], out[i]);
+    }
+
+    const std::vector<bool>& writeBackFlags = updateFunc(out);
+
+    for (uint64_t i = 0; i < batchSize; i++) {
+      for (UidBlock_& block : data) {
+        bool match = block.uid == uid[i];
+        obliMove(match, block.data, out[i]);
+        obliMove(match & !writeBackFlags[i], block.uid, DUMMY<UidType>());
+      }
+    }
+  }
 };
 };  // namespace ODSL::LinearORAM
     // namespace ODSL::LinearORAM

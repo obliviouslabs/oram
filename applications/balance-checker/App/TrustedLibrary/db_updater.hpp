@@ -106,14 +106,12 @@ uint64_t updateDBFromLog(
       uint256_t originalBalance(originalBalanceStr);
       balance += originalBalance;
     }
-    // TODO: delete address with zero balance when oram supports delete
-    // if (balance == 0) {
-    //   writeBatch.Delete(addr);
-    //   --metaData.recordCount;
-    //   deleteList.push_back(addr);
-    //   continue;
-    // } else
-    if (found) {
+    if (balance == 0) {
+      writeBatch.Delete(addr);
+      --metaData.recordCount;
+      deleteList.push_back(addr);
+      continue;
+    } else if (found) {
       updateList.push_back({addr, balance.str()});
     } else {
       ++metaData.recordCount;

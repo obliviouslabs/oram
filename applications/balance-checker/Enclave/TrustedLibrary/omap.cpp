@@ -126,7 +126,7 @@ int ecall_omap_insert(uint8_t* key, uint8_t* val, uint32_t keyLength,
 
 int ecall_omap_delete(uint8_t* key, uint32_t keyLength) {
   const key_type& k = *reinterpret_cast<key_type*>(key);
-  bool res = true;  // omap.erase(k);
+  bool res = omap.erase(k);
   return (int)res;
 }
 
