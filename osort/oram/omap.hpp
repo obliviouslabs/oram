@@ -234,7 +234,8 @@ struct OMap {
     for (auto& oram : internalOrams) {
       PositionType childNewPos = UniformRandom(oramSizes[level + 1] - 1);
       UidPosition nextChild;
-      std::function<void(BPlusNode_&)> updateFunc = [&](BPlusNode_& node) {
+      std::function<bool(BPlusNode_&)> updateFunc =
+          [&](BPlusNode_& node) -> bool {
         nextChild = node.children[0];
         short childIdx = 0;
         for (short i = 1; i < max_fan_out; ++i) {
@@ -246,6 +247,7 @@ struct OMap {
           bool flag = i == childIdx;
           obliMove(flag, node.children[i].data, childNewPos);
         }
+        return true;
       };
       oram.Update(child.data, child.uid, newPos, updateFunc);
       child = nextChild;
@@ -269,7 +271,8 @@ struct OMap {
   bool update(const K& key, const std::function<void(V&)>& valUpdateFunc,
               V& valOut) {
     bool foundFlag = false;
-    auto leafUpdateFunc = [&](BPlusLeaf_& leaf) {
+    std::function<bool(BPlusLeaf_&)> leafUpdateFunc =
+        [&](BPlusLeaf_& leaf) -> bool {
       short foundIdx = max_chunk_size;
       for (short i = 0; i < max_chunk_size; ++i) {
         bool flag = (i < leaf.numElements) & (key == leaf.kv[i].key);
@@ -282,6 +285,7 @@ struct OMap {
         bool flag = i == foundIdx;
         obliMove(flag, leaf.kv[i].value, valOut);
       }
+      return true;
     };
     int level = 0;
     PositionType newPos = 0;
@@ -291,7 +295,8 @@ struct OMap {
     for (auto& oram : internalOrams) {
       PositionType childNewPos = UniformRandom(oramSizes[level + 1] - 1);
       UidPosition nextChild;
-      std::function<void(BPlusNode_&)> updateFunc = [&](BPlusNode_& node) {
+      std::function<bool(BPlusNode_&)> updateFunc =
+          [&](BPlusNode_& node) -> bool {
         nextChild = node.children[0];
         short childIdx = 0;
         for (short i = 1; i < max_fan_out; ++i) {
@@ -303,6 +308,7 @@ struct OMap {
           bool flag = i == childIdx;
           obliMove(flag, node.children[i].data, childNewPos);
         }
+        return true;
       };
       oram.Update(child.data, child.uid, newPos, updateFunc);
       child = nextChild;
@@ -584,7 +590,8 @@ struct OMap {
     bool splitFlag = false;
 
     K keyNewNode;
-    std::function<void(BPlusNode_&)> updateFunc = [&, this](BPlusNode_& node) {
+    std::function<bool(BPlusNode_&)> updateFunc =
+        [&, this](BPlusNode_& node) -> bool {
       UidPosition child = node.children[0];
       short childIdx = 0;
       for (short i = 1; i < max_fan_out; ++i) {
@@ -606,10 +613,12 @@ struct OMap {
         BPlusLeaf_ newLeaf;
 
         // update leaf to write back, and the new node if split
-        auto leafUpdateFunc = [&](BPlusLeaf_& leaf) {
+        std::function<bool(BPlusLeaf_&)> leafUpdateFunc =
+            [&](BPlusLeaf_& leaf) -> bool {
           auto sf = addAndSplitLeaf(leaf, newLeaf, key, val);
           splitFlag = sf.first;
           foundFlag = sf.second;
+          return true;
           // for (short i = 0; i < leaf.numElements; ++i) {
           //   printf("leaf.kv[%d].key: \n", i);
           //   for (int partIdx = 0; partIdx < 5; ++partIdx) {
@@ -643,6 +652,7 @@ struct OMap {
       keyNewNode = node.keys[max_fan_out / 2];
 
       --oramIt;  // maintain invariant
+      return true;
     };
 
     oramIt->Update(0, 0, updateFunc);
@@ -678,7 +688,8 @@ struct OMap {
     auto oramIt = internalOrams.begin();
     bool foundFlag = false;
 
-    std::function<void(BPlusNode_&)> updateFunc = [&, this](BPlusNode_& node) {
+    std::function<bool(BPlusNode_&)> updateFunc =
+        [&, this](BPlusNode_& node) -> bool {
       UidPosition childInfo = node.children[0];
 
       short childIdx = 0;
@@ -785,6 +796,7 @@ struct OMap {
       //                            rightParentKey);
 
       --oramIt;  // maintain invariant
+      return true;
     };
 
     oramIt->Update(0, 0, updateFunc);

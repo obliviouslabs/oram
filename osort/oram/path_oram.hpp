@@ -131,42 +131,44 @@ struct ORAM {
   }
 
   PositionType Update(PositionType pos, const UidType& uid,
-                      std::function<void(T&)> updateFunc) {
+                      std::function<bool(T&)> updateFunc) {
     T out;
     return Update(pos, uid, updateFunc, out);
   }
 
   PositionType Update(PositionType pos, const UidType& uid, PositionType newPos,
-                      std::function<void(T&)> updateFunc) {
+                      std::function<bool(T&)> updateFunc) {
     T out;
     return Update(pos, uid, newPos, updateFunc, out);
   }
 
   PositionType Update(PositionType pos, const UidType& uid,
-                      std::function<void(T&)> updateFunc, T& out) {
+                      std::function<bool(T&)> updateFunc, T& out) {
     return Update(pos, uid, updateFunc, out, uid);  // does not change uid
   }
 
   PositionType Update(PositionType pos, const UidType& uid, PositionType newPos,
-                      std::function<void(T&)> updateFunc, T& out) {
+                      std::function<bool(T&)> updateFunc, T& out) {
     return Update(pos, uid, newPos, updateFunc, out,
                   uid);  // does not change uid
   }
 
   PositionType Update(PositionType pos, const UidType& uid,
-                      std::function<void(T&)> updateFunc, T& out,
+                      std::function<bool(T&)> updateFunc, T& out,
                       const UidType& updatedUid) {
     PositionType newPos = UniformRandom(size() - 1);
     return Update(pos, uid, newPos, updateFunc, out, updatedUid);
   }
 
   PositionType Update(PositionType pos, const UidType& uid, PositionType newPos,
-                      std::function<void(T&)> updateFunc, T& out,
+                      std::function<bool(T&)> updateFunc, T& out,
                       const UidType& updatedUid) {
     std::vector<Block_> path = ReadPath(pos);
 
     ReadElementAndRemoveFromPath(path, uid, out);
-    updateFunc(out);
+    bool keepFlag = updateFunc(out);
+    UidType newUid = DUMMY<UidType>();
+    obliMove(keepFlag, newUid, updatedUid);
     Block_ newBlock(out, newPos, updatedUid);
     WriteNewBlockToPath(path, newBlock);
     EvictPath(path, pos);

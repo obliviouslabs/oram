@@ -107,7 +107,7 @@ struct ORAM {
   }
 
   PositionType Update(PositionType pos, const UidType& uid,
-                      std::function<void(T&)> updateFunc) {
+                      std::function<bool(T&)> updateFunc) {
     if (isLinear) {
       return linearOram->Update(pos, uid, updateFunc);
     } else {
@@ -116,7 +116,7 @@ struct ORAM {
   }
 
   PositionType Update(PositionType pos, const UidType& uid,
-                      std::function<void(T&)> updateFunc, T& out) {
+                      std::function<bool(T&)> updateFunc, T& out) {
     if (isLinear) {
       return linearOram->Update(pos, uid, updateFunc, out);
     } else {
@@ -125,7 +125,7 @@ struct ORAM {
   }
 
   PositionType Update(PositionType pos, const UidType& uid,
-                      std::function<void(T&)> updateFunc, T& out,
+                      std::function<bool(T&)> updateFunc, T& out,
                       const UidType& updatedUid) {
     if (isLinear) {
       return linearOram->Update(pos, uid, updateFunc, out, updatedUid);
@@ -185,7 +185,7 @@ struct ORAM {
   }
 
   PositionType Update(PositionType pos, const UidType& uid, PositionType newPos,
-                      std::function<void(T&)> updateFunc) {
+                      std::function<bool(T&)> updateFunc) {
     if (isLinear) {
       return linearOram->Update(pos, uid, updateFunc);
     } else {
@@ -194,7 +194,7 @@ struct ORAM {
   }
 
   PositionType Update(PositionType pos, const UidType& uid, PositionType newPos,
-                      std::function<void(T&)> updateFunc, T& out) {
+                      std::function<bool(T&)> updateFunc, T& out) {
     if (isLinear) {
       return linearOram->Update(pos, uid, updateFunc, out);
     } else {
@@ -203,7 +203,7 @@ struct ORAM {
   }
 
   PositionType Update(PositionType pos, const UidType& uid, PositionType newPos,
-                      std::function<void(T&)> updateFunc, T& out,
+                      std::function<bool(T&)> updateFunc, T& out,
                       const UidType& updatedUid) {
     if (isLinear) {
       return linearOram->Update(pos, uid, updateFunc, out, updatedUid);

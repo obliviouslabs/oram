@@ -62,25 +62,27 @@ struct LinearORAM {
   }
 
   PositionType Update(PositionType pos, const UidType& uid,
-                      std::function<void(T&)> updateFunc) {
+                      std::function<bool(T&)> updateFunc) {
     T out;
     return Update(pos, uid, updateFunc, out);
   }
 
   PositionType Update(PositionType pos, const UidType& uid,
-                      std::function<void(T&)> updateFunc, T& out) {
+                      std::function<bool(T&)> updateFunc, T& out) {
     return Update(pos, uid, updateFunc, out, uid);
   }
 
   PositionType Update(PositionType pos, const UidType& uid,
-                      std::function<void(T&)> updateFunc, T& out,
+                      std::function<bool(T&)> updateFunc, T& out,
                       const UidType& updatedUid) {
     for (const UidBlock_& block : data) {
       bool match = block.uid == uid;
       obliMove(match, out, block.data);
     }
-    updateFunc(out);
-    UidBlock_ newBlock(out, updatedUid);
+    bool keepFlag = updateFunc(out);
+    UidType newUid = DUMMY<UidType>();
+    obliMove(keepFlag, newUid, updatedUid);
+    UidBlock_ newBlock(out, newUid);
     for (UidBlock_& block : data) {
       bool match = block.uid == uid;
       obliMove(match, block, newBlock);
