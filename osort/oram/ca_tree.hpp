@@ -1,4 +1,13 @@
 #pragma once
+/**
+ * @file ca_tree.hpp
+ * @brief Implements a cache-agnostic layout for an oram tree.
+ * @details The implementation is currently deprecated because
+ * (1) Calculating the indices of nodes on a path takes O(log N * loglog N)
+ * time. (2) Due to some rounding issues, the implementation does not have
+ * optimal constant in practice. (3) The implementation does not consider
+ * locality of deterministic reverse lexicographic order evictions.
+ */
 #include "common/utils.hpp"
 #include "external_memory/cachefrontvector.hpp"
 template <typename T, typename PositionType = uint64_t>

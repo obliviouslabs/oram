@@ -1,13 +1,19 @@
 #pragma once
 
 #include "oram.hpp"
-
+/**
+ * @brief An oblivious map based on B+ tree.
+ * Each level of the tree is stored in a separate ORAM.
+ * The number of levels is fixed. If a level has only one node, then the node
+ * can contain any number of entries, otherwise, the node must contain at least
+ * min_fan_out entries.
+ */
 namespace ODSL {
 
 template <typename K, const short max_fan_out = 9,
           typename PositionType = uint64_t, typename UidType = uint64_t>
 struct BPlusNode {
-  K keys[max_fan_out - 1];
+  K keys[max_fan_out - 1];  // does not store the key of the first child
   UidBlock<PositionType, UidType> children[max_fan_out];
   short numChildren = 0;
 // friend with cout
@@ -50,6 +56,13 @@ struct BPlusLeaf {
 #endif
 };
 
+/**
+ * @tparam K must overload < and == operators, should be trivially copyable
+ * @tparam V should be trivially copyable
+ * @tparam max_fan_out should be odd for best performance
+ * @tparam PositionType
+ * @tparam UidType
+ */
 template <typename K, typename V, const short max_fan_out = 9,
           typename PositionType = uint64_t, typename UidType = uint64_t>
 struct OMap {
@@ -97,6 +110,9 @@ struct OMap {
         break;
       }
     }
+    // Each oram gets equal share of the remaining memory. Start from the
+    // smallest oram. Deduct the memory used by the oram from the remaining
+    // memory.
     internalOrams.reserve(numLevel);
     size_t remainCacheBytes = cacheBytes;
     for (auto it = oramSizes.rbegin(); it != oramSizes.rend(); ++it) {
@@ -133,6 +149,13 @@ struct OMap {
     Assert(uid == 0);
   }
 
+  /**
+   * @brief Initialize the oram, the input must be sorted by key.
+   * Build the orams bottom up.
+   *
+   * @tparam Reader
+   * @param reader readsstd::pair<K, V>
+   */
   template <class Reader>
   void InitFromReader(Reader& reader) {
     printf("InitFromReader\n");
@@ -147,8 +170,8 @@ struct OMap {
     PositionVec positions(initSize);
     KeyVec keys(initSize);
     KeyWriter keyWriter(keys.begin(), keys.end());
-    /**
-      halfFullLeafCount * ((max_chunk_size + 1) / 2) + (initSize -
+    /** satisfies the following condition:
+      halfFullLeafCount * (min_chunk_size) + (initSize -
       halfFullLeafCount) * max_chunk_size >= reader.size(); */
     PositionType halfFullLeafCount =
         (initSize * max_chunk_size - reader.size()) / (max_chunk_size / 2);
@@ -157,8 +180,7 @@ struct OMap {
         initSize, [&reader, &keyWriter, halfFullLeafCount](PositionType i) {
           BPlusLeaf_ leaf;
           int j = 0;
-          int jUpper =
-              i < halfFullLeafCount ? (max_chunk_size + 1) / 2 : max_chunk_size;
+          int jUpper = i < halfFullLeafCount ? min_chunk_size : max_chunk_size;
           for (; j < jUpper; j++) {
             if (reader.eof()) {
               break;
@@ -177,7 +199,6 @@ struct OMap {
         wrappedPosWriter(posWriter,
                          [](const UidPosition& uidPos) { return uidPos.data; });
     leafOram.InitFromReader(leafReader, wrappedPosWriter);
-    printf("leafOram.InitFromReader done\n");
     // TODO end at a linear oram
     for (auto it = internalOrams.rbegin(); it != internalOrams.rend(); ++it) {
       auto& internalOram = *it;
@@ -194,8 +215,7 @@ struct OMap {
             BPlusNode_ node;
             int j = 0;
             newKeyWriter.write(keys[idx]);
-            int jUpper =
-                i < halfFullNodeCount ? (max_fan_out + 1) / 2 : max_fan_out;
+            int jUpper = i < halfFullNodeCount ? min_fan_out : max_fan_out;
             for (; j < jUpper; ++j, ++idx) {
               if (idx >= initSize) {
                 break;
@@ -207,7 +227,7 @@ struct OMap {
               node.children[j].uid = idx;
             }
             node.numChildren = j;
-            Assert(initSize <= max_fan_out || j >= (max_fan_out + 1) / 2);
+            Assert(initSize <= max_fan_out || j >= min_fan_out);
             // std::cout << "node: " << node << std::endl;
             return node;
           });
@@ -224,6 +244,14 @@ struct OMap {
     printf("InitFromReader done\n");
   }
 
+  /**
+   * @brief Find by key.
+   *
+   * @param key
+   * @param valOut
+   * @return true if key found
+   * @return false if key not found
+   */
   bool find(const K& key, V& valOut) {
     bool foundFlag = false;
     int level = 0;
@@ -268,6 +296,15 @@ struct OMap {
     return foundFlag;  // TODO return false if not found
   }
 
+  /**
+   * @brief Update the value by the key.
+   *
+   * @param key
+   * @param valUpdateFunc updates the value in place
+   * @param valOut allows reading the updated value
+   * @return true if key found
+   * @return false if key not found
+   */
   bool update(const K& key, const std::function<void(V&)>& valUpdateFunc,
               V& valOut) {
     bool foundFlag = false;
@@ -330,7 +367,15 @@ struct OMap {
     return update(key, valUpdateFunc, valOut);
   }
 
-  // returns {splitFlag, foundFlag}
+  /**
+   * @brief helper function of insert
+   *
+   * @param leaf leaf that may be split
+   * @param newLeaf the new leaf if split, can be anything if not split
+   * @param key the key to insert
+   * @param val the value to insert
+   * @return std::pair<bool, bool> {splitFlag, foundFlag}
+   */
   std::pair<bool, bool> addAndSplitLeaf(BPlusLeaf_& leaf, BPlusLeaf_& newLeaf,
                                         const K& key, const V& val) {
     bool foundFlag = false;
@@ -423,19 +468,28 @@ struct OMap {
     return splitFlag;
   }
 
-  // will update rightParentKey if real
+  /**
+   * @brief Helper function for erase. Conditionally put the rightmost entry of
+   * nodeLeft to node right, and get the new key in the parent node.
+   *
+   * @param real if the operation is not dummy
+   * @param nodeLeft node on the left (has smaller keys)
+   * @param nodeRight node on the right (has larger keys)
+   * @param rightParentKey the key between nodeLeft and nodeRight stored in
+   * parent, may be updated
+   */
   static void redistributeNodeLeftToRight(bool real, BPlusNode_& nodeLeft,
                                           BPlusNode_& nodeRight,
                                           K& rightParentKey) {
     Assert(!real | (nodeRight.numChildren == (max_fan_out - 1) / 2));
-    Assert(!real | (nodeLeft.numChildren > (max_fan_out + 1) / 2));
+    Assert(!real | (nodeLeft.numChildren > min_fan_out));
     for (short i = (max_fan_out - 1) / 2 - 1; i > 0; --i) {
       obliMove(real, nodeRight.children[i + 1], nodeRight.children[i]);
       obliMove(real, nodeRight.keys[i], nodeRight.keys[i - 1]);
     }
     obliMove(real, nodeRight.children[1], nodeRight.children[0]);
     obliMove(real, nodeRight.keys[0], rightParentKey);
-    for (short i = (max_fan_out + 1) / 2; i < max_fan_out; ++i) {
+    for (short i = min_fan_out; i < max_fan_out; ++i) {
       bool movFlag = real & (i == nodeLeft.numChildren - 1);
       obliMove(movFlag, nodeRight.children[0], nodeLeft.children[i]);
       obliMove(movFlag, rightParentKey, nodeLeft.keys[i - 1]);
@@ -444,12 +498,16 @@ struct OMap {
     nodeRight.numChildren += (short)real;
   }
 
+  /**
+   * @brief Similar to redistributeNodeLeftToRight, but in the opposite
+   * direction
+   */
   static void redistributeNodeRightToLeft(bool real, BPlusNode_& nodeLeft,
                                           BPlusNode_& nodeRight,
                                           K& rightParentKey) {
     // if right count = left count + 1, we move an entry to left,
     // this makes coalesce easier
-    Assert(!real | (nodeRight.numChildren >= (max_fan_out + 1) / 2));
+    Assert(!real | (nodeRight.numChildren >= min_fan_out));
     Assert(!real | (nodeLeft.numChildren == (max_fan_out - 1) / 2));
     Assert(!real | (nodeLeft.numChildren < nodeRight.numChildren));
     short leftNextSlotIdx = (max_fan_out - 1) / 2;
@@ -465,7 +523,17 @@ struct OMap {
     nodeRight.numChildren -= (short)real;
   }
 
-  // returns if coalesce
+  /**
+   * @brief Redistribute or coalesce the nodes depending on the loads of the
+   * nodes. If coalesce, put all entries in the right node into the left node.
+   *
+   * @param real if the operation is not dummy
+   * @param nodeLeft
+   * @param nodeRight
+   * @param rightParentKey
+   * @return true if coalesce
+   * @return false if not coalesce
+   */
   static bool redistributeOrCoalesceNode(bool real, BPlusNode_& nodeLeft,
                                          BPlusNode_& nodeRight,
                                          K& rightParentKey) {
@@ -474,11 +542,9 @@ struct OMap {
     bool coalesceFlag =
         real & (nodeLeft.numChildren + nodeRight.numChildren <= max_fan_out);
 
-    bool leftToRightFlag = real &
-                           (nodeRight.numChildren < (max_fan_out + 1) / 2) &
-                           (nodeLeft.numChildren > (max_fan_out + 1) / 2);
-    bool rightToLeftFlag =
-        real & (nodeLeft.numChildren < (max_fan_out + 1) / 2);
+    bool leftToRightFlag = real & (nodeRight.numChildren < min_fan_out) &
+                           (nodeLeft.numChildren > min_fan_out);
+    bool rightToLeftFlag = real & (nodeLeft.numChildren < min_fan_out);
 
     // std::cout << "nodeLeft: " << nodeLeft << std::endl;
     // std::cout << "nodeRight: " << nodeRight << std::endl;
@@ -489,18 +555,17 @@ struct OMap {
                                 rightParentKey);
     redistributeNodeRightToLeft(rightToLeftFlag, nodeLeft, nodeRight,
                                 rightParentKey);
-    Assert(!coalesceFlag | (nodeLeft.numChildren == (max_fan_out + 1) / 2));
+    Assert(!coalesceFlag | (nodeLeft.numChildren == min_fan_out));
     Assert(!coalesceFlag | (nodeRight.numChildren == max_fan_out / 2));
     for (short i = 0; i < max_fan_out / 2; ++i) {
-      obliMove(coalesceFlag, nodeLeft.children[i + (max_fan_out + 1) / 2],
+      obliMove(coalesceFlag, nodeLeft.children[i + min_fan_out],
                nodeRight.children[i]);
       if (i > 0) {
-        obliMove(coalesceFlag, nodeLeft.keys[i + (max_fan_out + 1) / 2 - 1],
+        obliMove(coalesceFlag, nodeLeft.keys[i + min_fan_out - 1],
                  nodeRight.keys[i - 1]);
       }
     }
-    obliMove(coalesceFlag, nodeLeft.keys[(max_fan_out + 1) / 2 - 1],
-             rightParentKey);
+    obliMove(coalesceFlag, nodeLeft.keys[min_fan_out - 1], rightParentKey);
     obliMove(coalesceFlag, nodeLeft.numChildren, max_fan_out);
     // std::cout << "After: " << std::endl;
     // std::cout << "nodeLeft: " << nodeLeft << std::endl;
@@ -512,17 +577,17 @@ struct OMap {
     return coalesceFlag;
   }
 
-  // will update rightParentKey if real
+  // similar operations for leaves
   static void redistributeLeafLeftToRight(bool real, BPlusLeaf_& leafLeft,
                                           BPlusLeaf_& leafRight,
                                           K& rightParentKey) {
     Assert(!real | rightParentKey <= leafRight.kv[0].key);
     Assert(!real | (leafRight.numElements == (max_chunk_size - 1) / 2));
-    Assert(!real | (leafLeft.numElements > (max_chunk_size + 1) / 2));
+    Assert(!real | (leafLeft.numElements > min_chunk_size));
     for (short i = (max_chunk_size - 1) / 2 - 1; i >= 0; --i) {
       obliMove(real, leafRight.kv[i + 1], leafRight.kv[i]);
     }
-    for (short i = (max_chunk_size + 1) / 2; i < max_chunk_size; ++i) {
+    for (short i = min_chunk_size; i < max_chunk_size; ++i) {
       bool movFlag = real & (i == leafLeft.numElements - 1);
       obliMove(movFlag, leafRight.kv[0], leafLeft.kv[i]);
     }
@@ -537,7 +602,7 @@ struct OMap {
     // if right count = left count + 1, we move an entry to left,
     // this makes coalesce easier
     Assert(!real | rightParentKey <= leafRight.kv[0].key);
-    Assert(!real | (leafRight.numElements >= (max_chunk_size + 1) / 2));
+    Assert(!real | (leafRight.numElements >= min_chunk_size));
     Assert(!real | (leafLeft.numElements == (max_chunk_size - 1) / 2));
     Assert(!real | (leafLeft.numElements < leafRight.numElements));
     short leftNextSlotIdx = (max_chunk_size - 1) / 2;
@@ -561,27 +626,31 @@ struct OMap {
     bool coalesceFlag =
         real & (leafLeft.numElements + leafRight.numElements <= max_chunk_size);
 
-    bool leftToRightFlag = real &
-                           (leafRight.numElements < (max_chunk_size + 1) / 2) &
-                           (leafLeft.numElements > (max_chunk_size + 1) / 2);
-    bool rightToLeftFlag =
-        real & (leafLeft.numElements < (max_chunk_size + 1) / 2);
+    bool leftToRightFlag = real & (leafRight.numElements < min_chunk_size) &
+                           (leafLeft.numElements > min_chunk_size);
+    bool rightToLeftFlag = real & (leafLeft.numElements < min_chunk_size);
     redistributeLeafLeftToRight(leftToRightFlag, leafLeft, leafRight,
                                 rightParentKey);
     redistributeLeafRightToLeft(rightToLeftFlag, leafLeft, leafRight,
                                 rightParentKey);
-    Assert(!coalesceFlag | (leafLeft.numElements == (max_chunk_size + 1) / 2));
+    Assert(!coalesceFlag | (leafLeft.numElements == min_chunk_size));
     Assert(!coalesceFlag | (leafRight.numElements == max_chunk_size / 2));
     for (short i = 0; i < max_chunk_size / 2; ++i) {
-      obliMove(coalesceFlag, leafLeft.kv[i + (max_chunk_size + 1) / 2],
-               leafRight.kv[i]);
+      obliMove(coalesceFlag, leafLeft.kv[i + min_chunk_size], leafRight.kv[i]);
     }
     obliMove(coalesceFlag, leafLeft.numElements, max_chunk_size);
     return coalesceFlag;
   }
 
-  // insert a key-value pair into the map, if the key already exist, update the
-  // value
+  /**
+   * @brief insert a key-value pair into the map, if the key already exist,
+   update the value
+   *
+   * @param key
+   * @param val
+   * @return true if key found
+   * @return false if key not found
+   */
   bool insert(const K& key, const V& val) {
     auto oramIt = internalOrams.begin();
     bool foundFlag = false;
@@ -596,13 +665,6 @@ struct OMap {
       short childIdx = 0;
       for (short i = 1; i < max_fan_out; ++i) {
         bool flag = (i < node.numChildren) & !(key < node.keys[i - 1]);
-
-        // printf("node.kv[%d].key: \n", i);
-        // for (int partIdx = 0; partIdx < 5; ++partIdx) {
-        //   printf("%X", node.keys[i - 1].part[partIdx]);
-        // }
-        // printf("\n");
-
         obliMove(flag, child, node.children[i]);
         childIdx += flag;
       }
@@ -619,13 +681,6 @@ struct OMap {
           splitFlag = sf.first;
           foundFlag = sf.second;
           return true;
-          // for (short i = 0; i < leaf.numElements; ++i) {
-          //   printf("leaf.kv[%d].key: \n", i);
-          //   for (int partIdx = 0; partIdx < 5; ++partIdx) {
-          //     printf("4", leaf.kv[i].key.part[partIdx]);
-          //   }
-          //   printf("\n");
-          // }
         };
 
         newPos = leafOram.Update(child.data, child.uid, leafUpdateFunc);
@@ -660,7 +715,14 @@ struct OMap {
     return foundFlag;
   }
 
-  // return true if the key is found and erased
+  /**
+   * @brief erase the key from a leaf
+   *
+   * @param leaf
+   * @param key
+   * @return true if the key is found and erased
+   * @return false otherwise
+   */
   bool eraseEntryFromLeaf(BPlusLeaf_& leaf, const K& key) {
     bool foundFlag = false;
     for (short i = 0; i < max_chunk_size; ++i) {
@@ -674,6 +736,13 @@ struct OMap {
     return foundFlag;
   }
 
+  /**
+   * @brief Erase an entry from an internal node by child idx
+   *
+   * @param real if the operation is not dummy
+   * @param node the node to erase from
+   * @param idx > 0 if real (because we only delete children on the right)
+   */
   void eraseEntryFromNode(bool real, BPlusNode_& node, short idx) {
     Assert(!real | (idx > 0));
     for (short i = 1; i < max_fan_out - 1; ++i) {
@@ -684,6 +753,13 @@ struct OMap {
     node.numChildren -= (short)real;
   }
 
+  /**
+   * @brief Erase the key from the map
+   *
+   * @param key
+   * @return true if key found and erased
+   * @return false otherwise
+   */
   bool erase(const K& key) {
     auto oramIt = internalOrams.begin();
     bool foundFlag = false;
@@ -695,13 +771,6 @@ struct OMap {
       short childIdx = 0;
       for (short i = 1; i < max_fan_out; ++i) {
         bool flag = (i < node.numChildren) & !(key < node.keys[i - 1]);
-
-        // printf("node.kv[%d].key: \n", i);
-        // for (int partIdx = 0; partIdx < 5; ++partIdx) {
-        //   printf("%X", node.keys[i - 1].part[partIdx]);
-        // }
-        // printf("\n");
-
         obliMove(flag, childInfo, node.children[i]);
         childIdx += flag;
       }
@@ -791,10 +860,6 @@ struct OMap {
                  rightParentKey);
       }
       eraseEntryFromNode(coalesceFlag, node, rightChildIdx);
-      // redistributeOrCoalesceNode(coalesceFlag, node,
-      // node.children[rightChildIdx],
-      //                            rightParentKey);
-
       --oramIt;  // maintain invariant
       return true;
     };

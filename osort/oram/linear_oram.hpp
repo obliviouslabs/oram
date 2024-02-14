@@ -5,6 +5,10 @@
 #include "external_memory/stdvector.hpp"
 #include "oram/block.hpp"
 
+/**
+ * @brief A simple linear oram efficient at small size.
+ *
+ */
 namespace ODSL::LinearORAM {
 template <typename T, typename PositionType = uint64_t,
           typename UidType = uint64_t>

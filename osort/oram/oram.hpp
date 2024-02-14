@@ -4,6 +4,11 @@
 #include "linear_oram.hpp"
 #include "path_oram.hpp"
 
+/**
+ * @brief An ORAM manager that switches between linear and tree ORAM based on
+ * size.
+ *
+ */
 namespace ODSL {
 template <typename T, typename PositionType = uint64_t,
           typename UidType = uint64_t>
@@ -36,6 +41,16 @@ struct ORAM {
     }
   }
 
+  /**
+   * @brief Initialize the oram from an existing oram array.
+   * Reader must be sorted and has uid [0, reader.size())
+   * Writer will write out the position map for tree oram as (uid, pos) pairs.
+   *
+   * @tparam Reader
+   * @tparam Writer
+   * @param reader
+   * @param writer
+   */
   template <typename Reader, typename Writer>
   void InitFromReader(Reader& reader, Writer& writer) {
     nextUid = reader.size();
@@ -46,6 +61,7 @@ struct ORAM {
     }
   }
 
+  // TODO rename to capacity
   PositionType size() const {
     if (isLinear) {
       Assert(linearOram);
@@ -90,6 +106,14 @@ struct ORAM {
     }
   }
 
+  /**
+   * @brief Read from the oram.
+   *
+   * @param pos position (path idx) of the element
+   * @param uid uid of the element
+   * @param out output
+   * @return PositionType new position of the element
+   */
   PositionType Read(PositionType pos, const UidType& uid, T& out) {
     if (isLinear) {
       return linearOram->Read(pos, uid, out);
@@ -98,6 +122,13 @@ struct ORAM {
     }
   }
 
+  /**
+   * @brief Write an element to the oram.
+   *
+   * @param uid uid of the element to write
+   * @param in element to write
+   * @return PositionType position of the element
+   */
   PositionType Write(const UidType& uid, const T& in) {
     if (isLinear) {
       return linearOram->Write(uid, in);
@@ -106,6 +137,15 @@ struct ORAM {
     }
   }
 
+  /**
+   * @brief Update the element at pos with uid.
+   *
+   * @param pos position (path idx) of the element
+   * @param uid uid of the element
+   * @param updateFunc may modify the element in place, return true to keep the
+   * element, false to delete it.
+   * @return PositionType new position of the element
+   */
   PositionType Update(PositionType pos, const UidType& uid,
                       std::function<bool(T&)> updateFunc) {
     if (isLinear) {
@@ -115,6 +155,7 @@ struct ORAM {
     }
   }
 
+  // allow read the updated value
   PositionType Update(PositionType pos, const UidType& uid,
                       std::function<bool(T&)> updateFunc, T& out) {
     if (isLinear) {
@@ -124,6 +165,7 @@ struct ORAM {
     }
   }
 
+  // allow update the uid
   PositionType Update(PositionType pos, const UidType& uid,
                       std::function<bool(T&)> updateFunc, T& out,
                       const UidType& updatedUid) {
@@ -134,6 +176,7 @@ struct ORAM {
     }
   }
 
+  // update a batch of elements atomically, return the new positions
   std::vector<PositionType> BatchUpdate(
       const std::vector<PositionType>& pos, const std::vector<UidType>& uid,
       std::function<std::vector<bool>(std::vector<T>&)> updateFunc) {
@@ -212,6 +255,7 @@ struct ORAM {
     }
   }
 
+  // returns the next unique id, if real is false, returns the dummy id
   UidType GetNextUid(bool real = true) {
     UidType res = DUMMY<UidType>();
     obliMove(real, res, nextUid);
