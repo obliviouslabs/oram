@@ -116,6 +116,23 @@ struct OMap {
 
   ~OMap() {}
 
+  void Init() {
+    BPlusLeaf_ emptyLeaf;
+    emptyLeaf.numElements = 0;
+    UidType uid = leafOram.GetNextUid();
+    PositionType pos = leafOram.Write(uid, emptyLeaf);
+    for (auto oramIt = internalOrams.rbegin(); oramIt != internalOrams.rend();
+         ++oramIt) {
+      BPlusNode_ node;
+      node.numChildren = 1;
+      node.children[0].data = pos;
+      node.children[0].uid = uid;
+      uid = oramIt->GetNextUid();
+      pos = oramIt->Write(uid, node);
+    }
+    Assert(uid == 0);
+  }
+
   template <class Reader>
   void InitFromReader(Reader& reader) {
     printf("InitFromReader\n");

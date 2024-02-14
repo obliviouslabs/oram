@@ -95,6 +95,18 @@ TEST(OMap, EraseAll) {
     uint64_t i = vec[r].first;
     ASSERT_TRUE(omap.erase(i));
   }
+  std::unordered_map<uint64_t, int> map;
+  for (size_t r = 0; r < mapSize; ++r) {
+    uint64_t i = UniformRandom(mapSize * 2);
+    int val = UniformRandom(mapSize * 3);
+    bool res = omap.insert(i, val);
+    if (map.find(i) != map.end()) {
+      ASSERT_TRUE(res);
+    } else {
+      ASSERT_FALSE(res);
+    }
+    map[i] = val;
+  }
 }
 
 TEST(OMap, Update) {
@@ -143,6 +155,41 @@ TEST(OMap, Insert) {
 
   omap.InitFromReader(reader);
   for (size_t r = 0; r < mapSize - initSize; ++r) {
+    uint64_t i = UniformRandom(mapSize * 10);
+    int64_t val = UniformRandom(mapSize * 3);
+    bool res = omap.insert(i, val);
+    if (map.find(i) != map.end()) {
+      ASSERT_TRUE(res);
+    } else {
+      ASSERT_FALSE(res);
+    }
+    map[i] = val;
+  }
+  for (auto& p : map) {
+    int64_t val;
+    ASSERT_TRUE(omap.find(p.first, val));
+    ASSERT_EQ(val, p.second);
+  }
+  for (size_t r = 0; r < 1000; ++r) {
+    uint64_t i = UniformRandom(mapSize * 10);
+    int64_t val;
+    bool res = omap.find(i, val);
+    if (map.find(i) != map.end()) {
+      ASSERT_TRUE(res);
+      ASSERT_EQ(val, map[i]);
+    } else {
+      ASSERT_FALSE(res);
+    }
+  }
+}
+
+TEST(OMap, InsertFromEmpty) {
+  size_t mapSize = 1e5;
+
+  OMap<uint64_t, int64_t> omap(mapSize);
+  std::unordered_map<uint64_t, int64_t> map;
+  omap.Init();
+  for (size_t r = 0; r < mapSize; ++r) {
     uint64_t i = UniformRandom(mapSize * 10);
     int64_t val = UniformRandom(mapSize * 3);
     bool res = omap.insert(i, val);
