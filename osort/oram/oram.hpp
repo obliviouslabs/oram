@@ -42,7 +42,7 @@ struct ORAM {
   }
 
   /**
-   * @brief Initialize the oram from an existing oram array.
+   * @brief Initialize the oram from an existing ram array.
    * Reader must be sorted and has uid [0, reader.size())
    * Writer will write out the position map for tree oram as (uid, pos) pairs.
    *

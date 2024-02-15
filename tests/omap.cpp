@@ -22,28 +22,45 @@ TEST(OMap, Init) {
   omap.InitFromReader(reader);
 }
 
-TEST(OMap, Find) {
-  size_t mapSize = 4321;
-  size_t initSize = 1234;
-  OMap<uint64_t, SortElement> omap(mapSize);
-  StdVector<std::pair<uint64_t, SortElement>> vec(initSize);
-  for (int i = 0; i < initSize; i++) {
+TEST(OMap, InitInPlace) {
+  OMap<uint64_t, SortElement> omap(512);
+  StdVector<std::pair<uint64_t, SortElement>> vec(16);
+  for (int i = 0; i < 16; i++) {
     vec[i].first = i * 10;
     vec[i].second.key = i * 3;
   }
   StdVector<std::pair<uint64_t, SortElement>>::Reader reader(vec.begin(),
                                                              vec.end());
 
-  omap.InitFromReader(reader);
-  SortElement val;
-  for (int r = 0; r < 1000; ++r) {
-    uint64_t i = UniformRandom(initSize - 1);
-    if (UniformRandomBit()) {
-      ASSERT_TRUE(omap.find(10 * i, val));
-      // printf("find %lu %lu\n", 10 * i, val.key);
-      ASSERT_EQ(val.key, 3 * i);
-    } else {
-      ASSERT_FALSE(omap.find(10 * i + 1, val));
+  omap.InitFromReaderInPlace(reader);
+}
+
+TEST(OMap, Find) {
+  for (int rr = 0; rr < 100; ++rr) {
+    size_t mapSize = UniformRandom(2, 100000);
+    size_t initSize = UniformRandom(1, mapSize);
+    // std::cout << "mapSize: " << mapSize << " initSize: " << initSize
+    //           << std::endl;
+    OMap<uint64_t, int64_t> omap(mapSize);
+    StdVector<std::pair<uint64_t, int64_t>> vec(initSize);
+    for (int i = 0; i < initSize; i++) {
+      vec[i].first = i * 10;
+      vec[i].second = i * 3;
+    }
+    StdVector<std::pair<uint64_t, int64_t>>::Reader reader(vec.begin(),
+                                                           vec.end());
+
+    omap.InitFromReaderInPlace(reader);
+    int64_t val;
+    for (int r = 0; r < 1000; ++r) {
+      uint64_t i = UniformRandom(initSize - 1);
+      if (UniformRandomBit()) {
+        ASSERT_TRUE(omap.find(10 * i, val));
+
+        ASSERT_EQ(val, 3 * i);
+      } else {
+        ASSERT_FALSE(omap.find(10 * i + 1, val));
+      }
     }
   }
 }

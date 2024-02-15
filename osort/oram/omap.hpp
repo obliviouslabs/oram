@@ -154,7 +154,7 @@ struct OMap {
    * Build the orams bottom up.
    *
    * @tparam Reader
-   * @param reader readsstd::pair<K, V>
+   * @param reader reads std::pair<K, V>
    */
   template <class Reader>
   void InitFromReader(Reader& reader) {
@@ -242,6 +242,78 @@ struct OMap {
       std::swap(keys, newKeys);
     }
     printf("InitFromReader done\n");
+  }
+
+  template <class Reader>
+  void InitFromReaderInPlace(Reader& reader) {
+    using T = typename Reader::value_type;
+    static_assert(std::is_same_v<T, std::pair<K, V>>,
+                  "Reader must read std::pair<K, V>");
+    PositionType initSize = divRoundUp(reader.size(), max_chunk_size);
+    // printf("max chunk size = %d\n", max_chunk_size);
+    // printf("init size = %lu\n", initSize);
+    PositionType halfFullLeafCount =
+        (initSize * max_chunk_size - reader.size()) / (max_chunk_size / 2);
+    // printf("half full leaf count = %lu\n", halfFullLeafCount);
+    std::vector<BPlusNode_> internalNodeCache(internalOrams.size());
+    std::vector<K> internalBeginKeys(internalOrams.size());
+    std::vector<PositionType> halfFullNodeCounts(internalOrams.size());
+    PositionType levelInitSize = initSize;
+    for (int i = internalOrams.size() - 1; i >= 0; --i) {
+      PositionType upperLevelInitSize = divRoundUp(levelInitSize, max_fan_out);
+      halfFullNodeCounts[i] =
+          (upperLevelInitSize * max_fan_out - levelInitSize) /
+          (max_fan_out / 2);
+      levelInitSize = upperLevelInitSize;
+    }
+    for (PositionType i = 0; i < initSize; ++i) {
+      int jUpper = i < halfFullLeafCount ? min_chunk_size : max_chunk_size;
+      int j = 0;
+      BPlusLeaf_ leaf;
+      for (; j < jUpper; ++j) {
+        if (reader.eof()) {
+          break;
+        }
+        auto kv = reader.read();
+        leaf.kv[j] = {kv.first, kv.second};
+      }
+      leaf.numElements = j;
+      bool endFlag = i == initSize - 1;
+      Assert(endFlag || !reader.eof());
+      UidType childUid = leafOram.GetNextUid();
+      PositionType childPos = leafOram.Write(childUid, leaf);
+      // std::cout << "write leaf: " << leaf << " at pos " << childPos
+      //           << " with uid " << childUid << std::endl;
+      K childKey = leaf.kv[0].key;
+      K nextLevelChildKey;
+      for (int j = internalOrams.size() - 1; j >= 0; --j) {
+        BPlusNode_& node = internalNodeCache[j];
+        int kUpper = max_fan_out;
+        if (halfFullNodeCounts[j]) {
+          kUpper = min_fan_out;
+          --halfFullNodeCounts[j];
+        }
+        node.children[node.numChildren] = {childPos, childUid};
+        if (node.numChildren) {
+          node.keys[node.numChildren - 1] = childKey;
+        } else {
+          internalBeginKeys[j] = childKey;
+        }
+        ++node.numChildren;
+        if (node.numChildren == kUpper || endFlag) {
+          childUid = internalOrams[j].GetNextUid();
+          childPos = internalOrams[j].Write(childUid, node);
+          // std::cout << "write node: " << node << " to level " << j << " at
+          // pos "
+          //           << childPos << std::endl;
+          node.numChildren = 0;
+          childKey = internalBeginKeys[j];
+        } else {
+          break;
+        }
+      }
+    }
+    // PositionType childPos
   }
 
   /**
