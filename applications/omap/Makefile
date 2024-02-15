@@ -45,6 +45,7 @@ STEP_RATIO ?= 1.2
 IO_ROUND ?= 1
 ENCLAVE_SIZE ?= 128
 DISK_IO ?= 0
+TCS_NUM ?= 1
 
 ifeq ($(shell getconf LONG_BIT), 32)
 	SGX_ARCH := x86
@@ -115,7 +116,7 @@ ifeq ($(DISK_IO), 1)
 	App_Cpp_Flags += -DDISK_IO
 endif
 
-App_Link_Flags := -L$(SGX_LIBRARY_PATH) -l$(Urts_Library_Name) -lpthread 
+App_Link_Flags := -L$(SGX_LIBRARY_PATH) -l$(Urts_Library_Name) -lpthread -lsgx_uswitchless
 
 App_Cpp_Objects := $(App_Cpp_Files:.cpp=.o)
 
@@ -172,7 +173,7 @@ else
 endif
 
 Enclave_C_Flags := $(Enclave_Flags) -std=c17 
-Enclave_Cpp_Flags := $(Enclave_Flags) -std=c++20 -nostdinc++ -DNOOPENSSL -DENCLAVE_MODE -DELEMENT_SIZE=${ELEMENT_SIZE} -DALGO=${ALGO} -DMIN_SIZE=${MIN_SIZE} -DMAX_SIZE=${MAX_SIZE} -DSTEP_RATIO=${STEP_RATIO} -DENCLAVE_SIZE=${ENCLAVE_SIZE} -DIO_ROUND=${IO_ROUND}
+Enclave_Cpp_Flags := $(Enclave_Flags) -std=c++20 -nostdinc++ -fopenmp -DNOOPENSSL -DENCLAVE_MODE -DELEMENT_SIZE=${ELEMENT_SIZE} -DALGO=${ALGO} -DMIN_SIZE=${MIN_SIZE} -DMAX_SIZE=${MAX_SIZE} -DSTEP_RATIO=${STEP_RATIO} -DENCLAVE_SIZE=${ENCLAVE_SIZE} -DIO_ROUND=${IO_ROUND}  -DTCS_NUM=${TCS_NUM}
 ifeq ($(DISK_IO), 1)
 	Enclave_Cpp_Flags += -DDISK_IO
 endif
@@ -189,12 +190,13 @@ Enclave_Security_Link_Flags := -Wl,-z,relro,-z,now,-z,noexecstack
 # Otherwise, you may get some undesirable errors.
 Enclave_Link_Flags := $(Enclave_Security_Link_Flags) \
     -Wl,--no-undefined -nostdlib -nodefaultlibs -nostartfiles -L$(SGX_LIBRARY_PATH) \
-	-Wl,--whole-archive -l$(Trts_Library_Name) -Wl,--no-whole-archive \
-	-Wl,--start-group -lsgx_tstdc -lsgx_tcxx -l$(Crypto_Library_Name) -l$(Service_Library_Name) -Wl,--end-group \
+	-Wl,--whole-archive -lsgx_tswitchless -l$(Trts_Library_Name) -Wl,--no-whole-archive \
+	-Wl,--start-group -lsgx_tstdc -lsgx_tcxx -lsgx_omp -lsgx_pthread -l$(Crypto_Library_Name) -l$(Service_Library_Name) -Wl,--end-group \
 	-Wl,-Bstatic -Wl,-Bsymbolic -Wl,--no-undefined \
 	-Wl,-pie,-eenclave_entry -Wl,--export-dynamic  \
 	-Wl,--defsym,__ImageBase=0 \
-	-Wl,--version-script=$(Enclave_Version_Script)
+	-Wl,--version-script=$(Enclave_Version_Script) \
+	-Wl,--gc-sections
 
 Enclave_C_Objects := $(Enclave_C_Files:.c=.o)
 Enclave_Cpp_Objects := $(Enclave_Cpp_Files:.cpp=.o)

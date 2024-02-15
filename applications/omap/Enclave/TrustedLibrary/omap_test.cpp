@@ -1,10 +1,14 @@
 #include "../Enclave.h"
 #include "Enclave_t.h"
 ////
+#include <omp.h>
+
 #include <functional>
 #include <unordered_map>
 
 #include "oram/omap.hpp"
+#include "sgx_thread.h"
+#include "sgx_trts.h"
 
 using namespace ODSL;
 EM::Backend::MemServerBackend* EM::Backend::g_DefaultBackend = nullptr;
@@ -182,6 +186,8 @@ struct ERC20_Balance {
 };
 
 void testOMapPerf() {
+  printf("test omap perf with %d threads\n", TCS_NUM);
+  printf("actual working thread max %d\n", omp_get_max_threads());
   size_t mapSize = 5e6;
   size_t initSize = 4e6;
   OMap<ETH_Addr, ERC20_Balance> omap(mapSize);
@@ -194,12 +200,12 @@ void testOMapPerf() {
   uint64_t start, end;
   printf("init omap of size %lu\n", mapSize);
   ocall_measure_time(&start);
-  omap.InitFromReader(reader);
+  omap.InitFromReaderInPlace(reader);
   ocall_measure_time(&end);
   uint64_t timediff = end - start;
   printf("oram init time %d.%d s\n", timediff / 1'000'000'000,
          timediff % 1'000'000'000);
-  int round = 1e6;
+  int round = 5e4;
   ocall_measure_time(&start);
   for (size_t r = 0; r < round; ++r) {
     ETH_Addr addr;
@@ -221,6 +227,18 @@ void testOMapPerf() {
   timediff = end - start;
   printf("oram find time %d.%d us\n", timediff / round / 1'000,
          timediff / round % 1'000);
+
+  ocall_measure_time(&start);
+#pragma omp parallel for
+  for (size_t r = 0; r < round; ++r) {
+    ETH_Addr addr;
+    ERC20_Balance balance;
+    omap.find(addr, balance);
+  }
+  ocall_measure_time(&end);
+  timediff = end - start;
+  printf("oram find with %d threads time %d.%d us\n", TCS_NUM,
+         timediff / round / 1'000, timediff / round % 1'000);
 
   ocall_measure_time(&start);
   for (size_t r = 0; r < round; ++r) {

@@ -1,4 +1,6 @@
 enclave {
   from "TrustedLibrary/omap.edl" import *;
   from "sgx_tstdc.edl" import *;
+  from "sgx_pthread.edl" import *;
+  from "sgx_tswitchless.edl" import *;
 };

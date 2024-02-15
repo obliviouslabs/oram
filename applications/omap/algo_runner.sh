@@ -4,11 +4,12 @@ source /startsgxenv.sh
 SGX_MODE=SIM # HW or SIM
 
 # Algorithms:
-MIN_ENCLAVE_SIZE=2048 # enclave size in MB
-MAX_ENCLAVE_SIZE=2048
+MIN_ENCLAVE_SIZE=8192 # enclave size in MB
+MAX_ENCLAVE_SIZE=8192
 IO_ROUNDs=(1) # number of rounds encryption/decryption is performed, used to get breakdown
 CORE_ID=5 # the cpu core id to run the program
-DISK_IO=1 # 0: no disk IO, 1: disk IO
+DISK_IO=0 # 0: no disk IO, 1: disk IO
+TCS_NUM=8
 
 for IO_ROUND in ${IO_ROUNDs[@]}; do
 if [ $IO_ROUND = 0 ]
@@ -44,8 +45,10 @@ hex_encsize=$(printf '%x\n' $heapsizeB)
 
 sed -i "/.*<Heap.*/c\  <HeapMaxSize>0x"${hex_encsize}"</HeapMaxSize>" ./Enclave/Enclave.config.xml
 
+sed -i "/.*<TCSNum.*/c\  <TCSNum>"${TCS_NUM}"</TCSNum>" ./Enclave/Enclave.config.xml
+
 make clean
-make SGX_MODE=$SGX_MODE SGX_PRERELEASE=0 IO_ROUND=$IO_ROUND DISK_IO=$DISK_IO ENCLAVE_SIZE=$encsize
+make SGX_MODE=$SGX_MODE SGX_PRERELEASE=0 IO_ROUND=$IO_ROUND DISK_IO=$DISK_IO ENCLAVE_SIZE=$encsize TCS_NUM=$TCS_NUM
 if [[ $1 = 1 ]]; then
     taskset -c ${CORE_ID} ./omap.elf
     sleep 1
@@ -56,3 +59,4 @@ done
 done
 
 sed -i '/.*<Heap.*/c\  <HeapMaxSize>0x7A00000</HeapMaxSize>' ./Enclave/Enclave.config.xml
+sed -i "/.*<TCSNum.*/c\  <TCSNum>1</TCSNum>" ./Enclave/Enclave.config.xml
