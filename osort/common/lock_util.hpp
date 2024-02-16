@@ -1,5 +1,5 @@
 #pragma once
-#ifdef ENCLAVE_MODE
+#ifdef false  // ENCLAVE_MODE
 #ifndef TCS_NUM
 #define TCS_NUM 1
 #endif
@@ -19,7 +19,13 @@ struct Lock {
 
 #else
 #include <mutex>
-typedef std::mutex Lock;
+struct Lock {
+  std::mutex _lock;
+  void lock() { _lock.lock(); }
+  void unlock() { _lock.unlock(); }
+  Lock() {}
+  Lock(const Lock&) {}
+};
 #endif
 struct Critical {
   Lock& _lock;
