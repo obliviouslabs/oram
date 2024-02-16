@@ -1,5 +1,5 @@
 #pragma once
-#ifdef false  // ENCLAVE_MODE
+#ifdef ENCLAVE_MODE
 #ifndef TCS_NUM
 #define TCS_NUM 1
 #endif

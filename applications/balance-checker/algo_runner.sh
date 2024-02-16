@@ -6,8 +6,8 @@ SGX_MODE=HW # HW or SIM
 # ./init_db_balance ./db ./rcc_balance.txt 
 # ./init_db_balance ./db_usdt ./usdt_balance.txt
 # Algorithms:
-MIN_ENCLAVE_SIZE=4096 # enclave size in MB
-MAX_ENCLAVE_SIZE=4096
+MIN_ENCLAVE_SIZE=128 # enclave size in MB
+MAX_ENCLAVE_SIZE=128
 TCS_NUM=1
 IO_ROUNDs=(1) # number of rounds encryption/decryption is performed, used to get breakdown
 CORE_ID=0 # the cpu core id to run the program
