@@ -85,12 +85,12 @@ struct OMap {
   OMap() {}
 
   OMap(PositionType maxSize,
-       size_t cacheBytes = ((uint64_t)ENCLAVE_SIZE << 20) >> 1) {
+       size_t cacheBytes = ((uint64_t)ENCLAVE_SIZE << 20) * 3UL / 4UL) {
     SetSize(maxSize, cacheBytes);
   }
 
   void SetSize(PositionType maxSize,
-               size_t cacheBytes = ((uint64_t)ENCLAVE_SIZE << 20) >> 1) {
+               size_t cacheBytes = ((uint64_t)ENCLAVE_SIZE << 20) * 3UL / 4UL) {
     this->maxSize = maxSize;
     size_t numLevel = 0;
     size_t leafOramSize = divRoundUp(maxSize, min_chunk_size);
@@ -332,7 +332,9 @@ struct OMap {
     child.data = 0;
     child.uid = 0;
     for (auto& oram : internalOrams) {
-      PositionType childNewPos = UniformRandom(oramSizes[level + 1] - 1);
+      uint64_t childNewPosRand;  // = UniformRandom(oramSizes[level + 1] - 1);
+      sgx_read_rand((uint8_t*)&childNewPosRand, sizeof(uint64_t));
+      PositionType childNewPos = childNewPosRand % oramSizes[level + 1];
       UidPosition nextChild;
       std::function<bool(BPlusNode_&)> updateFunc =
           [&](BPlusNode_& node) -> bool {
@@ -402,7 +404,9 @@ struct OMap {
     child.data = 0;
     child.uid = 0;
     for (auto& oram : internalOrams) {
-      PositionType childNewPos = UniformRandom(oramSizes[level + 1] - 1);
+      uint64_t childNewPosRand;  // = UniformRandom(oramSizes[level + 1] - 1);
+      sgx_read_rand((uint8_t*)&childNewPosRand, sizeof(uint64_t));
+      PositionType childNewPos = childNewPosRand % oramSizes[level + 1];
       UidPosition nextChild;
       std::function<bool(BPlusNode_&)> updateFunc =
           [&](BPlusNode_& node) -> bool {
