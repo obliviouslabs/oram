@@ -324,7 +324,7 @@ struct OMap {
    * @return true if key found
    * @return false if key not found
    */
-  bool find(const K& key, V& valOut) {
+  bool find(const K& key, V& valOut, bool isDummy = false) {
     bool foundFlag = false;
     int level = 0;
     PositionType newPos = 0;
@@ -332,9 +332,8 @@ struct OMap {
     child.data = 0;
     child.uid = 0;
     for (auto& oram : internalOrams) {
-      uint64_t childNewPosRand;  // = UniformRandom(oramSizes[level + 1] - 1);
-      sgx_read_rand((uint8_t*)&childNewPosRand, sizeof(uint64_t));
-      PositionType childNewPos = childNewPosRand % oramSizes[level + 1];
+      PositionType childORAMSize = oramSizes[level + 1];
+      PositionType childNewPos = UniformRandom(childORAMSize - 1);
       UidPosition nextChild;
       std::function<bool(BPlusNode_&)> updateFunc =
           [&](BPlusNode_& node) -> bool {
@@ -351,12 +350,18 @@ struct OMap {
         }
         return true;
       };
+      obliMove(isDummy, child.data,
+               UniformRandom(childORAMSize - 1));  // set a random read path
+      obliMove(isDummy, child.uid, DUMMY<UidType>());
       oram.Update(child.data, child.uid, newPos, updateFunc);
       child = nextChild;
       newPos = childNewPos;
       ++level;
     }
     BPlusLeaf_ leaf;
+    uint64_t leafPosRand;
+    obliMove(isDummy, child.data, UniformRandom(leafOram.size() - 1));
+    obliMove(isDummy, child.uid, DUMMY<UidType>());
     leafOram.Read(child.data, child.uid, leaf, newPos);
     for (short i = 0; i < max_chunk_size; ++i) {
       bool flag = (i < leaf.numElements) & (key == leaf.kv[i].key);
@@ -380,7 +385,7 @@ struct OMap {
    * @return false if key not found
    */
   bool update(const K& key, const std::function<void(V&)>& valUpdateFunc,
-              V& valOut) {
+              V& valOut, bool isDummy = false) {
     bool foundFlag = false;
     std::function<bool(BPlusLeaf_&)> leafUpdateFunc =
         [&](BPlusLeaf_& leaf) -> bool {
@@ -404,9 +409,8 @@ struct OMap {
     child.data = 0;
     child.uid = 0;
     for (auto& oram : internalOrams) {
-      uint64_t childNewPosRand;  // = UniformRandom(oramSizes[level + 1] - 1);
-      sgx_read_rand((uint8_t*)&childNewPosRand, sizeof(uint64_t));
-      PositionType childNewPos = childNewPosRand % oramSizes[level + 1];
+      PositionType childORAMSize = oramSizes[level + 1];
+      PositionType childNewPos = UniformRandom(childORAMSize - 1);
       UidPosition nextChild;
       std::function<bool(BPlusNode_&)> updateFunc =
           [&](BPlusNode_& node) -> bool {
@@ -423,24 +427,32 @@ struct OMap {
         }
         return true;
       };
+
+      obliMove(isDummy, child.data,
+               UniformRandom(childORAMSize - 1));  // set a random read path
+      obliMove(isDummy, child.uid, DUMMY<UidType>());
       oram.Update(child.data, child.uid, newPos, updateFunc);
       child = nextChild;
       newPos = childNewPos;
       ++level;
     }
+
+    obliMove(isDummy, child.data, UniformRandom(leafOram.size() - 1));
+    obliMove(isDummy, child.uid, DUMMY<UidType>());
     leafOram.Update(child.data, child.uid, newPos, leafUpdateFunc);
     return foundFlag;
   }
 
-  bool update(const K& key, const std::function<void(V&)>& valUpdateFunc) {
+  bool update(const K& key, const std::function<void(V&)>& valUpdateFunc,
+              bool isDummy = false) {
     V valOut;
-    return update(key, valUpdateFunc, valOut);
+    return update(key, valUpdateFunc, valOut, isDummy);
   }
 
-  bool update(const K& key, const V& val) {
+  bool update(const K& key, const V& val, bool isDummy = false) {
     V valOut;
     auto valUpdateFunc = [&val](V& v) { v = val; };
-    return update(key, valUpdateFunc, valOut);
+    return update(key, valUpdateFunc, valOut, isDummy);
   }
 
   /**
@@ -727,7 +739,7 @@ struct OMap {
    * @return true if key found
    * @return false if key not found
    */
-  bool insert(const K& key, const V& val) {
+  bool insert(const K& key, const V& val, bool isDummy = false) {
     auto oramIt = internalOrams.begin();
     bool foundFlag = false;
     BPlusNode_ newNode;
@@ -747,6 +759,7 @@ struct OMap {
       ++oramIt;
       PositionType newPos;
       UidType uidNewNode;
+      obliMove(isDummy, child.uid, DUMMY<UidType>());
       if (oramIt == internalOrams.end()) {
         BPlusLeaf_ newLeaf;
 
@@ -758,17 +771,20 @@ struct OMap {
           foundFlag = sf.second;
           return true;
         };
-
+        obliMove(isDummy, child.data,
+                 UniformRandom(leafOram.size() - 1));  // set a random read path
         newPos = leafOram.Update(child.data, child.uid, leafUpdateFunc);
 
         // DUMMY if splitFlag is false
-        uidNewNode = leafOram.GetNextUid(splitFlag);
+        uidNewNode = leafOram.GetNextUid(splitFlag & !isDummy);
         posNewNode = leafOram.Write(uidNewNode, newLeaf);
         keyNewNode = newLeaf.kv[0].key;
       } else {
+        obliMove(isDummy, child.data,
+                 UniformRandom(oramIt->size() - 1));  // set a random read path
         newPos = oramIt->Update(child.data, child.uid,
                                 updateFunc);  // recursive lambda
-        uidNewNode = oramIt->GetNextUid(splitFlag);
+        uidNewNode = oramIt->GetNextUid(splitFlag & !isDummy);
         posNewNode = oramIt->Write(uidNewNode, newNode);
       }
 
@@ -785,8 +801,9 @@ struct OMap {
       --oramIt;  // maintain invariant
       return true;
     };
-
-    oramIt->Update(0, 0, updateFunc);
+    UidType uid = 0;
+    obliMove(isDummy, uid, DUMMY<UidType>());
+    oramIt->Update(0, uid, updateFunc);
     Assert(!splitFlag);  // root should not split
     return foundFlag;
   }
@@ -836,7 +853,7 @@ struct OMap {
    * @return true if key found and erased
    * @return false otherwise
    */
-  bool erase(const K& key) {
+  bool erase(const K& key, bool isDummy = false) {
     auto oramIt = internalOrams.begin();
     bool foundFlag = false;
 
@@ -896,6 +913,11 @@ struct OMap {
           return {bool(!neighborOnLeftFlag | !coalesceFlag),
                   bool((neighborOnLeftFlag | !coalesceFlag) & !noNeighborFlag)};
         };
+        obliMove(isDummy, childInfo.data, UniformRandom(leafOram.size() - 1));
+        obliMove(isDummy, childInfo.uid, DUMMY<UidType>());
+        obliMove(isDummy, childNeighbor.data,
+                 UniformRandom(leafOram.size() - 1));
+        obliMove(isDummy, childNeighbor.uid, DUMMY<UidType>());
 
         const auto& newPositions = leafOram.BatchUpdate(
             {childInfo.data, childNeighbor.data},
@@ -915,6 +937,12 @@ struct OMap {
           return {bool(!neighborOnLeftFlag | !coalesceFlag),
                   bool((neighborOnLeftFlag | !coalesceFlag) & !noNeighborFlag)};
         };
+        obliMove(isDummy, childInfo.data,
+                 UniformRandom(oramIt->size() - 1));  // set a random read path
+        obliMove(isDummy, childInfo.uid, DUMMY<UidType>());
+        obliMove(isDummy, childNeighbor.data,
+                 UniformRandom(oramIt->size() - 1));
+        obliMove(isDummy, childNeighbor.uid, DUMMY<UidType>());
 
         const auto& newPositions = oramIt->BatchUpdate(
             {childInfo.data, childNeighbor.data},
@@ -939,8 +967,9 @@ struct OMap {
       --oramIt;  // maintain invariant
       return true;
     };
-
-    oramIt->Update(0, 0, updateFunc);
+    UidType uid = 0;
+    obliMove(isDummy, uid, DUMMY<UidType>());
+    oramIt->Update(0, uid, updateFunc);
     return foundFlag;
   }
 };

@@ -489,11 +489,14 @@ TEST(OMap, Mixed) {
 
   for (size_t r = 0; r < round; ++r) {
     uint64_t op = UniformRandom(2);
-
+    bool isDummy = !(UniformRandom() % 5);
     if (op == 0) {  // insert
       uint64_t i = UniformRandom(mapSize * 10);
       int64_t val = UniformRandom(mapSize * 3);
-      bool res = omap.insert(i, val);
+      bool res = omap.insert(i, val, isDummy);
+      if (isDummy) {
+        continue;
+      }
       if (map.find(i) != map.end()) {
         if (!res) {
           printf("insert failed at round %lu, does not replace element\n", r);
@@ -511,7 +514,10 @@ TEST(OMap, Mixed) {
     } else if (op == 1) {  // find
       uint64_t i = UniformRandom(mapSize * 10);
       int64_t val;
-      bool res = omap.find(i, val);
+      bool res = omap.find(i, val, isDummy);
+      if (isDummy) {
+        continue;
+      }
       if (map.find(i) != map.end()) {
         if (!res) {
           printf("find failed at round %lu, does not find element\n", r);
@@ -530,11 +536,15 @@ TEST(OMap, Mixed) {
       }
     } else if (op == 2) {  // erase
       uint64_t i = UniformRandom(mapSize * 10);
+      bool res = omap.erase(i, isDummy);
+      if (isDummy) {
+        continue;
+      }
       if (map.find(i) != map.end()) {
-        ASSERT_TRUE(omap.erase(i));
+        ASSERT_TRUE(res);
         map.erase(i);
       } else {
-        ASSERT_FALSE(omap.erase(i));
+        ASSERT_FALSE(res);
       }
     }
   }
