@@ -31,7 +31,7 @@ void initFromBalanceFile(const char* DBPath, const char* balancePath) {
     }
     db->put(addr, balance);
   }
-  db->put("lastBlock", std::to_string(lastBlock));
+  db->put("lastBlock", std::to_string(lastBlock + 10));
   db->put("lastTxIdx", std::to_string(lastTxIdx));
   db->put("recordCount", std::to_string(recordCount));
   delete db;

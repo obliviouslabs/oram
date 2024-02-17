@@ -62,13 +62,14 @@ uint32_t ecall_gen_key_pair(uint8_t pubkey[64], uint8_t sealedPrivKey[1024]) {
   return sealed_data_size;
 }
 
-void ecall_set_private_key(uint8_t* sealedPrivKey, uint32_t sealedPrivKeySize) {
+int ecall_set_private_key(uint8_t* sealedPrivKey, uint32_t sealedPrivKeySize) {
   sgx_status_t status =
       unseal_private_key(sealedPrivKey, sealedPrivKeySize, &private_key);
   if (status != SGX_SUCCESS) {
-    printf("unseal private key failed\n");
-    abort();
+    printf("unseal private key failed, generating new key\n");
+    return 0;
   }
+  return 1;
 }
 
 void ecall_omap_init(uint64_t N, uint64_t initSize) {

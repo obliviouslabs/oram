@@ -52,12 +52,13 @@ uint64_t ocall_Fetch_Next_KV_Batch(uint8_t* data, uint64_t batchBytes) {
   return bytes;
 }
 
-void updateDBAndORAM(const std::string& logPath) {
+void updateDBAndORAM(const std::string& logPath,
+                     std::unordered_map<std::string, uint256_t>& unstableDiff) {
   std::vector<std::pair<std::string, std::string>> insertList;
   std::vector<std::pair<std::string, std::string>> updateList;
   std::vector<std::string> deleteList;
-  uint64_t lastBlock =
-      updateDBFromLog(db, logPath, insertList, updateList, deleteList);
+  uint64_t lastBlock = updateDBFromLog(db, logPath, unstableDiff, insertList,
+                                       updateList, deleteList);
   printf("insert %lu keys, update %lu keys, delete %lu keys\n",
          insertList.size(), updateList.size(), deleteList.size());
   SemaphoreLock lock(sem);
@@ -108,8 +109,9 @@ void updateDBAndORAM(const std::string& logPath) {
 
 void periodicUpdateFromLog() {
   std::string logPath = "tx.log";
+  std::unordered_map<std::string, uint256_t> unstableDiff;
   while (true) {
-    updateDBAndORAM(logPath);
+    updateDBAndORAM(logPath, unstableDiff);
     std::this_thread::sleep_for(std::chrono::seconds(5));
   }
 }
@@ -152,15 +154,22 @@ std::string getServerPublicKeyBase64() { return publicKeyBase64; }
 void InitKeys(DB_* db) {
   sgx_status_t ret = SGX_ERROR_UNEXPECTED;
   std::string sealedPrivateKeyBase64;
+  int success = 0;
   if (db->get("public_key", publicKeyBase64) &&
       db->get("sealed_private_key", sealedPrivateKeyBase64)) {
     printf("Recovered public key and sealed private key from db\n");
     printf("public key: %s\n", publicKeyBase64.c_str());
     printf("sealed private key: %s\n", sealedPrivateKeyBase64.c_str());
     std::string sealedPrivateKey = base64_decode(sealedPrivateKeyBase64);
-    ecall_set_private_key(global_eid, (uint8_t*)sealedPrivateKey.data(),
-                          sealedPrivateKey.size());
-  } else {
+    ret = ecall_set_private_key(global_eid, &success,
+                                (uint8_t*)sealedPrivateKey.data(),
+                                sealedPrivateKey.size());
+    if (ret != SGX_SUCCESS) {
+      printf("ecall_set_private_key ecall failed\n");
+      abort();
+    }
+  }
+  if (!success) {
     ec256_public_t public_key;
     uint32_t sealedDataSize = 0;
     uint8_t sealedData[1024];  // ecall will fail it detected overflow
@@ -181,7 +190,7 @@ void InitKeys(DB_* db) {
 
 void InitDB(void) {
   try {
-    db = new DB_("./db_rcc");
+    db = new DB_("./db_usdt");
     dbIt = db->getIterator();
     dbIt.seekToFirst();
     if (!dbIt.isValid()) {

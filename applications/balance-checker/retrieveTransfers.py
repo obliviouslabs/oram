@@ -153,7 +153,7 @@ class EventScanner:
 
         # Do not scan all the way to the final block, as this
         # block might not be mined yet
-        return self.w3.eth.block_number - 10
+        return self.w3.eth.block_number
 
     def get_last_scanned_block(self) -> int:
         return self.state.get_last_scanned_block()
@@ -631,7 +631,7 @@ if __name__ == "__main__":
         # Note that our chain reorg safety blocks cannot go negative
         # start_block = max(state.get_last_scanned_block() - chain_reorg_safety_blocks, 0)
         while True:
-            start_block = max(state.get_last_scanned_block(), 0)
+            start_block = max(state.get_last_scanned_block() - 10, 0)
             end_block = scanner.get_suggested_scan_end_block()
             blocks_to_scan = end_block - start_block
             if blocks_to_scan > 0:

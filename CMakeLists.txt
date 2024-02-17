@@ -35,6 +35,7 @@ FetchContent_MakeAvailable(googletest)
 
 find_package(OpenSSL REQUIRED)
 find_package (Boost REQUIRED)
+find_package(OpenMP REQUIRED)
 
 include(cmake/searchfiles.cmake)
 include(cmake/boost.cmake)

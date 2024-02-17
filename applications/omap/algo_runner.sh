@@ -1,7 +1,7 @@
 #!/bin/bash
 source /startsgxenv.sh
 
-SGX_MODE=HW # HW or SIM
+SGX_MODE=SIM # HW or SIM
 
 # Algorithms:
 MIN_ENCLAVE_SIZE=128 # enclave size in MB
@@ -48,7 +48,7 @@ sed -i "/.*<Heap.*/c\  <HeapMaxSize>0x"${hex_encsize}"</HeapMaxSize>" ./Enclave/
 sed -i "/.*<TCSNum.*/c\  <TCSNum>"${TCS_NUM}"</TCSNum>" ./Enclave/Enclave.config.xml
 
 make clean
-make SGX_MODE=$SGX_MODE SGX_PRERELEASE=1 IO_ROUND=$IO_ROUND DISK_IO=$DISK_IO ENCLAVE_SIZE=$encsize TCS_NUM=$TCS_NUM
+make SGX_MODE=$SGX_MODE SGX_PRERELEASE=0 IO_ROUND=$IO_ROUND DISK_IO=$DISK_IO ENCLAVE_SIZE=$encsize TCS_NUM=$TCS_NUM
 if [[ $1 = 1 ]]; then
     ./omap.elf
     sleep 1
