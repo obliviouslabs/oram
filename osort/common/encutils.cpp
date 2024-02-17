@@ -158,6 +158,64 @@ uint8_t RandGen::rand1() {
   return d(engine);
 }
 
+#include <openssl/evp.h>
+
+#include <cstdint>
+#include <cstring>
+
+uint64_t secure_hash_with_salt(const uint8_t *data, size_t data_size,
+                               const uint8_t (&salt)[16]) {
+  EVP_MD_CTX *mdctx = EVP_MD_CTX_new();
+  uint64_t result = 0;
+  unsigned char hash[EVP_MAX_MD_SIZE];
+  unsigned int lengthOfHash = 0;
+
+  if (mdctx == NULL) {
+    // Handle error
+    return 0;
+  }
+
+  if (1 != EVP_DigestInit_ex(mdctx, EVP_sha256(), NULL)) {
+    // Handle error
+    EVP_MD_CTX_free(mdctx);
+    return 0;
+  }
+
+  // Hash the salt
+  if (1 != EVP_DigestUpdate(mdctx, salt, sizeof(salt))) {
+    // Handle error
+    EVP_MD_CTX_free(mdctx);
+    return 0;
+  }
+
+  // Hash the data
+  if (1 != EVP_DigestUpdate(mdctx, data, data_size)) {
+    // Handle error
+    EVP_MD_CTX_free(mdctx);
+    return 0;
+  }
+
+  // Finalize the hash
+  if (1 != EVP_DigestFinal_ex(mdctx, hash, &lengthOfHash)) {
+    // Handle error
+    EVP_MD_CTX_free(mdctx);
+    return 0;
+  }
+
+  // Use the first 8 bytes of the hash as the result
+  memcpy(&result, hash, sizeof(result));
+
+  EVP_MD_CTX_free(mdctx);
+
+  return result;
+}
+
+void read_rand(uint8_t *output, size_t size) {
+  if (1 != RAND_bytes(output, size)) {
+    printf("RAND_bytes failed\n");
+  }
+}
+
 #else
 #include <x86intrin.h>
 
@@ -289,9 +347,14 @@ bool aes_256_ctr_decrypt(uint64_t ciphertextSize, uint8_t *ciphertext,
                                 plaintext, iv);
 }
 
-RandGen::RandGen() { new (this) RandGen(rd()); }
+RandGen::RandGen() {
+#if TCS_NUM <= 1
+  new (this) RandGen(rd());
+#endif
+}
 
 RandGen::RandGen(uint64_t seed) {
+#if TCS_NUM <= 1
   const br_block_ctr_class *aes_vtable =
       &br_aes_x86ni_ctr_vtable;  // in theory we should use
                                  // br_aes_x86ni_ctr_get_vtable() here, but it
@@ -303,9 +366,15 @@ RandGen::RandGen(uint64_t seed) {
   // }
   br_aesctr_drbg_init(&ctx, aes_vtable, &seed, 8);
   br_aesctr_drbg_generate(&ctx, buffer, 4096);
+#endif
 }
 
 uint64_t RandGen::rand64() {
+#if TCS_NUM > 1
+  uint64_t output;
+  sgx_read_rand((uint8_t *)&output, sizeof(output));
+  return output;
+#else
   // Generate random output
   if (idx > 4088) {
     br_aesctr_drbg_generate(&ctx, buffer, 4096);
@@ -314,9 +383,15 @@ uint64_t RandGen::rand64() {
   uint64_t output = *(uint64_t *)(buffer + idx);
   idx += 8;
   return output;
+#endif
 }
 
 uint32_t RandGen::rand32() {
+#if TCS_NUM > 1
+  uint32_t output;
+  sgx_read_rand((uint8_t *)&output, sizeof(output));
+  return output;
+#else
   if (idx > 4092) {
     br_aesctr_drbg_generate(&ctx, buffer, 4096);
     idx = 0;
@@ -324,8 +399,14 @@ uint32_t RandGen::rand32() {
   uint32_t output = *(uint32_t *)(buffer + idx);
   idx += 4;
   return output;
+#endif
 }
 uint8_t RandGen::rand1() {
+#if TCS_NUM > 1
+  uint8_t output;
+  sgx_read_rand((uint8_t *)&output, sizeof(output));
+  return output & 1;
+#else
   if (idx > 4095) {
     br_aesctr_drbg_generate(&ctx, buffer, 4096);
     idx = 0;
@@ -333,6 +414,57 @@ uint8_t RandGen::rand1() {
   uint8_t output = *(uint8_t *)(buffer + idx);
   idx += 1;
   return output & 1;
+#endif
+}
+
+void read_rand(uint8_t *output, size_t size) { sgx_read_rand(output, size); }
+
+// Inside SGX enclave
+#include <cstring>
+
+#include "sgx_tcrypto.h"
+#include "sgx_trts.h"
+
+uint64_t secure_hash_with_salt(const uint8_t *data, size_t data_size,
+                               const uint8_t (&salt)[16]) {
+  sgx_sha_state_handle_t sha_handle;
+  sgx_sha256_hash_t hash;
+  uint64_t result = 0;
+
+  sgx_status_t status = sgx_sha256_init(&sha_handle);
+  if (status != SGX_SUCCESS) {
+    // Handle error
+    return 0;
+  }
+
+  // Hash the salt
+  status = sgx_sha256_update(salt, sizeof(salt), sha_handle);
+  if (status != SGX_SUCCESS) {
+    // Handle error
+    sgx_sha256_close(sha_handle);
+    return 0;
+  }
+
+  // Hash the data
+  status = sgx_sha256_update(data, data_size, sha_handle);
+  if (status != SGX_SUCCESS) {
+    // Handle error
+    sgx_sha256_close(sha_handle);
+    return 0;
+  }
+
+  // Finalize the hash
+  status = sgx_sha256_get_hash(sha_handle, &hash);
+  sgx_sha256_close(sha_handle);
+  if (status != SGX_SUCCESS) {
+    // Handle error
+    return 0;
+  }
+
+  // Use the first 8 bytes of the hash as the result
+  memcpy(&result, hash, sizeof(result));
+
+  return result;
 }
 
 #endif

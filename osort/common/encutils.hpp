@@ -75,6 +75,10 @@ class RandGen {
 inline constexpr uint8_t KEY[16] = {0x41, 0x41, 0x41, 0x41, 0x41, 0x41,
                                     0x41, 0x41, 0x41, 0x41, 0x41, 0x41,
                                     0x41, 0x41, 0x41, 0x41};
+
+void read_rand(uint8_t* output, size_t size);
+uint64_t secure_hash_with_salt(const uint8_t* data, size_t data_size,
+                               const uint8_t (&salt)[16]);
 #ifndef NOOPENSSL
 #include <openssl/evp.h>
 #include <openssl/rand.h>
