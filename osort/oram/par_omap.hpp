@@ -20,10 +20,18 @@ struct ParOMap {
                                      batchSize, satisfy);
   }
 
-  ParOMap(uint64_t mapSize, uint64_t shardCount) : shards(shardCount) {
+  ParOMap(uint64_t mapSize, uint64_t shardCount,
+          size_t cacheBytes = ((uint64_t)ENCLAVE_SIZE << 20) * 3UL / 4UL)
+      : shards(shardCount) {
+    if (shardCount == 0) {
+      throw std::runtime_error("shardCount should be positive");
+    }
+    if (shardCount > 128) {
+      throw std::runtime_error("shardCount should be less than 128");
+    }
     uint64_t shardSize = maxQueryPerShard(mapSize, shardCount, -60);
     for (auto& shard : shards) {
-      shard.SetSize(shardSize);
+      shard.SetSize(shardSize, cacheBytes / shardCount);
     }
     read_rand(randSalt, sizeof(randSalt));
   }
