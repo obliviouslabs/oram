@@ -7,6 +7,7 @@
 #include <unordered_map>
 
 #include "oram/omap.hpp"
+#include "oram/par_omap.hpp"
 #include "sgx_thread.h"
 #include "sgx_trts.h"
 
@@ -252,6 +253,40 @@ void testOMapPerf() {
          timediff / round % 1'000);
 }
 
+void testParOMapPerf() {
+  printf("test parallel omap perf with %d threads\n", TCS_NUM);
+  printf("actual working thread max %d\n", omp_get_max_threads());
+  size_t mapSize = 5e6;
+  size_t initSize = 4e6;
+  ParOMap<ETH_Addr, ERC20_Balance> omap(mapSize, 2);
+  uint64_t start, end;
+  omap.Init();
+  uint64_t timediff = end - start;
+  int round = 1e6;
+  uint32_t batchSize = 1e3;
+  ocall_measure_time(&start);
+  for (size_t r = 0; r < round / batchSize; ++r) {
+    std::vector<ETH_Addr> addr(batchSize);
+    std::vector<ERC20_Balance> balance(batchSize);
+    omap.insertBatch(addr.begin(), addr.end(), balance.begin());
+  }
+  ocall_measure_time(&end);
+  timediff = end - start;
+  printf("oram insert time %d.%d us\n", timediff / round / 1'000,
+         timediff / round % 1'000);
+
+  ocall_measure_time(&start);
+  for (size_t r = 0; r < round / batchSize; ++r) {
+    std::vector<ETH_Addr> addr(batchSize);
+    std::vector<ERC20_Balance> balance(batchSize);
+    omap.findBatch(addr.begin(), addr.end(), balance.begin());
+  }
+  ocall_measure_time(&end);
+  timediff = end - start;
+  printf("oram find time %d.%d us\n", timediff / round / 1'000,
+         timediff / round % 1'000);
+}
+
 void ecall_omap() {
   if (EM::Backend::g_DefaultBackend) {
     delete EM::Backend::g_DefaultBackend;
@@ -278,7 +313,8 @@ void ecall_omap_perf() {
   EM::Backend::g_DefaultBackend =
       new EM::Backend::MemServerBackend(BackendSize);
   try {
-    testOMap();
+    testParOMapPerf();
+    // testOMap();
     // testORAMInit();
     // testORAMReadWrite();
     // testBuildBottomUp();

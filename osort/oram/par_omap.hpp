@@ -34,6 +34,61 @@ struct ParOMap {
     }
   }
 
+  template <class Reader>
+  void InitFromReaderInPlace(Reader& reader) {
+    uint64_t shardCount = shards.size();
+    std::vector<uint64_t> shardCounter(shardCount);
+    uint64_t initSizePerShard =
+        maxQueryPerShard(reader.size(), shardCount, -60);
+    struct ShuffleElement {
+      uint32_t shardIdx;
+      std::pair<K, V> kvPair;
+    };
+    uint64_t shuffleVecSize = initSizePerShard * shardCount;
+    EM::VirtualVector::VirtualReader<ShuffleElement> shuffleReader(
+        shuffleVecSize, [&](uint64_t i) {
+          ShuffleElement shuffleElement;
+          if (i < reader.size()) {
+            shuffleElement.kvPair = reader.read();
+            uint64_t hash = secure_hash_with_salt(
+                (uint8_t*)&shuffleElement.kvPair.first, sizeof(K), randSalt);
+            uint32_t shardIdx = hash % shardCount;
+            for (uint32_t j = 0; j < shardCount; ++j) {
+              bool matchFlag = shardIdx == j;
+              shardCounter[j] += matchFlag;
+            }
+          } else {
+            shuffleElement.isDummy = true;
+            bool selectedShardFlag = false;
+            for (uint32_t j = 0; j < shardCount; ++j) {
+              bool matchFlag =
+                  (shardCounter[j] < initSizePerShard) & !selectedShardFlag;
+              shardCounter[j] += matchFlag;
+              obliMove(matchFlag, shuffleElement.shardIdx, j);
+              selectedShardFlag |= matchFlag;
+            }
+          }
+          return shuffleElement;
+        });
+    using ShardInitVec = EM::NonCachedVector::Vector<std::pair<K, V>>;
+    std::vector<ShardInitVec*> shardInitVecs(shardCount);
+    for (uint32_t i = 0; i < shardCount; ++i) {
+      shardInitVecs[i] = new ShardInitVec(initSizePerShard);
+    }
+    using ShardWriter = ShardInitVec::Writer;
+    std::vector<ShardWriter*> shardWriters(shardCount);
+    for (uint32_t i = 0; i < shardCount; ++i) {
+      shardWriters[i] =
+          new ShardWriter(shardInitVecs[i]->begin(), shardInitVecs[i]->end());
+    }
+    EM::VirtualVector::VirtualWriter<ShuffleElement> shuffleWriter(
+        shuffleVecSize, [&](uint64_t i, const ShuffleElement& elem) {
+          uint32_t shardIdx = elem.shardIdx;
+          shardWriters[shardIdx]->write(elem.kvPair);
+        });
+    // TODO: init each sub omap
+  }
+
   template <class KeyIterator, class ShardIdxIterator>
   std::pair<std::vector<K>, std::vector<uint32_t>> extractKeyByShard(
       const KeyIterator keyInputBegin, const KeyIterator keyInputEnd,
