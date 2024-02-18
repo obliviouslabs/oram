@@ -101,16 +101,24 @@ struct ParOMap {
     return recoveryInfo;
   }
 
-  // recovery info will be consumed
-  template <typename Iterator>
-  void recoverArrayOrder(Iterator arrBegin, RecoveryInfo& recoveryInfo) {
-    for (uint32_t i = 1; i < recoveryInfo.isDuplicate.size(); ++i) {
-      obliMove(recoveryInfo.isDuplicate[i], *(arrBegin + i),
-               *(arrBegin + i - 1));
+  RecoveryInfo sortAndSuppressDuplicateKeysInInsert(std::vector<K>& keyVec,
+                                                    std::vector<V>& valueVec) {
+    RecoveryInfo recoveryInfo(keyVec.size());
+    for (uint32_t i = 0; i < keyVec.size(); ++i) {
+      recoveryInfo.recoveryArray[i] = i;
     }
-    EM::Algorithm::BitonicSortSepPayload(recoveryInfo.recoveryArray.begin(),
-                                         recoveryInfo.recoveryArray.end(),
-                                         arrBegin);
+    auto customSwap = [&](bool cond, uint64_t idx0, uint64_t idx1) {
+      obliSwap(cond, recoveryInfo.recoveryArray[idx0],
+               recoveryInfo.recoveryArray[idx1]);
+      obliSwap(cond, valueVec[idx0], valueVec[idx1]);
+    };
+    EM::Algorithm::BitonicSortCustomSwap(keyVec.begin(), keyVec.end(),
+                                         customSwap);
+    recoveryInfo.isDuplicate[0] = false;
+    for (uint32_t i = 1; i < keyVec.size(); ++i) {
+      recoveryInfo.isDuplicate[i] = keyVec[i] == keyVec[i - 1];
+    }
+    return recoveryInfo;
   }
 
   template <typename T, class OutIterator>
@@ -169,9 +177,20 @@ struct ParOMap {
     mergeShardOutput(valueShard, shardIndexVec, valueBegin);
     std::vector<uint8_t> foundFlags(batchSize);
     mergeShardOutput(foundFlagsShard, shardIndexVec, foundFlags.begin());
-    RecoveryInfo recoveryInfoTmp = recoveryInfo;
-    recoverArrayOrder(valueBegin, recoveryInfo);
-    recoverArrayOrder(foundFlags.begin(), recoveryInfoTmp);
+    for (uint32_t i = 1; i < recoveryInfo.isDuplicate.size(); ++i) {
+      obliMove(recoveryInfo.isDuplicate[i], *(valueBegin + i),
+               *(valueBegin + i - 1));
+    }
+    for (uint32_t i = 1; i < recoveryInfo.isDuplicate.size(); ++i) {
+      obliMove(recoveryInfo.isDuplicate[i], foundFlags[i], foundFlags[i - 1]);
+    }
+    auto customSwap = [&](bool cond, uint64_t idx0, uint64_t idx1) {
+      obliSwap(cond, *(valueBegin + idx0), *(valueBegin + idx1));
+      obliSwap(cond, foundFlags[idx0], foundFlags[idx1]);
+    };
+    EM::Algorithm::BitonicSortCustomSwap(recoveryInfo.recoveryArray.begin(),
+                                         recoveryInfo.recoveryArray.end(),
+                                         customSwap);
     return foundFlags;
   }
 

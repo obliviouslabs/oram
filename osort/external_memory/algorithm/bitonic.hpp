@@ -198,4 +198,66 @@ void BitonicSortSepPayload(KeyIterator keyBegin, KeyIterator keyEnd,
   BitonicSortSepPayload(keyBegin, keyEnd, payloadBegin, true);
 }
 
+template <class KeyIterator, class Swap>
+void BitonicMergePow2CustomSwap(KeyIterator keyBegin, KeyIterator keyEnd,
+                                const Swap& swap, uint64_t beginIdx,
+                                bool dire) {
+  size_t size = keyEnd - keyBegin;
+  if (size > 1) {
+    size_t halfSize = size / 2;
+    KeyIterator leftKeyIt = keyBegin;
+    KeyIterator rightKeyIt = keyBegin + halfSize;
+    uint64_t leftBeginIdx = beginIdx;
+    for (size_t i = 0; i < halfSize;
+         ++i, ++leftKeyIt, ++rightKeyIt, ++leftBeginIdx) {
+      bool swapFlag = dire != (*leftKeyIt < *rightKeyIt);
+      condSwap(swapFlag, *leftKeyIt, *rightKeyIt);
+      swap(swapFlag, leftBeginIdx, leftBeginIdx + halfSize);
+    }
+    BitonicMergePow2CustomSwap(keyBegin, leftKeyIt, swap, beginIdx, dire);
+    BitonicMergePow2CustomSwap(leftKeyIt, keyEnd, swap, leftBeginIdx, dire);
+  }
+}
+
+template <class KeyIterator, class Swap>
+void BitonicMergeCustomSwap(KeyIterator keyBegin, KeyIterator keyEnd,
+                            const Swap& swap, uint64_t beginIdx, bool dire) {
+  size_t size = keyEnd - keyBegin;
+  if (size > 1) {
+    size_t halfSize = GetNextPowerOfTwo(size) / 2;
+    KeyIterator leftKeyIt = keyBegin;
+    KeyIterator rightKeyIt = keyBegin + halfSize;
+    uint64_t leftBeginIdx = beginIdx;
+    for (size_t i = 0; i < size - halfSize;
+         ++i, ++leftKeyIt, ++rightKeyIt, ++leftBeginIdx) {
+      bool swapFlag = dire != (*leftKeyIt < *rightKeyIt);
+      condSwap(swapFlag, *leftKeyIt, *rightKeyIt);
+      swap(swapFlag, leftBeginIdx, leftBeginIdx + halfSize);
+    }
+    KeyIterator midKeyIt = keyBegin + halfSize;
+    uint64_t midIdx = beginIdx + halfSize;
+    BitonicMergePow2CustomSwap(keyBegin, midKeyIt, swap, beginIdx, dire);
+    BitonicMergeCustomSwap(midKeyIt, keyEnd, swap, midIdx, dire);
+  }
+}
+
+template <class KeyIterator, class Swap>
+void BitonicSortCustomSwap(KeyIterator keyBegin, KeyIterator keyEnd,
+                           const Swap& swap, uint64_t beginIdx, bool dire) {
+  size_t size = keyEnd - keyBegin;
+  if (size > 1) {
+    size_t halfSize = size / 2;
+    KeyIterator keyMid = keyBegin + halfSize;
+    BitonicSortCustomSwap(keyBegin, keyMid, swap, beginIdx, !dire);
+    BitonicSortCustomSwap(keyMid, keyEnd, swap, beginIdx + halfSize, dire);
+    BitonicMergeCustomSwap(keyBegin, keyEnd, swap, beginIdx, dire);
+  }
+}
+
+template <class KeyIterator, class Swap>
+void BitonicSortCustomSwap(KeyIterator keyBegin, KeyIterator keyEnd,
+                           const Swap& swap) {
+  BitonicSortCustomSwap(keyBegin, keyEnd, swap, 0, true);
+}
+
 }  // namespace EM::Algorithm
