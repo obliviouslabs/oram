@@ -22,13 +22,37 @@ struct Lock {
 #endif
 
 #else
-#include <mutex>
-struct Lock {
-  std::mutex _lock;
-  void lock() { _lock.lock(); }
-  void unlock() { _lock.unlock(); }
-  Lock() {}
+// #include <mutex>
+// struct Lock {
+//   std::mutex _lock;
+//   void lock() { _lock.lock(); }
+//   void unlock() { _lock.unlock(); }
+//   Lock() {}
+//   Lock(const Lock&) {}
+// };
+#include <atomic>
+// TTASSpinlock
+class Lock {
+ public:
+  Lock() : flag(false) {}
   Lock(const Lock&) {}
+
+  void lock() {
+    // First, test in a non-atomic way
+    while (flag.load(std::memory_order_relaxed)) {
+      // Spin without attempting to set the flag
+      // Optionally, use std::this_thread::yield() to reduce contention
+    }
+    // Now attempt to set the flag atomically
+    while (flag.exchange(true, std::memory_order_acquire)) {
+      // If exchange returns true, the flag was already set, so keep spinning
+    }
+  }
+
+  void unlock() { flag.store(false, std::memory_order_release); }
+
+ private:
+  std::atomic<bool> flag;
 };
 #endif
 struct Critical {

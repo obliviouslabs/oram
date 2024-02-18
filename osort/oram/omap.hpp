@@ -331,7 +331,10 @@ struct OMap {
     UidPosition child;
     child.data = 0;
     child.uid = 0;
-    for (auto& oram : internalOrams) {
+    auto prevOramIt = internalOrams.begin();
+    for (auto oramIt = internalOrams.begin(); oramIt != internalOrams.end();
+         ++oramIt) {
+      auto& oram = *oramIt;
       PositionType childORAMSize = oramSizes[level + 1];
       PositionType childNewPos = UniformRandom(childORAMSize - 1);
       UidPosition nextChild;
@@ -353,6 +356,11 @@ struct OMap {
       obliMove(isDummy, child.data,
                UniformRandom(childORAMSize - 1));  // set a random read path
       obliMove(isDummy, child.uid, DUMMY<UidType>());
+      oram.lock();
+      if (level > 0) {
+        prevOramIt->unlock();
+      }
+      prevOramIt = oramIt;
       oram.Update(child.data, child.uid, newPos, updateFunc);
       child = nextChild;
       newPos = childNewPos;
@@ -362,7 +370,10 @@ struct OMap {
     uint64_t leafPosRand;
     obliMove(isDummy, child.data, UniformRandom(leafOram.size() - 1));
     obliMove(isDummy, child.uid, DUMMY<UidType>());
+    leafOram.lock();
+    prevOramIt->unlock();
     leafOram.Read(child.data, child.uid, leaf, newPos);
+    leafOram.unlock();
     for (short i = 0; i < max_chunk_size; ++i) {
       bool flag = (i < leaf.numElements) & (key == leaf.kv[i].key);
       // if (i < leaf.numElements) {
@@ -408,7 +419,10 @@ struct OMap {
     UidPosition child;
     child.data = 0;
     child.uid = 0;
-    for (auto& oram : internalOrams) {
+    auto prevOramIt = internalOrams.begin();
+    for (auto oramIt = internalOrams.begin(); oramIt != internalOrams.end();
+         ++oramIt) {
+      auto& oram = *oramIt;
       PositionType childORAMSize = oramSizes[level + 1];
       PositionType childNewPos = UniformRandom(childORAMSize - 1);
       UidPosition nextChild;
@@ -431,6 +445,10 @@ struct OMap {
       obliMove(isDummy, child.data,
                UniformRandom(childORAMSize - 1));  // set a random read path
       obliMove(isDummy, child.uid, DUMMY<UidType>());
+      oram.lock();
+      if (level > 0) {
+        prevOramIt->unlock();
+      }
       oram.Update(child.data, child.uid, newPos, updateFunc);
       child = nextChild;
       newPos = childNewPos;
@@ -439,7 +457,10 @@ struct OMap {
 
     obliMove(isDummy, child.data, UniformRandom(leafOram.size() - 1));
     obliMove(isDummy, child.uid, DUMMY<UidType>());
+    leafOram.lock();
+    prevOramIt->unlock();
     leafOram.Update(child.data, child.uid, newPos, leafUpdateFunc);
+    leafOram.unlock();
     return foundFlag;
   }
 

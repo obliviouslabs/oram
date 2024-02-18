@@ -20,7 +20,7 @@ struct ORAM {
   LinearORAM_* linearOram = NULL;
   ORAM_* treeOram = NULL;
   UidType nextUid = 0;  // uid 0 is reserved for dummy
-  Lock lock;
+  Lock _lock;
   bool isLinear = false;
   static constexpr PositionType linear_oram_threshold = 100;
 
@@ -43,6 +43,9 @@ struct ORAM {
     }
   }
 
+  void lock() { _lock.lock(); }
+  void unlock() { _lock.unlock(); }
+
   /**
    * @brief Initialize the oram from an existing ram array.
    * Reader must be sorted and has uid [0, reader.size())
@@ -55,7 +58,6 @@ struct ORAM {
    */
   template <typename Reader, typename Writer>
   void InitFromReader(Reader& reader, Writer& writer) {
-    Critical section(lock);
     nextUid = reader.size();
     if (isLinear) {
       linearOram->InitFromReader(reader);
@@ -76,7 +78,6 @@ struct ORAM {
   }
 
   void SetSize(PositionType size, size_t cacheBytes = 1UL << 62) {
-    Critical section(lock);
     if (linearOram || treeOram) {
       throw std::runtime_error("SetSize can only be called on empty oram");
     }
@@ -119,7 +120,6 @@ struct ORAM {
    * @return PositionType new position of the element
    */
   PositionType Read(PositionType pos, const UidType& uid, T& out) {
-    Critical section(lock);
     if (isLinear) {
       return linearOram->Read(pos, uid, out);
     } else {
@@ -135,7 +135,6 @@ struct ORAM {
    * @return PositionType position of the element
    */
   PositionType Write(const UidType& uid, const T& in) {
-    Critical section(lock);
     if (isLinear) {
       return linearOram->Write(uid, in);
     } else {
@@ -154,7 +153,6 @@ struct ORAM {
    */
   PositionType Update(PositionType pos, const UidType& uid,
                       std::function<bool(T&)> updateFunc) {
-    Critical section(lock);
     if (isLinear) {
       return linearOram->Update(pos, uid, updateFunc);
     } else {
@@ -165,7 +163,6 @@ struct ORAM {
   // allow read the updated value
   PositionType Update(PositionType pos, const UidType& uid,
                       std::function<bool(T&)> updateFunc, T& out) {
-    Critical section(lock);
     if (isLinear) {
       return linearOram->Update(pos, uid, updateFunc, out);
     } else {
@@ -177,7 +174,6 @@ struct ORAM {
   PositionType Update(PositionType pos, const UidType& uid,
                       std::function<bool(T&)> updateFunc, T& out,
                       const UidType& updatedUid) {
-    Critical section(lock);
     if (isLinear) {
       return linearOram->Update(pos, uid, updateFunc, out, updatedUid);
     } else {
@@ -189,7 +185,6 @@ struct ORAM {
   std::vector<PositionType> BatchUpdate(
       const std::vector<PositionType>& pos, const std::vector<UidType>& uid,
       std::function<std::vector<bool>(std::vector<T>&)> updateFunc) {
-    Critical section(lock);
     if (isLinear) {
       return linearOram->BatchUpdate(uid, updateFunc);
     } else {
@@ -201,7 +196,6 @@ struct ORAM {
       const std::vector<PositionType>& pos, const std::vector<UidType>& uid,
       const std::vector<PositionType>& newPos,
       std::function<std::vector<bool>(std::vector<T>&)> updateFunc) {
-    Critical section(lock);
     if (isLinear) {
       linearOram->BatchUpdate(uid, updateFunc);
     } else {
@@ -214,7 +208,6 @@ struct ORAM {
                    const std::vector<PositionType>& newPos,
                    std::function<std::vector<bool>(std::vector<T>&)> updateFunc,
                    std::vector<T>& out) {
-    Critical section(lock);
     if (isLinear) {
       linearOram->BatchUpdate(uid, updateFunc, out);
     } else {
@@ -224,7 +217,6 @@ struct ORAM {
 
   PositionType Read(PositionType pos, const UidType& uid, T& out,
                     PositionType newPos) {
-    Critical section(lock);
     if (isLinear) {
       return linearOram->Read(pos, uid, out);
     } else {
@@ -233,7 +225,6 @@ struct ORAM {
   }
 
   PositionType Write(const UidType& uid, const T& in, PositionType newPos) {
-    Critical section(lock);
     if (isLinear) {
       return linearOram->Write(uid, in);
     } else {
@@ -243,7 +234,6 @@ struct ORAM {
 
   PositionType Update(PositionType pos, const UidType& uid, PositionType newPos,
                       std::function<bool(T&)> updateFunc) {
-    Critical section(lock);
     if (isLinear) {
       return linearOram->Update(pos, uid, updateFunc);
     } else {
@@ -253,7 +243,6 @@ struct ORAM {
 
   PositionType Update(PositionType pos, const UidType& uid, PositionType newPos,
                       std::function<bool(T&)> updateFunc, T& out) {
-    Critical section(lock);
     if (isLinear) {
       return linearOram->Update(pos, uid, updateFunc, out);
     } else {
@@ -264,7 +253,6 @@ struct ORAM {
   PositionType Update(PositionType pos, const UidType& uid, PositionType newPos,
                       std::function<bool(T&)> updateFunc, T& out,
                       const UidType& updatedUid) {
-    Critical section(lock);
     if (isLinear) {
       return linearOram->Update(pos, uid, updateFunc, out, updatedUid);
     } else {
@@ -274,7 +262,6 @@ struct ORAM {
 
   // returns the next unique id, if real is false, returns the dummy id
   UidType GetNextUid(bool real = true) {
-    Critical section(lock);
     UidType res = DUMMY<UidType>();
     obliMove(real, res, nextUid);
     nextUid += (UidType)real;

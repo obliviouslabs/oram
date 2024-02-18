@@ -66,17 +66,51 @@ struct ParOMap {
 
   template <class KeyIterator>
   std::vector<uint32_t> getShardIndexVec(const KeyIterator keyBegin,
-                                         const KeyIterator keyEnd) {
+                                         const KeyIterator keyEnd,
+                                         const std::vector<bool>& isDuplicate) {
     uint64_t shardCount = shards.size();
     uint64_t batchSize = keyEnd - keyBegin;
     std::vector<uint32_t> shardIndexVec(batchSize);
-#pragma omp parallel for
+#pragma omp parallel for schedule(static)
     for (uint64_t i = 0; i < batchSize; ++i) {
       uint64_t keyHash =
           secure_hash_with_salt((uint8_t*)&keyBegin[i], sizeof(K), randSalt);
       shardIndexVec[i] = keyHash % shardCount;
+      obliMove(isDuplicate[i], shardIndexVec[i], DUMMY<uint32_t>());
     }
     return shardIndexVec;
+  }
+
+  struct RecoveryInfo {
+    std::vector<uint32_t> recoveryArray;
+    std::vector<bool> isDuplicate;
+    RecoveryInfo(uint32_t size) : recoveryArray(size), isDuplicate(size) {}
+  };
+
+  RecoveryInfo sortAndSuppressDuplicateKeysInFind(std::vector<K>& keyVec) {
+    RecoveryInfo recoveryInfo(keyVec.size());
+    for (uint32_t i = 0; i < keyVec.size(); ++i) {
+      recoveryInfo.recoveryArray[i] = i;
+    }
+    EM::Algorithm::BitonicSortSepPayload(keyVec.begin(), keyVec.end(),
+                                         recoveryInfo.recoveryArray.begin());
+    recoveryInfo.isDuplicate[0] = false;
+    for (uint32_t i = 1; i < keyVec.size(); ++i) {
+      recoveryInfo.isDuplicate[i] = keyVec[i] == keyVec[i - 1];
+    }
+    return recoveryInfo;
+  }
+
+  // recovery info will be consumed
+  template <typename Iterator>
+  void recoverArrayOrder(Iterator arrBegin, RecoveryInfo& recoveryInfo) {
+    for (uint32_t i = 1; i < recoveryInfo.isDuplicate.size(); ++i) {
+      obliMove(recoveryInfo.isDuplicate[i], *(arrBegin + i),
+               *(arrBegin + i - 1));
+    }
+    EM::Algorithm::BitonicSortSepPayload(recoveryInfo.recoveryArray.begin(),
+                                         recoveryInfo.recoveryArray.end(),
+                                         arrBegin);
   }
 
   template <typename T, class OutIterator>
@@ -84,7 +118,7 @@ struct ParOMap {
                         const std::vector<uint32_t>& shardIndexVec,
                         OutIterator outBegin) {
     uint32_t batchSize = shardIndexVec.size();
-#pragma omp parallel for
+#pragma omp parallel for schedule(static)
     for (uint32_t i = 0; i < batchSize; ++i) {
       for (uint32_t j = 0; j < shardOutput.size(); ++j) {
         bool matchFlag = shardIndexVec[i] == j;
@@ -100,25 +134,32 @@ struct ParOMap {
     uint64_t shardCount = shards.size();
     uint64_t batchSize = keyEnd - keyBegin;
     uint64_t shardSize = maxQueryPerShard(batchSize, shardCount);
-    std::vector<uint32_t> shardIndexVec = getShardIndexVec(keyBegin, keyEnd);
+
+    std::vector<K> keyVec(keyBegin, keyEnd);
+    RecoveryInfo recoveryInfo = sortAndSuppressDuplicateKeysInFind(keyVec);
+    std::vector<uint32_t> shardIndexVec = getShardIndexVec(
+        keyVec.begin(), keyVec.end(), recoveryInfo.isDuplicate);
     std::vector<std::vector<V>> valueShard(shardCount,
                                            std::vector<V>(batchSize));
     std::vector<std::vector<uint8_t>> foundFlagsShard(
         shardCount, std::vector<uint8_t>(batchSize));
 
-#pragma omp parallel for
+#pragma omp parallel for schedule(static)
     for (uint64_t i = 0; i < shardCount; ++i) {
       const auto& [keyShard, prefixSum] = extractKeyByShard(
-          keyBegin, keyEnd, shardIndexVec.begin(), i, shardSize);
-
+          keyVec.begin(), keyVec.end(), shardIndexVec.begin(), i, shardSize);
       uint32_t numReal = prefixSum.back();
+      //       omp_set_num_threads(2);
+      // #pragma omp parallel for schedule(static)
       for (uint32_t j = 0; j < keyShard.size(); ++j) {
         foundFlagsShard[i][j] =
             shards[i].find(keyShard[j], valueShard[i][j], j >= numReal);
         // std::cout << "shard " << i << " find: " << keyShard[j] << " "
         //           << valueShard[j] << " real = " << (j < numReal)
-        //           << " findRes = " << foundFlagsTmp.get()[j] << std::endl;
+        //           << " findRes = " << foundFlagsTmp.get()[j] <<
+        // std::endl;
       }
+
       EM::Algorithm::OrDistributeSeparateMark(
           valueShard[i].begin(), valueShard[i].end(), prefixSum.begin());
       EM::Algorithm::OrDistributeSeparateMark(foundFlagsShard[i].begin(),
@@ -128,7 +169,9 @@ struct ParOMap {
     mergeShardOutput(valueShard, shardIndexVec, valueBegin);
     std::vector<uint8_t> foundFlags(batchSize);
     mergeShardOutput(foundFlagsShard, shardIndexVec, foundFlags.begin());
-
+    RecoveryInfo recoveryInfoTmp = recoveryInfo;
+    recoverArrayOrder(valueBegin, recoveryInfo);
+    recoverArrayOrder(foundFlags.begin(), recoveryInfoTmp);
     return foundFlags;
   }
 
@@ -139,10 +182,11 @@ struct ParOMap {
     uint64_t shardCount = shards.size();
     uint64_t batchSize = keyEnd - keyBegin;
     uint64_t shardSize = maxQueryPerShard(batchSize, shardCount);
-    std::vector<uint32_t> shardIndexVec = getShardIndexVec(keyBegin, keyEnd);
+    std::vector<uint32_t> shardIndexVec =
+        getShardIndexVec(keyBegin, keyEnd, std::vector<bool>(batchSize, false));
     std::vector<std::vector<uint8_t>> foundFlagsShard(
         shardCount, std::vector<uint8_t>(batchSize));
-#pragma omp parallel for
+#pragma omp parallel for schedule(static)
     for (uint64_t i = 0; i < shardCount; ++i) {
       const auto& [keyShard, prefixSum] = extractKeyByShard(
           keyBegin, keyEnd, shardIndexVec.begin(), i, shardSize);

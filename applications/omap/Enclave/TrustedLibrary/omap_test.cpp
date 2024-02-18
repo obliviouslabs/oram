@@ -80,31 +80,31 @@ void testORAMInit() {
 
 void testOMap() {
   printf("test omap\n");
-  size_t mapSize = 1e7;
-  size_t initSize = 1e7;
+  size_t mapSize = 1e6;
+  size_t initSize = 1e6;
   OMap<uint64_t, int64_t> omap(mapSize);
   std::unordered_map<uint64_t, int64_t> map;
   for (int i = 0; i < initSize; i++) {
-    map[i * 10] = i * 3;
+    map[i] = i * 3;
   }
 
   std::function<std::pair<uint64_t, int64_t>(uint64_t)> readerFunc =
-      [](uint64_t i) { return std::pair<uint64_t, int64_t>(i * 10, i * 3); };
+      [](uint64_t i) { return std::pair<uint64_t, int64_t>(i, i * 3); };
 
   EM::VirtualVector::VirtualReader<std::pair<uint64_t, int64_t>> reader(
       initSize, readerFunc);
   uint64_t start, end;
   printf("init omap\n");
   ocall_measure_time(&start);
-  omap.InitFromReader(reader);
+  omap.InitFromReaderInPlace(reader);
   ocall_measure_time(&end);
   uint64_t timediff = end - start;
   printf("oram init time %d.%d s\n", timediff / 1'000'000'000,
          timediff % 1'000'000'000);
-  int round = 1e4;
+  int round = 1e5;
   ocall_measure_time(&start);
   for (size_t r = 0; r < round; ++r) {
-    uint64_t i = UniformRandom(mapSize * 10);
+    uint64_t i = UniformRandom(mapSize);
     int64_t val = UniformRandom(mapSize * 3);
     bool res = omap.insert(i, val);
     if (map.find(i) != map.end()) {
@@ -127,8 +127,9 @@ void testOMap() {
          timediff / round % 1'000);
 
   ocall_measure_time(&start);
+#pragma omp parallel for
   for (size_t r = 0; r < round; ++r) {
-    uint64_t i = UniformRandom(mapSize * 10);
+    uint64_t i = UniformRandom(mapSize);
     int64_t val;
     bool res = omap.find(i, val);
     if (map.find(i) != map.end()) {
@@ -273,11 +274,11 @@ void ecall_omap_perf() {
   if (EM::Backend::g_DefaultBackend) {
     delete EM::Backend::g_DefaultBackend;
   }
-  size_t BackendSize = 8e9;
+  size_t BackendSize = 4e9;
   EM::Backend::g_DefaultBackend =
       new EM::Backend::MemServerBackend(BackendSize);
   try {
-    testOMapPerf();
+    testOMap();
     // testORAMInit();
     // testORAMReadWrite();
     // testBuildBottomUp();
