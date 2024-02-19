@@ -75,9 +75,31 @@ struct ParOMap {
               obliMove(matchFlag, shuffleElement.shardIdx, j);
               selectedShardFlag |= matchFlag;
             }
+            for (;;) {
+              // set as random so that the comparison based sorting within each
+              // shard doesn't leak which elements are dummy
+              set_rand((uint8_t*)&shuffleElement.kvPair.first, sizeof(K));
+              uint64_t hash = secure_hash_with_salt(
+                  (uint8_t*)&shuffleElement.kvPair.first, sizeof(K), randSalt);
+              uint32_t shardIdx = hash % shardCount;
+              if (shardIdx != shuffleElement.shardIdx) {
+                // avoids the case where the dummy key is the same as a real
+                // it's ok to leak the number of iterations
+                break;
+              }
+            }
           }
           return shuffleElement;
         });
+    struct ShardElement {
+      std::pair<K, V> kvPair;
+      bool isDummy;
+      bool operator<(const ShardElement& other) const {
+        return ((kvPair.first < other.kvPair.first) |
+                (!isDummy & other.isDummy)) &
+               (!isDummy | other.isDummy);
+      }
+    };
     using ShardInitVec = EM::NonCachedVector::Vector<std::pair<K, V>>;
     std::vector<ShardInitVec*> shardInitVecs(shardCount);
     for (uint32_t i = 0; i < shardCount; ++i) {
