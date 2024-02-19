@@ -449,6 +449,7 @@ struct OMap {
       if (level > 0) {
         prevOramIt->unlock();
       }
+      prevOramIt = oramIt;
       oram.Update(child.data, child.uid, newPos, updateFunc);
       child = nextChild;
       newPos = childNewPos;
