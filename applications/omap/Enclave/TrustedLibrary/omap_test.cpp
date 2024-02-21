@@ -322,9 +322,23 @@ void testParOMapPerf() {
   size_t mapSize = 5e6;
   size_t initSize = 4e6;
   ParOMap<ETH_Addr, ERC20_Balance> omap(mapSize, 2);
+  std::function<std::pair<ETH_Addr, ERC20_Balance>(uint64_t)> readerFunc =
+      [](uint64_t i) {
+        std::pair<ETH_Addr, ERC20_Balance> pr;
+        pr.first.part[0] = i;
+        return pr;
+      };
+
+  EM::VirtualVector::VirtualReader<std::pair<ETH_Addr, ERC20_Balance>> reader(
+      initSize, readerFunc);
   uint64_t start, end;
-  omap.Init();
+  printf("init omap of size %lu\n", mapSize);
+  ocall_measure_time(&start);
+  omap.InitFromReaderInPlace(reader);
+  ocall_measure_time(&end);
   uint64_t timediff = end - start;
+  printf("oram init time %d.%d s\n", timediff / 1'000'000'000,
+         timediff % 1'000'000'000);
   int round = 1e6;
   uint32_t batchSize = 1e3;
   ocall_measure_time(&start);
@@ -358,7 +372,8 @@ void ecall_omap() {
   EM::Backend::g_DefaultBackend =
       new EM::Backend::MemServerBackend(BackendSize);
   try {
-    testOMap();
+    // testOMap();
+    testParOMapPerf();
     // testORAMInit();
     // testORAMReadWrite();
     // testBuildBottomUp();

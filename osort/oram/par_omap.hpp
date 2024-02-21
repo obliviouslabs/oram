@@ -170,7 +170,7 @@ struct ParOMap {
     RecoveryInfo(uint32_t size) : recoveryArray(size), isDuplicate(size) {}
   };
 
-  RecoveryInfo sortAndSuppressDuplicateKeysInFind(std::vector<K>& keyVec) {
+  RecoveryInfo sortAndSuppressDuplicateKeys(std::vector<K>& keyVec) {
     RecoveryInfo recoveryInfo(keyVec.size());
     for (uint32_t i = 0; i < keyVec.size(); ++i) {
       recoveryInfo.recoveryArray[i] = i;
@@ -183,26 +183,26 @@ struct ParOMap {
     }
     return recoveryInfo;
   }
-
-  RecoveryInfo sortAndSuppressDuplicateKeysInInsert(std::vector<K>& keyVec,
-                                                    std::vector<V>& valueVec) {
-    RecoveryInfo recoveryInfo(keyVec.size());
-    for (uint32_t i = 0; i < keyVec.size(); ++i) {
-      recoveryInfo.recoveryArray[i] = i;
+  /**
+    RecoveryInfo sortAndSuppressDuplicateKeysInInsert(std::vector<K>& keyVec,
+                                                      std::vector<V>& valueVec)
+    { RecoveryInfo recoveryInfo(keyVec.size()); for (uint32_t i = 0; i <
+    keyVec.size(); ++i) { recoveryInfo.recoveryArray[i] = i;
+      }
+      auto customSwap = [&](bool cond, uint64_t idx0, uint64_t idx1) {
+        obliSwap(cond, recoveryInfo.recoveryArray[idx0],
+                 recoveryInfo.recoveryArray[idx1]);
+        obliSwap(cond, valueVec[idx0], valueVec[idx1]);
+      };
+      EM::Algorithm::BitonicSortCustomSwap(keyVec.begin(), keyVec.end(),
+                                           customSwap);
+      recoveryInfo.isDuplicate[0] = false;
+      for (uint32_t i = 1; i < keyVec.size(); ++i) {
+        recoveryInfo.isDuplicate[i] = keyVec[i] == keyVec[i - 1];
+      }
+      return recoveryInfo;
     }
-    auto customSwap = [&](bool cond, uint64_t idx0, uint64_t idx1) {
-      obliSwap(cond, recoveryInfo.recoveryArray[idx0],
-               recoveryInfo.recoveryArray[idx1]);
-      obliSwap(cond, valueVec[idx0], valueVec[idx1]);
-    };
-    EM::Algorithm::BitonicSortCustomSwap(keyVec.begin(), keyVec.end(),
-                                         customSwap);
-    recoveryInfo.isDuplicate[0] = false;
-    for (uint32_t i = 1; i < keyVec.size(); ++i) {
-      recoveryInfo.isDuplicate[i] = keyVec[i] == keyVec[i - 1];
-    }
-    return recoveryInfo;
-  }
+    */
 
   template <typename T, class OutIterator>
   void mergeShardOutput(const std::vector<std::vector<T>>& shardOutput,
@@ -227,7 +227,7 @@ struct ParOMap {
     uint64_t shardSize = maxQueryPerShard(batchSize, shardCount);
 
     std::vector<K> keyVec(keyBegin, keyEnd);
-    RecoveryInfo recoveryInfo = sortAndSuppressDuplicateKeysInFind(keyVec);
+    RecoveryInfo recoveryInfo = sortAndSuppressDuplicateKeys(keyVec);
     std::vector<uint32_t> shardIndexVec = getShardIndexVec(
         keyVec.begin(), keyVec.end(), recoveryInfo.isDuplicate);
     std::vector<std::vector<V>> valueShard(shardCount,
@@ -277,10 +277,25 @@ struct ParOMap {
     return foundFlags;
   }
 
+  template <class KeyIterator>
+  void requireDistinctKeys(const KeyIterator keyBegin,
+                           const KeyIterator keyEnd) {
+    std::vector<K> keyVec(keyBegin, keyEnd);
+    EM::Algorithm::BitonicSort(keyVec.begin(), keyVec.end());
+    bool distinctFlag = true;
+    for (uint32_t i = 1; i < keyVec.size(); ++i) {
+      distinctFlag &= keyVec[i] != keyVec[i - 1];
+    }
+    if (!distinctFlag) {
+      throw std::runtime_error("keys should be distinct");
+    }
+  }
+
   template <class KeyIterator, class ValueIterator>
   std::vector<uint8_t> insertBatch(const KeyIterator keyBegin,
                                    const KeyIterator keyEnd,
                                    const ValueIterator valueBegin) {
+    // requireDistinctKeys(keyBegin, keyEnd);
     uint64_t shardCount = shards.size();
     uint64_t batchSize = keyEnd - keyBegin;
     uint64_t shardSize = maxQueryPerShard(batchSize, shardCount);
@@ -302,6 +317,34 @@ struct ParOMap {
         // std::cout << "shard " << i << " insert: " << keyShard[j] << " "
         //           << valueShard[j] << " real = " << (j < numReal)
         //           << " insertRes = " << foundFlagsTmp.get()[j] << std::endl;
+      }
+      EM::Algorithm::OrDistributeSeparateMark(foundFlagsShard[i].begin(),
+                                              foundFlagsShard[i].end(),
+                                              prefixSum.begin());
+    }
+    std::vector<uint8_t> foundFlags(batchSize);
+    mergeShardOutput(foundFlagsShard, shardIndexVec, foundFlags.begin());
+    return foundFlags;
+  }
+
+  template <class KeyIterator>
+  std::vector<uint8_t> eraseBatch(const KeyIterator keyBegin,
+                                  const KeyIterator keyEnd) {
+    // requireDistinctKeys(keyBegin, keyEnd);
+    uint64_t shardCount = shards.size();
+    uint64_t batchSize = keyEnd - keyBegin;
+    uint64_t shardSize = maxQueryPerShard(batchSize, shardCount);
+    std::vector<uint32_t> shardIndexVec =
+        getShardIndexVec(keyBegin, keyEnd, std::vector<bool>(batchSize, false));
+    std::vector<std::vector<uint8_t>> foundFlagsShard(
+        shardCount, std::vector<uint8_t>(batchSize));
+#pragma omp parallel for schedule(static)
+    for (uint64_t i = 0; i < shardCount; ++i) {
+      const auto& [keyShard, prefixSum] = extractKeyByShard(
+          keyBegin, keyEnd, shardIndexVec.begin(), i, shardSize);
+      uint32_t numReal = prefixSum.back();
+      for (uint32_t j = 0; j < keyShard.size(); ++j) {
+        foundFlagsShard[i][j] = shards[i].erase(keyShard[j], j >= numReal);
       }
       EM::Algorithm::OrDistributeSeparateMark(foundFlagsShard[i].begin(),
                                               foundFlagsShard[i].end(),
