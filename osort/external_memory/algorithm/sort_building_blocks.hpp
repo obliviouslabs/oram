@@ -714,6 +714,14 @@ void ExtMergeSort(IOIterator begin, IOIterator end,
   size_t size = end - begin;
   size_t batchSize = heapSize / sizeof(T);
   size_t batchCount = divRoundUp(size, batchSize);
+  if (batchCount == 1) {
+    std::vector<T> mem(size);
+    CopyIn(begin, end, mem.begin(), inAuth);
+    std::sort(mem.begin(), mem.end());
+    uint32_t outAuth = incAuth ? inAuth + 1 : inAuth;
+    CopyOut(mem.begin(), mem.end(), begin, outAuth);
+    return;
+  }
   std::vector<std::pair<Iterator, Iterator>> mergeRanges;
   std::vector<Reader> mergeReaders;
   Vector<T> batchSorted(size);

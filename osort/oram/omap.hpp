@@ -285,7 +285,6 @@ struct OMap {
       // std::cout << "write leaf: " << leaf << " at pos " << childPos
       //           << " with uid " << childUid << std::endl;
       K childKey = leaf.kv[0].key;
-      K nextLevelChildKey;
       for (int j = internalOrams.size() - 1; j >= 0; --j) {
         BPlusNode_& node = internalNodeCache[j];
         int kUpper = max_fan_out;
@@ -307,6 +306,84 @@ struct OMap {
           // pos "
           //           << childPos << std::endl;
           node.numChildren = 0;
+          childKey = internalBeginKeys[j];
+        } else {
+          break;
+        }
+      }
+    }
+    // PositionType childPos
+  }
+
+  // elements after numReal are dummy
+  template <class Reader>
+  void InitFromReaderInPlaceWithDummy(Reader& reader, PositionType numReal) {
+    using T = typename Reader::value_type;
+    static_assert(std::is_same_v<T, std::pair<K, V>>,
+                  "Reader must read std::pair<K, V>");
+    PositionType initSize = divRoundUp(reader.size(), max_chunk_size);
+    // printf("max chunk size = %d\n", max_chunk_size);
+    // printf("init size = %lu\n", initSize);
+    // printf("half full leaf count = %lu\n", halfFullLeafCount);
+    std::vector<BPlusNode_> internalNodeCache(internalOrams.size());
+    // load of the current internal nodes including dummies
+    std::vector<short> internalNodeLoad(internalOrams.size(), 0);
+    std::vector<K> internalBeginKeys(internalOrams.size());
+    PositionType levelInitSize = initSize;
+    for (int i = internalOrams.size() - 1; i >= 0; --i) {
+      PositionType upperLevelInitSize = divRoundUp(levelInitSize, max_fan_out);
+      levelInitSize = upperLevelInitSize;
+    }
+    PositionType readCount = 0;
+    short leafLastChunkSize = numReal % max_chunk_size;
+    for (PositionType i = 0; i < initSize; ++i) {
+      int j = 0;
+      BPlusLeaf_ leaf;
+      for (; j < max_chunk_size; ++j) {
+        if (reader.eof()) {
+          break;
+        }
+        auto kv = reader.read();
+        // std::cout << "read kv: " << kv.first << " " << kv.second <<
+        // std::endl;
+        ++readCount;
+        leaf.kv[j] = {kv.first, kv.second};
+      }
+      leaf.numElements = j;
+      // alter numElement if contains dummy
+      short numElementIfDummy = 0;
+      obliMove(readCount < numReal + max_chunk_size, numElementIfDummy,
+               leafLastChunkSize);
+      obliMove(readCount > numReal, leaf.numElements, numElementIfDummy);
+
+      bool endFlag = i == initSize - 1;
+      Assert(endFlag || !reader.eof());
+      bool isDummyChild = !leaf.numElements;
+      UidType childUid = leafOram.GetNextUid(!isDummyChild);
+      PositionType childPos = leafOram.Write(childUid, leaf);
+      // std::cout << "write leaf: " << leaf << " at pos " << childPos
+      //           << " with uid " << childUid << std::endl;
+      K childKey = leaf.kv[0].key;
+      for (int j = internalOrams.size() - 1; j >= 0; --j) {
+        BPlusNode_& node = internalNodeCache[j];
+        short& nodeLoad = internalNodeLoad[j];
+        node.children[nodeLoad] = {childPos, childUid};
+        if (nodeLoad) {
+          node.keys[nodeLoad - 1] = childKey;
+        } else {
+          internalBeginKeys[j] = childKey;
+        }
+        ++nodeLoad;
+        node.numChildren += !isDummyChild;
+        if (nodeLoad == max_fan_out || endFlag) {
+          isDummyChild = !node.numChildren;
+          childUid = internalOrams[j].GetNextUid(!isDummyChild);
+          childPos = internalOrams[j].Write(childUid, node);
+          // std::cout << "write node: " << node << " to level " << j << " at
+          // pos "
+          //           << childPos << std::endl;
+          node.numChildren = 0;
+          nodeLoad = 0;
           childKey = internalBeginKeys[j];
         } else {
           break;

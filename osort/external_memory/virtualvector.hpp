@@ -237,9 +237,9 @@ struct VirtualWriter {
   using iterator_type = uint64_t;
   iterator_type it = 0;
   size_t _size;
-  std::function<void(iterator_type, VT&)> devirtualize;
+  std::function<void(iterator_type, const VT&)> devirtualize;
   VirtualWriter(size_t size,
-                std::function<void(iterator_type, VT&)> devirtualize)
+                std::function<void(iterator_type, const VT&)> devirtualize)
       : devirtualize(devirtualize), _size(size) {}
 
   void write(const VT& element) { devirtualize(it++, element); }

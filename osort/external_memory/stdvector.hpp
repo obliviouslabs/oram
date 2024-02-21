@@ -59,7 +59,7 @@ struct StdVector : public std::vector<T> {
   StdVector(Iterator begin, Iterator end) : std::vector<T>(begin, end) {}
 
   StdVector(uint64_t N, const T& val) : std::vector<T>(N, val) {}
-
+  StdVector(const StdVector& other) : std::vector<T>(other) {}
   StdVector(StdVector&& other) : std::vector<T>(std::move(other)) {}
 
   Iterator begin() { return Iterator(std::vector<T>::begin()); }

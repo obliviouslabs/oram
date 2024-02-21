@@ -21,6 +21,69 @@ EM::Backend::MemServerBackend* EM::Backend::g_DefaultBackend = nullptr;
     abort();                                        \
   }
 
+void testOmpSpeedup() {
+  size_t vecCount = 512;
+  uint64_t start, end;
+  printf("bitonic sort benchmark\n");
+  ocall_measure_time(&start);
+  for (int i = 0; i < vecCount; ++i) {
+    std::vector<uint64_t> vec(65546);
+    EM::Algorithm::BitonicSort(vec);
+  }
+  ocall_measure_time(&end);
+  uint64_t timediffOneThread = end - start;
+  printf("one thread %d.%d s\n", timediffOneThread / 1'000'000'000,
+         timediffOneThread % 1'000'000'000);
+
+  ocall_measure_time(&start);
+#pragma omp parallel for schedule(static)
+  for (int i = 0; i < vecCount; ++i) {
+    std::vector<uint64_t> vec(65546);
+    EM::Algorithm::BitonicSort(vec);
+  }
+  ocall_measure_time(&end);
+  uint64_t timediffMultipleThread = end - start;
+  printf("%d thread %d.%d s\n", omp_get_max_threads(),
+         timediffMultipleThread / 1'000'000'000,
+         timediffMultipleThread % 1'000'000'000);
+  printf("speedup for bitonic sort benchmark (memory intensive task) = %f\n",
+         (double)timediffOneThread / timediffMultipleThread);
+
+  printf("\nFloating point benchmark\n");
+  ocall_measure_time(&start);
+  double totalSum;
+  for (int i = 0; i < vecCount; ++i) {
+    double sum = 1.0 + UniformRandomDouble();
+    for (uint64_t i = 0; i < 1e6; ++i) {
+      sum += 1.0 / sum;
+    }
+    totalSum += sum;
+  }
+  ocall_measure_time(&end);
+  printf("total sum = %f\n", totalSum);
+  timediffOneThread = end - start;
+  printf("one thread %d.%d s\n", timediffOneThread / 1'000'000'000,
+         timediffOneThread % 1'000'000'000);
+
+  ocall_measure_time(&start);
+#pragma omp parallel for schedule(static)
+  for (int i = 0; i < vecCount; ++i) {
+    double sum = 1.0 + UniformRandomDouble();
+    for (uint64_t i = 0; i < 1e6; ++i) {
+      sum += 1.0 / sum;
+    }
+    totalSum += sum;
+  }
+  ocall_measure_time(&end);
+  printf("total sum = %f\n", totalSum);
+  timediffMultipleThread = end - start;
+  printf("%d thread %d.%d s\n", omp_get_max_threads(),
+         timediffMultipleThread / 1'000'000'000,
+         timediffMultipleThread % 1'000'000'000);
+  printf("speedup for floating point benchmark (cpu intensive task) = %f\n",
+         (double)timediffOneThread / timediffMultipleThread);
+}
+
 void testORAMReadWrite() {
   for (int memSize : {1, 3, 5, 7, 9, 33, 40, 55, 127, 129, 543, 678, 1023, 1025,
                       2000, 10000, 50000}) {
