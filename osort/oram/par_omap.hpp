@@ -101,7 +101,8 @@ struct ParOMap {
     using SortVec = EM::NonCachedVector::Vector<Element>;
     SortVec sortVec(sortVecSize);
     typename SortVec::Writer sortWriter(sortVec.begin(), sortVec.end());
-    EM::Algorithm::KWayButterflySort(sortReader, sortWriter);
+    EM::Algorithm::KWayButterflySort(sortReader, sortWriter,
+                                     (ENCLAVE_SIZE << 20) / 5);
 #pragma omp parallel for schedule(static)
     for (uint32_t i = 0; i < shardCount; ++i) {
       typename SortVec::Reader shardReader(

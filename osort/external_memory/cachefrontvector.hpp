@@ -13,7 +13,7 @@ template <typename T,
 struct Vector {
   static constexpr uint64_t item_per_page = page_size / sizeof(T);
   constexpr static bool useStdCopy = true;
-  constexpr static uint64_t ext_cache_bytes = 1UL << 20;
+  constexpr static uint64_t ext_cache_bytes = 1UL << 16;
   using ExtVec =
       EM::ExtVector::Vector<T, page_size, ENCRYPTED, AUTH,
                             std::max(1UL, ext_cache_bytes / page_size)>;
