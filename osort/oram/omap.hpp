@@ -329,6 +329,14 @@ struct OMap {
     // load of the current internal nodes including dummies
     std::vector<short> internalNodeLoad(internalOrams.size(), 0);
     std::vector<K> internalBeginKeys(internalOrams.size());
+    /*
+    std::vector<UidBlock<PositionType, UidType>> lastChildPerLevel(
+        internalOrams.size());
+    std::vector<UidBlock<PositionType, UidType>> secondlastChildPerLevel(
+        internalOrams.size());
+    UidBlock<PositionType, UidType> lastLeaf, secondLastLeaf;
+    */
+
     PositionType levelInitSize = initSize;
     for (int i = internalOrams.size() - 1; i >= 0; --i) {
       PositionType upperLevelInitSize = divRoundUp(levelInitSize, max_fan_out);
@@ -361,6 +369,10 @@ struct OMap {
       bool isDummyChild = !leaf.numElements;
       UidType childUid = leafOram.GetNextUid(!isDummyChild);
       PositionType childPos = leafOram.Write(childUid, leaf);
+      /*
+      obliMove(!isDummyChild, secondLastLeaf, lastLeaf);
+      obliMove(!isDummyChild, lastLeaf, {childPos, childUid});
+      */
       // std::cout << "write leaf: " << leaf << " at pos " << childPos
       //           << " with uid " << childUid << std::endl;
       K childKey = leaf.kv[0].key;
@@ -379,6 +391,11 @@ struct OMap {
           isDummyChild = !node.numChildren;
           childUid = internalOrams[j].GetNextUid(!isDummyChild);
           childPos = internalOrams[j].Write(childUid, node);
+          /*
+          obliMove(!isDummyChild, secondlastChildPerLevel[j],
+                   lastChildPerLevel[j]);
+          obliMove(!isDummyChild, lastChildPerLevel[j], {childPos, childUid});
+          */
           // std::cout << "write node: " << node << " to level " << j << " at
           // pos "
           //           << childPos << std::endl;
@@ -390,7 +407,62 @@ struct OMap {
         }
       }
     }
-    // PositionType childPos
+    /*
+        // the last node on each level might contain too few keys, we
+       redistribute
+        // the keys with the second last node
+        K lastChildKey;
+        auto lastlLeafRedistribute = [&](std::vector<BPlusLeaf_>& leaves) {
+          bool needUpdate =
+              !secondLastLeaf.isDummy() & leaves[1].numElement < min_chunk_size;
+          Assert(!needUpdate | secondLastLeaf.numElement == max_chunk_size);
+          short sumNumKey = leaves[0].numElement + leaves[1].numElement;
+          obliMove(needUpdate, leaves[0].numElement, (sumNumKey + 1) / 2);
+          obliMove(needUpdate, leaves[1].numElement, sumNumKey / 2);
+
+          // so that ordistribute does not change the array
+          obliMove(!needUpdate, leaves[0].numElement, max_chunk_size);
+          short prefixSum[2 * max_chunk_size + 1];
+          prefixSum[0] = 0;
+          for (short i = 0; i < max_chunk_size; ++i) {
+            prefixSum[i + 1] = prefixSum[i] + ((i < leaves[1].numElement) |
+                                               ((i >= max_chunk_size) &
+                                                (i < leaves[0].numElement)));
+          }
+          using KVPair = typename BPlusLeaf::KVPair;
+          KVPair newKv[max_chunk_size * 2];
+          std::memcpy(newKv, leaves[0].kv, sizeof(KVPair) * max_chunk_size);
+          std::memcpy(newKv + max_chunk_size, leaves[1].kv,
+                      sizeof(KVPair) * max_chunk_size);
+          EM::Algorithm::OrDistributeSeparateMark(newKv, newKv + 2 *
+       max_chunk_size, prefixSum); std::memcpy(leaves[0].kv, newKv,
+       sizeof(KVPair) * max_chunk_size); std::memcpy(leaves[1].kv, newKv +
+       max_chunk_size, sizeof(KVPair) * max_chunk_size); lastChildKey =
+       leaves[1].kv[0].key;
+        };
+
+        std::vector<PositionType> newChildPos = leafOram.BatchUpdate(
+            {secondLastLeaf.uid, lastLeaf.uid},
+            {secondLastLeaf.data, lastLeaf.data}, lastlLeafRedistribute);
+
+        for (int level = internalOrams.size() - 1; level >= 0; --level) {
+          auto lastNodeRedistribute = [&](std::vector<BPlusNode_>& nodes) {
+            bool needUpdate = !secondlastChildPerLevel[level].isDummy() &
+                              nodes[1].numChildren < min_fan_out;
+            Assert(!needUpdate |
+                   secondlastChildPerLevel[0].numChildren == max_fan_out);
+            short sumNumKey = nodes[0].numChildren + nodes[1].numChildren;
+            using ChildInfo = UidBlock<PositionType, UidType>;
+
+            for (short i = 0; i < max_fan_out; ++i) {
+              bool isLast = i == nodes[1].numChildren - 1;
+              bool isSecondLast = i == nodes[1].numChildren - 2;
+              obliMove(isSecondLast, nodes[1].children[i].data, newChildPos[0]);
+              obliMove(isLast, nodes[1].children[i].data, newChildPos[1]);
+            }
+          };
+        }
+        */
   }
 
   /**

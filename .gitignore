@@ -64,6 +64,8 @@ Enclave_u.c
 scripts/
 db/
 usdt_balance.txt
+mock_balance.txt
 db_usdt/
 db_rcc/
+mock_db/
 tx.log

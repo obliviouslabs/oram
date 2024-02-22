@@ -124,9 +124,13 @@ int SGX_CDECL main(int argc, char *argv[]) {
     getchar();
     return -1;
   }
+  if (argc != 2) {
+    printf("Usage: %s <path to the initial DB>\n", argv[0]);
+    return 1;
+  }
 
   /* Utilize trusted libraries */
-  ActualMain();
+  ActualMain(argv[1]);
 
   /* Destroy the enclave */
   sgx_destroy_enclave(global_eid);

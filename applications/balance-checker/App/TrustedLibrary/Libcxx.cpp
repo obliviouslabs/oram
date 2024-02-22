@@ -188,9 +188,9 @@ void InitKeys(DB_* db) {
   }
 }
 
-void InitDB(void) {
+void InitDB(const char* dbPath) {
   try {
-    db = new DB_("./db_usdt");
+    db = new DB_(dbPath);
     dbIt = db->getIterator();
     dbIt.seekToFirst();
     if (!dbIt.isValid()) {
@@ -217,9 +217,9 @@ void DeleteDB(void) {
 
 std::string GetPublicKeyBase64(void) { return publicKeyBase64; }
 
-void ActualMain(void) {
+void ActualMain(const char* dbPath) {
   sgx_status_t ret = SGX_ERROR_UNEXPECTED;
-  InitDB();
+  InitDB(dbPath);
   InitKeys(db);
 
   DBMetaData metaData;

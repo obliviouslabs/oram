@@ -108,12 +108,19 @@ int generate_secure_iv(unsigned char *iv, int iv_length) {
   return 1;  // Success
 }
 
-std::string makeBalanceQueryBody(CoinType coinType, const std::string &addr,
+std::string makeBalanceQueryBody(CoinType coinType, std::string &addr,
                                  const Nounce &nounce,
                                  const ec256_public_t &client_pub_key,
                                  const uint8_t *shared_secret) {
   Query query;
   EncryptedQuery encQuery;
+  if (addr.length() < 2 || addr.substr(0, 2) != "0x") {
+    printf("client invalid ethereum address %s\n", addr.c_str());
+    throw std::invalid_argument("Invalid ethereum address (client)");
+  }
+  if (addr.length() < 42) {
+    addr.insert(2, 42 - addr.length(), '0');
+  }
   query.addr.set(addr);
   query.addr.hton();
   query.coinType = coinType;
@@ -250,7 +257,7 @@ void interactive(httplib::Client &cli, const ec256_public_t &client_pub_key,
   Nounce nounce = 0;
   while (true) {
     std::string addr;
-    std::cout << "Enter an ethereum address: ";
+    std::cout << "Enter an ethereum address: " << std::endl;
     std::cin >> addr;
 
     std::string body = makeBalanceQueryBody(CoinType::USDT, addr, nounce,
@@ -352,7 +359,7 @@ int main(int argc, char **argv) {
   }
 
   printf("Shared secret computed\n");
-  // interactive(cli, client_pub_key, shared_secret);
-  stressTest(cli, client_pub_key, shared_secret);
+  interactive(cli, client_pub_key, shared_secret);
+  // stressTest(cli, client_pub_key, shared_secret);
   return 0;
 }
