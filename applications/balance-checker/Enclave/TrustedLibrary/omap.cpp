@@ -191,7 +191,9 @@ void ecall_handle_encrypted_query(uint8_t* encryptedQuery,
   {
     OMapCritical section;
     response.tillBlock = globalLastBlock;  // TODO add pending status
-    response.success = omap.find(query.addr, response.balance);
+    bool found = omap.find(query.addr, response.balance);
+    obliMove(!found, response.balance, ERC20_Balance());
+    response.success = true;
   }
 
   sgx_read_rand(encResponse.iv, IV_SIZE);

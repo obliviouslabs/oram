@@ -12,7 +12,7 @@ TCS_NUM=1
 IO_ROUNDs=(1) # number of rounds encryption/decryption is performed, used to get breakdown
 CORE_ID=0 # the cpu core id to run the program
 DISK_IO=0 # 0: no disk IO, 1: disk IO
-DB_PATH=./db_rcc
+DB_PATH=./mock_db
 
 for IO_ROUND in ${IO_ROUNDs[@]}; do
 if [ $IO_ROUND = 0 ]
@@ -51,10 +51,10 @@ sed -i "/.*<Heap.*/c\  <HeapMaxSize>0x"${hex_encsize}"</HeapMaxSize>" ./Enclave/
 make clean
 make SGX_MODE=$SGX_MODE SGX_PRERELEASE=0 IO_ROUND=$IO_ROUND DISK_IO=$DISK_IO ENCLAVE_SIZE=$encsize
 if [[ $1 = 1 ]]; then
-    taskset -c ${CORE_ID} ./omap.elf $DB_PATH
+    ./omap.elf $DB_PATH
     sleep 1
 else
-    taskset -c ${CORE_ID} stdbuf -oL nohup ./omap.elf $DB_PATH &>> $FILENAME < /dev/null
+    stdbuf -o0 nohup ./omap.elf $DB_PATH &>> $FILENAME < /dev/null
 fi
 done
 done

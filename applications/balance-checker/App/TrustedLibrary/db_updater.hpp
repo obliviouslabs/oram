@@ -65,7 +65,9 @@ uint64_t updateDBFromLog(
   std::string line;
   bool changed = false;
   std::vector<Tx> txs;
+  int lineCount = 0;
   while (std::getline(logFile, line)) {
+    ++lineCount;
     std::string txHash;
     std::string timestamp;
     std::istringstream iss(line);
@@ -76,6 +78,7 @@ uint64_t updateDBFromLog(
       throw std::runtime_error("Error reading log file");
     }
     if (lastTx.blockNumber <= metaData.lastStableBlock) {
+      txs.pop_back();
       continue;
     }
 
@@ -84,9 +87,17 @@ uint64_t updateDBFromLog(
     //     {
     //   continue;
     // }
+    if (lastTx.from.length() < 2 || lastTx.from.substr(0, 2) != "0x") {
+      printf("Invalid ethereum from address %s\n", lastTx.from.c_str());
+      printf("line = %s\n", line.c_str());
+      throw std::invalid_argument("Invalid ethereum address");
+    }
+    if (lastTx.to.length() < 2 || lastTx.to.substr(0, 2) != "0x") {
+      printf("Invalid ethereum to address %s\n", lastTx.to.c_str());
+      printf("line = %s\n", line.c_str());
+      throw std::invalid_argument("Invalid ethereum address");
+    }
 
-    Assert(lastTx.from.substr(0, 2) != "0x", "from address not hex");
-    Assert(lastTx.to.substr(0, 2) != "0x", "to address not hex");
     // metaData.lastBlock = blockNumber;
     // metaData.lastTxIdx = txIndex;
     // changed = true;
@@ -101,25 +112,32 @@ uint64_t updateDBFromLog(
     // balanceMap[from] -= value;
     // balanceMap[to] += value;
   }
-  if (!txs.empty() && txs.back().blockNumber > metaData.lastBlock) {
+  printf("read %d lines from log, keeps %lu txs\n", lineCount, txs.size());
+  if (!txs.empty() && txs.back().blockNumber >= metaData.lastBlock) {
     metaData.lastBlock = txs.back().blockNumber;
     metaData.lastTxIdx = txs.back().txIndex;
     metaData.lastStableBlock = metaData.lastBlock - 10;
   } else {
     clearFile(logFd);
+    if (!txs.empty())
+      printf("last tx block = %lu, prev last block = %lu\n",
+             txs.back().blockNumber, metaData.lastBlock);
     return metaData.lastBlock;
   }
   uint64_t minBlock = metaData.lastBlock;
   uint64_t minIdx = metaData.lastTxIdx;
+  int duplicateCount = 0;
   for (auto txIt = txs.rbegin(); txIt != txs.rend(); ++txIt) {
     if (txIt->blockNumber > minBlock ||
         (txIt->blockNumber == minBlock && txIt->txIndex >= minIdx)) {
       txIt->isDuplicate = true;
+      ++duplicateCount;
       continue;
     }
     minBlock = txIt->blockNumber;
     minIdx = txIt->txIndex;
   }
+  printf("duplicateCount = %d\n", duplicateCount);
   auto txIt = txs.begin();
   for (; txIt != txs.end(); ++txIt) {
     if (txIt->isDuplicate) {

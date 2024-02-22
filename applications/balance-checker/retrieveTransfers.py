@@ -505,6 +505,8 @@ if __name__ == "__main__":
                         for txhash, tx in block.items():
                             for idx, transfer in tx.items():
                                 f.write(f"{block_num}\t{txhash}\t{idx}\t{transfer['from'].lower()}\t{transfer['to'].lower()}\t{transfer['value']}\t{transfer['timestamp']}\n")
+                    # write a dummy transaction to update the last scanned block
+                    f.write(f"{self.state['last_scanned_block']}\t0x0\t9999999\t0x0\t0x0\t0\t0\n")
                 finally:
                     fcntl.flock(f.fileno(), fcntl.LOCK_UN)
             self.state["blocks"] = {}

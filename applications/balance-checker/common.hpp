@@ -61,6 +61,7 @@ struct ETH_Addr {
     // hexStr is required to be padded to 42 bytes long
     // 0x + 40 bytes
     if (hexStr.size() != 42 || hexStr[0] != '0' || hexStr[1] != 'x') {
+      printf("invalid hex string: %s\n", hexStr.c_str());
       throw std::runtime_error("invalid hex string");
     }
     for (int i = 0; i < 5; ++i) {
@@ -109,7 +110,7 @@ struct ETH_Addr {
 };
 
 struct ERC20_Balance {
-  uint64_t part[4];
+  uint64_t part[4] = {0};
 
   // ntoh
   void ntoh() {

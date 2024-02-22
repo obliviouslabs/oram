@@ -30,7 +30,7 @@ extern "C" {
 #endif
 
 std::string GetPublicKeyBase64(void);
-void ActualMain(void);
+void ActualMain(const char* dbPath);
 
 #if defined(__cplusplus)
 }
