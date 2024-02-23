@@ -49,6 +49,35 @@ void testOmpSpeedup() {
   printf("speedup for bitonic sort benchmark (memory intensive task) = %f\n",
          (double)timediffOneThread / timediffMultipleThread);
 
+  printf("\nReverse benchmark\n");
+  ocall_measure_time(&start);
+  for (int i = 0; i < vecCount; ++i) {
+    std::vector<uint64_t> vec(65546);
+    for (int t = 0; t < 500; ++t) {
+      std::reverse(vec.begin(), vec.end());
+    }
+  }
+  ocall_measure_time(&end);
+  timediffOneThread = end - start;
+  printf("one thread %d.%d s\n", timediffOneThread / 1'000'000'000,
+         timediffOneThread % 1'000'000'000);
+
+  ocall_measure_time(&start);
+#pragma omp parallel for schedule(static)
+  for (int i = 0; i < vecCount; ++i) {
+    std::vector<uint64_t> vec(65546);
+    for (int t = 0; t < 500; ++t) {
+      std::reverse(vec.begin(), vec.end());
+    }
+  }
+  ocall_measure_time(&end);
+  timediffMultipleThread = end - start;
+  printf("%d thread %d.%d s\n", omp_get_max_threads(),
+         timediffMultipleThread / 1'000'000'000,
+         timediffMultipleThread % 1'000'000'000);
+  printf("speedup for reverse benchmark (cpu intensive task) = %f\n",
+         (double)timediffOneThread / timediffMultipleThread);
+
   printf("\nFloating point benchmark\n");
   ocall_measure_time(&start);
   double totalSum;
@@ -270,7 +299,7 @@ void testOMapPerf() {
   uint64_t timediff = end - start;
   printf("oram init time %d.%d s\n", timediff / 1'000'000'000,
          timediff % 1'000'000'000);
-  int round = 1e6;
+  int round = 1e5;
   ocall_measure_time(&start);
   for (size_t r = 0; r < round; ++r) {
     ETH_Addr addr;
@@ -321,7 +350,7 @@ void testParOMapPerf() {
   printf("actual working thread max %d\n", omp_get_max_threads());
   size_t mapSize = 5e6;
   size_t initSize = 4e6;
-  ParOMap<ETH_Addr, ERC20_Balance> omap(mapSize, 2);
+  ParOMap<ETH_Addr, ERC20_Balance> omap(mapSize, omp_get_max_threads());
   std::function<std::pair<ETH_Addr, ERC20_Balance>(uint64_t)> readerFunc =
       [](uint64_t i) {
         std::pair<ETH_Addr, ERC20_Balance> pr;
@@ -339,12 +368,15 @@ void testParOMapPerf() {
   uint64_t timediff = end - start;
   printf("oram init time %d.%d s\n", timediff / 1'000'000'000,
          timediff % 1'000'000'000);
-  int round = 1e6;
-  uint32_t batchSize = 1e3;
+  int round = 1e5;
+  uint32_t batchSize = 1000;
   ocall_measure_time(&start);
   for (size_t r = 0; r < round / batchSize; ++r) {
     std::vector<ETH_Addr> addr(batchSize);
     std::vector<ERC20_Balance> balance(batchSize);
+    for (int i = 0; i < batchSize; ++i) {
+      addr[i].part[0] = i;
+    }
     omap.insertBatch(addr.begin(), addr.end(), balance.begin());
   }
   ocall_measure_time(&end);
@@ -391,7 +423,9 @@ void ecall_omap_perf() {
   EM::Backend::g_DefaultBackend =
       new EM::Backend::MemServerBackend(BackendSize);
   try {
-    testParOMapPerf();
+    // testOmpSpeedup();
+    // testParOMapPerf();
+    testOMapPerf();
     // testOMap();
     // testORAMInit();
     // testORAMReadWrite();
