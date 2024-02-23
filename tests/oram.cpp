@@ -234,6 +234,63 @@ TEST(ORAM, WithoutPositionMapMixed) {
   }
 }
 
+TEST(ORAM, WithoutPositionMapMixedOverflowHandling) {
+  for (int memSize : {2, 3, 5, 7, 9, 33, 40, 55, 127, 129, 543, 678, 1023, 1025,
+                      2000, 71429}) {
+    ODSL::CircuitORAM::ORAM<uint64_t, 2, 5, uint64_t, uint64_t, 4096, 1> oram(
+        memSize);
+    std::vector<uint64_t> posMap(memSize, -1);
+    std::vector<uint64_t> valMap(memSize);
+    int opCount = 1e5;
+    for (int i = 0; i < opCount; ++i) {
+      int rd = UniformRandom() % 3;
+      uint64_t uid = UniformRandom() % memSize;
+      switch (rd) {
+        case 0: {  // write
+          if (posMap[uid] != -1) {
+            --i;
+            continue;
+          }
+          uint64_t val = UniformRandom();
+          uint64_t pos = oram.Write(uid, val);
+          posMap[uid] = pos;
+          valMap[uid] = val;
+        } break;
+        case 1: {  // read
+          if (posMap[uid] == -1) {
+            --i;
+            continue;
+          }
+          uint64_t val;
+          uint64_t pos = oram.Read(posMap[uid], uid, val);
+          posMap[uid] = pos;
+          ASSERT_EQ(val, valMap[uid]);
+        } break;
+        case 2: {  // update
+          if (posMap[uid] == -1) {
+            --i;
+            continue;
+          }
+          uint64_t val;
+          uint64_t pos = oram.Update(
+              posMap[uid], uid,
+              [](uint64_t& x) {
+                ++x;
+                return true;
+              },
+              val);
+          posMap[uid] = pos;
+          ++valMap[uid];
+          ASSERT_EQ(val, valMap[uid]);
+        } break;
+
+        default:
+          break;
+      }
+    }
+  }
+}
+
 TEST(ORAM, StashLoad) {
   size_t memSize = 1UL << 16;
   static constexpr int Z = 2;

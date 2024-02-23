@@ -105,10 +105,22 @@ struct ORAM {
     ReadElementAndRemoveFromPath(path, uid, out);
 
     Block_ newBlock(out, newPos, uid);
-    WriteNewBlockToTreeTop(path, newBlock, stashSize + Z);
-    EvictPath(path, pos);
-    WriteBackPath(path, pos);
-    Evict();
+    int retry = 10;
+    while (true) {
+      bool success = WriteNewBlockToTreeTop(path, newBlock, stashSize + Z);
+      EvictPath(path, pos);
+      WriteBackPath(path, pos);
+      Evict();
+      if (success) {
+        break;
+      }
+      if (!retry) {
+        throw std::runtime_error("ORAM read failed");
+      }
+      --retry;
+      pos = (evictCounter++) % size();
+      path = ReadPath(pos);
+    }
     return newPos;
   }
 
@@ -135,10 +147,22 @@ struct ORAM {
     PositionType pos = (evictCounter++) % size();
     std::vector<Block_> path = ReadPath(pos);
     Block_ newBlock(in, newPos, uid);
-    WriteNewBlockToTreeTop(path, newBlock, stashSize + Z);
-    EvictPath(path, pos);
-    WriteBackPath(path, pos);
-    Evict<_evict_freq>();
+    int retry = 10;
+    while (true) {
+      bool success = WriteNewBlockToTreeTop(path, newBlock, stashSize + Z);
+      EvictPath(path, pos);
+      WriteBackPath(path, pos);
+      Evict<_evict_freq>();
+      if (success) {
+        break;
+      }
+      if (!retry) {
+        throw std::runtime_error("ORAM write failed");
+      }
+      --retry;
+      pos = (evictCounter++) % size();
+      path = ReadPath(pos);
+    }
     return newPos;
   }
 
@@ -188,11 +212,22 @@ struct ORAM {
     UidType newUid = DUMMY<UidType>();
     obliMove(keepFlag, newUid, updatedUid);
     Block_ newBlock(out, newPos, updatedUid);
-    WriteNewBlockToTreeTop(path, newBlock, stashSize + Z);
-    EvictPath(path, pos);
-
-    WriteBackPath(path, pos);
-    Evict();
+    int retry = 10;
+    while (true) {
+      bool success = WriteNewBlockToTreeTop(path, newBlock, stashSize + Z);
+      EvictPath(path, pos);
+      WriteBackPath(path, pos);
+      Evict();
+      if (success) {
+        break;
+      }
+      if (!retry) {
+        throw std::runtime_error("ORAM update failed");
+      }
+      --retry;
+      pos = (evictCounter++) % size();
+      path = ReadPath(pos);
+    }
     return newPos;
   }
 

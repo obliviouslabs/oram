@@ -177,29 +177,27 @@ void ReadElementAndRemoveFromPath(PathVec& path, const UidType& uid, T& out) {
   }
 }
 
+// Write a new block to the path, return false if the path is full
 template <class PathVec, typename Block_>
-void WriteNewBlockToPath(PathVec& path, const Block_& block) {
+bool WriteNewBlockToPath(PathVec& path, const Block_& block) {
   int endIdx = path.size();
   bool cond = true;
   // fill the first slot that's empty
   for (int i = 0; i < endIdx; i++) {
     cond &= !path[i].conditionalFillIfDummy(cond, block);
   }
-  if (cond) {
-    throw std::runtime_error("Path overflow");
-  }
+  return !cond;
 }
 
+// Write a new block to the top of the tree, return false if the top is full
 template <class PathVec, typename Block_>
-void WriteNewBlockToTreeTop(PathVec& path, const Block_& block, int topSize) {
+bool WriteNewBlockToTreeTop(PathVec& path, const Block_& block, int topSize) {
   bool cond = true;
   // fill the first slot that's empty
   for (int i = 0; i < topSize; i++) {
     cond &= !path[i].conditionalFillIfDummy(cond, block);
   }
-  if (cond) {
-    throw std::runtime_error("Stash overflow");
-  }
+  return !cond;
 }
 
 template <typename T, const int Z, const int stashSize,
