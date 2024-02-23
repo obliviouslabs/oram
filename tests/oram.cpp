@@ -239,29 +239,90 @@ TEST(ORAM, StashLoad) {
   static constexpr int Z = 2;
   static constexpr int stashSize = 50;
   ODSL::CircuitORAM::ORAM<int, Z, stashSize, uint64_t, uint64_t> oram(memSize);
-  size_t round = 1e8;
+  size_t warmupWindowCount = 1e5;
+  size_t windowCount = 1e8;
+  size_t windowSize = 10;
   std::vector<uint64_t> posMap(memSize);
   for (int i = 0; i < memSize; ++i) {
     posMap[i] = oram.Write(i, 0);
   }
   std::vector<uint64_t> elementDistribute(60);
-  for (int i = 0; i < round; ++i) {
-    int val;
-    uint64_t idx = UniformRandom(memSize - 1);
-    uint64_t pos = oram.Read(posMap[idx], idx, val);
-    posMap[idx] = pos;
-    int stashLoad = 0;
-    for (int j = 0; j < stashSize; ++j) {
-      if (!oram.stash->blocks[j].isDummy()) {
-        ++stashLoad;
+  for (int i = 0; i < warmupWindowCount + windowCount; ++i) {
+    int windowMaxStashLoad = 0;
+    for (int j = 0; j < windowSize; ++j) {
+      int val;
+      uint64_t idx = UniformRandom(memSize - 1);
+      uint64_t oldpos = posMap[idx];
+      uint64_t pos = oram.Read(oldpos, idx, val);
+      posMap[idx] = pos;
+
+      int stashLoad = 0;
+      for (int j = 0; j < stashSize; ++j) {
+        if (!oram.stash->blocks[j].isDummy()) {
+          ++stashLoad;
+        }
       }
-    }
-    for (int j = 0; j < Z; ++j) {
-      if (!oram.tree.GetByPathAndLevel(0, 0).blocks[j].isDummy()) {
-        ++stashLoad;
+      for (int j = 0; j < Z; ++j) {
+        if (!oram.tree.GetByPathAndLevel(0, 0).blocks[j].isDummy()) {
+          ++stashLoad;
+        }
       }
+      windowMaxStashLoad = std::max(windowMaxStashLoad, stashLoad);
     }
-    ++elementDistribute[stashLoad];
+    if (i >= warmupWindowCount) {
+      ++elementDistribute[windowMaxStashLoad];
+    }
+  }
+  for (int i = 0; i < 60; ++i) {
+    printf("%d %lu\n", i, elementDistribute[i]);
+  }
+}
+
+TEST(ORAM, StashLoadOPRAM) {
+  size_t memSize = 1UL << 16;
+  static constexpr int Z = 2;
+  static constexpr int stashSize = 50;
+  ODSL::CircuitORAM::ORAM<int, Z, stashSize, uint64_t, uint64_t, 4096, 2> oram(
+      memSize);
+  size_t warmupWindowCount = 1e5;
+  size_t windowCount = 1e8;
+  size_t windowSize = 10;
+  double dummyProb = 0;
+  std::vector<uint64_t> posMap(memSize);
+  for (int i = 0; i < memSize; ++i) {
+    posMap[i] = oram.Write(i, 0);
+  }
+  std::vector<uint64_t> elementDistribute(60);
+  for (int i = 0; i < warmupWindowCount + windowCount; ++i) {
+    int windowMaxStashLoad = 0;
+    for (int j = 0; j < windowSize; ++j) {
+      int val;
+      uint64_t idx = UniformRandom(memSize - 1);
+      uint64_t oldpos = posMap[idx];
+      if (UniformRandomDouble() < dummyProb) {
+        idx = DUMMY<uint64_t>();
+        oldpos = UniformRandom(memSize - 1);
+      }
+      uint64_t pos = oram.Read(oldpos, idx, val);
+      if (idx != DUMMY<uint64_t>()) {
+        posMap[idx] = pos;
+      }
+      int stashLoad = 0;
+      for (int j = 0; j < stashSize; ++j) {
+        if (!oram.stash->blocks[j].isDummy()) {
+          ++stashLoad;
+        }
+      }
+      for (int j = 0; j < Z; ++j) {
+        if (!oram.tree.GetByPathAndLevel(0, 0).blocks[j].isDummy()) {
+          ++stashLoad;
+        }
+      }
+      windowMaxStashLoad = std::max(windowMaxStashLoad, stashLoad);
+    }
+    if (i >= warmupWindowCount) {
+      ++elementDistribute[windowMaxStashLoad];
+    }
   }
   for (int i = 0; i < 60; ++i) {
     printf("%d %lu\n", i, elementDistribute[i]);

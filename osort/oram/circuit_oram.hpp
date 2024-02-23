@@ -3,16 +3,16 @@
 #include "oram_common.hpp"
 
 namespace ODSL::CircuitORAM {
-template <typename T, const int Z = 2, const int stashSize = 50,
+template <typename T, const int Z = 2, const int stashSize = 20,
           typename PositionType = uint64_t, typename UidType = uint64_t,
-          const uint64_t page_size = 4096>
+          const uint64_t page_size = 4096, int evict_freq = 2>
 struct ORAM {
   // using Node_ = Node<T, Z, PositionType, UidType>;
   using Stash = Bucket<T, stashSize, PositionType, UidType>;
   using Block_ = Block<T, PositionType, UidType>;
   using Bucket_ = Bucket<T, Z, PositionType, UidType>;
   using UidBlock_ = UidBlock<T, UidType>;
-  using HeapTree_ = HeapTree<Bucket_, PositionType, page_size>;
+  using HeapTree_ = HeapTree<Bucket_, PositionType, page_size, evict_freq>;
   // Node_* root = nullptr;
   HeapTree_ tree;
   Stash* stash = nullptr;
@@ -118,9 +118,9 @@ struct ORAM {
     WriteBackPath(path, pos);
   }
 
-  template <const int evict_freq = 2>
+  template <const int _evict_freq = evict_freq>
   void Evict() {
-    for (int i = 0; i < evict_freq; ++i) {
+    for (int i = 0; i < _evict_freq; ++i) {
       Evict((evictCounter++) % size());
     }
   }
@@ -130,7 +130,7 @@ struct ORAM {
     return Read(pos, uid, out, newPos);
   }
 
-  template <const int evict_freq = 2>
+  template <const int _evict_freq = evict_freq>
   PositionType Write(const UidType& uid, const T& in, PositionType newPos) {
     PositionType pos = (evictCounter++) % size();
     std::vector<Block_> path = ReadPath(pos);
@@ -138,11 +138,11 @@ struct ORAM {
     WriteNewBlockToTreeTop(path, newBlock, stashSize + Z);
     EvictPath(path, pos);
     WriteBackPath(path, pos);
-    Evict<evict_freq>();
+    Evict<_evict_freq>();
     return newPos;
   }
 
-  template <const int evict_freq = 2>
+  template <const int _evict_freq = evict_freq>
   PositionType Write(const UidType& uid, const T& in) {
     PositionType newPos = UniformRandom(size() - 1);
     return Write<evict_freq>(uid, in, newPos);
