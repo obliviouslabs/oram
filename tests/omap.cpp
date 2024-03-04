@@ -272,25 +272,23 @@ TEST(OMap, TestRedistribute) {
 }
 
 TEST(OMap, FindPerf) {
-  size_t mapSize = 1e7;
-  size_t initSize = 1e7;
+  size_t mapSize = 1UL << 26;
+  size_t initSize = 1UL << 26;
   if (EM::Backend::g_DefaultBackend) {
     delete EM::Backend::g_DefaultBackend;
   }
-  size_t BackendSize = 1e10;
+  size_t BackendSize = 1e8;
   EM::Backend::g_DefaultBackend =
       new EM::Backend::MemServerBackend(BackendSize);
-  OMap<uint64_t, int64_t, 9, uint64_t, uint64_t> omap(mapSize);
-  StdVector<std::pair<uint64_t, int64_t>> vec(initSize);
-  for (int i = 0; i < initSize; i++) {
-    vec[i].first = i * 10;
-    vec[i].second = i * 3;
-  }
-  StdVector<std::pair<uint64_t, int64_t>>::Reader reader(vec.begin(),
-                                                         vec.end());
+  OMap<uint64_t, int64_t, 9, uint64_t, uint64_t> omap(mapSize, 1UL << 35);
+  std::function<std::pair<uint64_t, int64_t>(uint64_t)> readerFunc =
+      [](uint64_t i) { return std::pair<uint64_t, int64_t>(i * 10, i * 3); };
+
+  EM::VirtualVector::VirtualReader<std::pair<uint64_t, int64_t>> reader(
+      initSize, readerFunc);
   // time initialization
   auto start = std::chrono::system_clock::now();
-  omap.InitFromReader(reader);
+  omap.InitFromReaderInPlace(reader);
   auto end = std::chrono::system_clock::now();
   std::chrono::duration<double> elapsed_seconds = end - start;
   std::cout << "omap init time: " << elapsed_seconds.count() << "s\n";

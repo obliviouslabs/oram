@@ -5,6 +5,7 @@
 #include "external_memory/algorithm/sort_def.hpp"
 #include "oram/circuit_oram.hpp"
 #include "oram/path_oram.hpp"
+#include "oram/recursive_oram.hpp"
 #include "testutils.hpp"
 
 using namespace ODSL::PathORAM;
@@ -546,6 +547,82 @@ TEST(ORAM, testInitWithReader) {
         posMap[i].data = pos;
         ASSERT_EQ(val.key, valMap[i]);
       }
+    }
+  }
+}
+
+TEST(RecursiveORAM, testInitDefault) {
+  uint64_t size = 12345;
+  ODSL::RecursiveORAM<SortElement> oram(size);
+  oram.InitDefault(SortElement());
+}
+
+TEST(RecuriveORAM, testReadAfterWrite) {
+  uint64_t size = 1234;
+  ODSL::RecursiveORAM<int64_t> oram(size);
+  oram.InitDefault(0);
+  oram.Write(0, 1235);
+  int64_t val;
+  oram.Read(0, val);
+  ASSERT_EQ(val, 1235);
+  for (uint64_t i = 0; i < size; i++) {
+    oram.Write(i, i * 3);
+  }
+  for (uint64_t i = 0; i < size; i++) {
+    int64_t val;
+    oram.Read(i, val);
+    ASSERT_EQ(val, i * 3);
+  }
+}
+
+TEST(RecuriveORAM, testReadAfterInit) {
+  uint64_t size = 1234;
+  StdVector<int64_t> ref(size);
+  ODSL::RecursiveORAM<int64_t> oram(size);
+  for (uint64_t i = 0; i < size; i++) {
+    ref[i] = UniformRandom();
+  }
+  StdVector<int64_t>::Reader reader(ref.begin(), ref.end());
+  oram.InitFromReaderInPlace(reader);
+  for (int round = 0; round < 1e5; ++round) {
+    uint64_t addr = UniformRandom(size - 1);
+    int64_t val;
+    oram.Read(addr, val);
+    ASSERT_EQ(val, ref[addr]);
+  }
+}
+
+TEST(RecuriveORAM, testMixed) {
+  uint64_t size = 4312;
+  StdVector<int64_t> ref(size);
+  ODSL::RecursiveORAM<int64_t> oram(size);
+  for (uint64_t i = 0; i < size; i++) {
+    ref[i] = UniformRandom();
+  }
+  StdVector<int64_t>::Reader reader(ref.begin(), ref.end());
+  oram.InitFromReaderInPlace(reader);
+  for (int round = 0; round < 1e6; ++round) {
+    int op = UniformRandom(2);
+    uint64_t addr = UniformRandom(size - 1);
+    switch (op) {
+      case 0: {
+        int64_t val;
+        oram.Read(addr, val);
+        ASSERT_EQ(val, ref[addr]);
+      } break;
+      case 1: {
+        int64_t val = UniformRandom();
+        oram.Write(addr, val);
+        ref[addr] = val;
+      } break;
+      case 2: {
+        auto incFunc = [](int64_t& x) {
+          ++x;
+          return true;
+        };
+        oram.Access(addr, incFunc);
+        ++ref[addr];
+      } break;
     }
   }
 }
