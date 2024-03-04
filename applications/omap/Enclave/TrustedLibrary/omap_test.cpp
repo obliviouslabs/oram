@@ -8,6 +8,7 @@
 
 #include "oram/omap.hpp"
 #include "oram/par_omap.hpp"
+#include "oram/recursive_oram.hpp"
 #include "sgx_thread.h"
 #include "sgx_trts.h"
 
@@ -345,6 +346,42 @@ void testOMapPerf() {
          timediff / round % 1'000);
 }
 
+void testRecursiveORAMPerf() {
+  printf("test recursive oram perf with %d threads\n", TCS_NUM);
+  printf("actual working thread max %d\n", omp_get_max_threads());
+  size_t mapSize = 5e6;
+  struct AddrBalance {
+    ETH_Addr addr;
+    ERC20_Balance balance;
+  };
+  RecursiveORAM<AddrBalance> roram(mapSize);
+
+  std::function<AddrBalance(uint64_t)> readerFunc = [](uint64_t i) {
+    return AddrBalance();
+  };
+
+  EM::VirtualVector::VirtualReader<AddrBalance> reader(mapSize, readerFunc);
+  uint64_t start, end;
+  printf("init recursive oram of size %lu\n", mapSize);
+  ocall_measure_time(&start);
+  roram.InitFromReaderInPlace(reader);
+  ocall_measure_time(&end);
+  uint64_t timediff = end - start;
+  printf("oram init time %d.%d s\n", timediff / 1'000'000'000,
+         timediff % 1'000'000'000);
+  int round = 1e5;
+  ocall_measure_time(&start);
+  for (size_t r = 0; r < round; ++r) {
+    AddrBalance pr;
+    uint64_t addr = UniformRandom(mapSize - 1);
+    roram.Read(addr, pr);
+  }
+  ocall_measure_time(&end);
+  timediff = end - start;
+  printf("recursive oram access time %d.%d us\n", timediff / round / 1'000,
+         timediff / round % 1'000);
+}
+
 void testParOMapPerf() {
   printf("test parallel omap perf with %d threads\n", TCS_NUM);
   printf("actual working thread max %d\n", omp_get_max_threads());
@@ -425,6 +462,7 @@ void ecall_omap_perf() {
   try {
     // testOmpSpeedup();
     // testParOMapPerf();
+    // testRecursiveORAMPerf();
     testOMapPerf();
     // testOMap();
     // testORAMInit();
