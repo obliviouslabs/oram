@@ -31,6 +31,10 @@ struct RecursiveORAM {
 
   RecursiveORAM(PositionType size) { SetSize(size); }
 
+  RecursiveORAM(PositionType size, size_t cacheBytes) {
+    SetSize(size, cacheBytes);
+  }
+
   void SetSize(PositionType size,
                size_t cacheBytes = ((uint64_t)ENCLAVE_SIZE << 20) * 3UL / 4UL) {
     _size = size;

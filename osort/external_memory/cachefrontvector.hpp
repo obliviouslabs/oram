@@ -9,11 +9,11 @@
 namespace EM::CacheFrontVector {
 template <typename T,
           uint64_t page_size = std::max((1UL << 14) - 32, sizeof(T)),
-          bool ENCRYPTED = true, bool AUTH = true>
+          bool ENCRYPTED = true, bool AUTH = true,
+          const uint64_t ext_cache_bytes = (1UL << 16)>
 struct Vector {
   static constexpr uint64_t item_per_page = page_size / sizeof(T);
   constexpr static bool useStdCopy = true;
-  constexpr static uint64_t ext_cache_bytes = 1UL << 16;
   using ExtVec =
       EM::ExtVector::Vector<T, page_size, ENCRYPTED, AUTH,
                             std::max(1UL, ext_cache_bytes / page_size)>;
@@ -23,7 +23,7 @@ struct Vector {
   using const_reference = const T&;
   IntVec intVec;
   ExtVec* extVec = NULL;
-  size_t cacheSize;
+  size_t cacheSize = 0;
 
   Vector() : intVec(0), cacheSize(0) {}
 
@@ -181,6 +181,15 @@ struct Vector {
   }
 
   T& operator[](size_t i) {
+    if (i < cacheSize) {
+      return intVec[i];
+    } else {
+      Assert(extVec);
+      return (*extVec)[i - cacheSize];
+    }
+  }
+
+  const T& operator[](size_t i) const {
     if (i < cacheSize) {
       return intVec[i];
     } else {
