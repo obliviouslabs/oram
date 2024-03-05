@@ -7,7 +7,13 @@ struct CuckooHashMapIndexer {
   static constexpr int saltLength = 16;
   uint8_t salts[2][saltLength];
   PositionType _size;
-  CuckooHashMapIndexer(PositionType size) : _size(size) {
+
+  CuckooHashMapIndexer() {}
+
+  CuckooHashMapIndexer(PositionType size) { SetSize(size); }
+
+  void SetSize(PositionType size) {
+    _size = size;
     for (int i = 0; i < 2; ++i) {
       read_rand(salts[i], saltLength);
     }
@@ -76,13 +82,25 @@ struct CuckooHashMap {
   TableType table0, table1;
   CuckooHashMapIndexer<K, PositionType> indexer;
   std::vector<CuckooHashMapEntry<K, V>> stash;
-  CuckooHashMap(PositionType size, uint64_t cacheBytes = ENCLAVE_SIZE << 19)
-      : _size(size),
-        indexer(size / (2 * loadFactor * bucketSize)),
-        tableSize(size / (2 * loadFactor * bucketSize)),
-        table0(size / (2 * loadFactor * bucketSize), cacheBytes / 2),
-        table1(size / (2 * loadFactor * bucketSize), cacheBytes / 2),
-        load(0) {}
+
+  CuckooHashMap() {}
+
+  CuckooHashMap(PositionType size) { SetSize(size); }
+
+  CuckooHashMap(PositionType size, uint64_t cacheBytes) {
+    SetSize(size, cacheBytes);
+  }
+
+  void SetSize(PositionType size,
+               uint64_t cacheBytes = ((uint64_t)ENCLAVE_SIZE << 20) * 3UL /
+                                     4UL) {
+    _size = size;
+    load = 0;
+    tableSize = size / (2 * loadFactor * bucketSize);
+    indexer.SetSize(tableSize);
+    table0.SetSize(tableSize, cacheBytes / 2);
+    table1.SetSize(tableSize, cacheBytes / 2);
+  }
   using NonObliviousCuckooHashMap = CuckooHashMap<K, V, false, PositionType>;
 
   void InitFromNonOblivious(NonObliviousCuckooHashMap& other) {
@@ -99,7 +117,7 @@ struct CuckooHashMap {
   }
 
   template <typename Reader>
-  void InitFromReader(Reader& reader) {
+  void InitFromReaderInPlace(Reader& reader) {
     if constexpr (!isOblivious) {
       while (!reader.eof()) {
         std::pair<K, V> entry = reader.read();
@@ -123,7 +141,7 @@ struct CuckooHashMap {
       */
     } else {
       NonObliviousCuckooHashMap nonObliviousCuckooHashMap(_size, 0);
-      nonObliviousCuckooHashMap.InitFromReader(reader);
+      nonObliviousCuckooHashMap.InitFromReaderInPlace(reader);
       InitFromNonOblivious(nonObliviousCuckooHashMap);
     }
   }
@@ -323,15 +341,18 @@ struct CuckooHashMap {
     PositionType idx0 = indexer.getHashIdx0(key);
     updateHelper(idx0, table0, updateFunc);
     if (erased) {
+      --load;
       return true;
     }
     PositionType idx1 = indexer.getHashIdx1(key);
     updateHelper(idx1, table1, updateFunc);
     if (erased) {
+      --load;
       return true;
     }
     for (auto it = stash.begin(); it != stash.end(); ++it) {
       if (it->key == key) {
+        --load;
         stash.erase(it);
         return true;
       }

@@ -6,6 +6,7 @@
 #include <functional>
 #include <unordered_map>
 
+#include "oram/cuckoo.hpp"
 #include "oram/omap.hpp"
 #include "oram/par_omap.hpp"
 #include "oram/recursive_oram.hpp"
@@ -346,6 +347,62 @@ void testOMapPerf() {
          timediff / round % 1'000);
 }
 
+void testCuckooOMapPerf() {
+  printf("test cuckoo omap perf with %d threads\n", TCS_NUM);
+  printf("actual working thread max %d\n", omp_get_max_threads());
+  size_t mapSize = 5e6;
+  size_t initSize = 4e6;
+  CuckooHashMap<ETH_Addr, ERC20_Balance, true> omap(mapSize);
+
+  std::function<std::pair<ETH_Addr, ERC20_Balance>(uint64_t)> readerFunc =
+      [](uint64_t i) { return std::pair<ETH_Addr, ERC20_Balance>(); };
+
+  EM::VirtualVector::VirtualReader<std::pair<ETH_Addr, ERC20_Balance>> reader(
+      initSize, readerFunc);
+  uint64_t start, end;
+  printf("init omap of size %lu\n", mapSize);
+  ocall_measure_time(&start);
+  omap.InitFromReaderInPlace(reader);
+  ocall_measure_time(&end);
+  uint64_t timediff = end - start;
+  printf("oram init time %d.%d s\n", timediff / 1'000'000'000,
+         timediff % 1'000'000'000);
+  int round = 1e5;
+  ocall_measure_time(&start);
+  for (size_t r = 0; r < round; ++r) {
+    ETH_Addr addr;
+    addr.part[0] = r;
+    ERC20_Balance balance;
+    bool res = omap.insert(addr, balance);
+  }
+  ocall_measure_time(&end);
+  timediff = end - start;
+  printf("oram insert time %d.%d us\n", timediff / round / 1'000,
+         timediff / round % 1'000);
+
+  ocall_measure_time(&start);
+  for (size_t r = 0; r < round; ++r) {
+    ETH_Addr addr;
+    addr.part[0] = r;
+    ERC20_Balance balance;
+    omap.find(addr, balance);
+  }
+  ocall_measure_time(&end);
+  timediff = end - start;
+  printf("oram find time %d.%d us\n", timediff / round / 1'000,
+         timediff / round % 1'000);
+
+  ocall_measure_time(&start);
+  for (size_t r = 0; r < round; ++r) {
+    ETH_Addr addr;
+    omap.erase(addr);
+  }
+  ocall_measure_time(&end);
+  timediff = end - start;
+  printf("oram erase time %d.%d us\n", timediff / round / 1'000,
+         timediff / round % 1'000);
+}
+
 void testRecursiveORAMPerf() {
   printf("test recursive oram perf with %d threads\n", TCS_NUM);
   printf("actual working thread max %d\n", omp_get_max_threads());
@@ -441,11 +498,7 @@ void ecall_omap() {
   EM::Backend::g_DefaultBackend =
       new EM::Backend::MemServerBackend(BackendSize);
   try {
-    // testOMap();
-    testParOMapPerf();
-    // testORAMInit();
-    // testORAMReadWrite();
-    // testBuildBottomUp();
+    testOMap();
   } catch (std::exception& e) {
     printf("exception: %s\n", e.what());
   }
@@ -461,7 +514,8 @@ void ecall_omap_perf() {
       new EM::Backend::MemServerBackend(BackendSize);
   try {
     // testOmpSpeedup();
-    testParOMapPerf();
+    // testParOMapPerf();
+    testCuckooOMapPerf();
     // testRecursiveORAMPerf();
     // testOMapPerf();
     // testOMap();
