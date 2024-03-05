@@ -14,6 +14,7 @@ ORAMBindingSingleton::ORAMBindingSingleton() {
 void ORAMBindingSingleton::InitORAM(uint64_t size) {
   // ASSERT(oram == nullptr);
   oram = (void*) (new RecursiveORAM<uint64_t, uint32_t>(size));
+  ((RecursiveORAM<uint64_t, uint32_t>*)oram)->InitDefault(0);
 }
 
 void ORAMBindingSingleton::Write(uint32_t addr, uint64_t val) {
