@@ -354,7 +354,7 @@ void testRecursiveORAMPerf() {
     ETH_Addr addr;
     ERC20_Balance balance;
   };
-  RecursiveORAM<AddrBalance> roram(mapSize);
+  RecursiveORAM<AddrBalance, uint32_t> roram(mapSize);
 
   std::function<AddrBalance(uint64_t)> readerFunc = [](uint64_t i) {
     return AddrBalance();
@@ -461,9 +461,9 @@ void ecall_omap_perf() {
       new EM::Backend::MemServerBackend(BackendSize);
   try {
     // testOmpSpeedup();
-    // testParOMapPerf();
+    testParOMapPerf();
     // testRecursiveORAMPerf();
-    testOMapPerf();
+    // testOMapPerf();
     // testOMap();
     // testORAMInit();
     // testORAMReadWrite();

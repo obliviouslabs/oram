@@ -5,15 +5,15 @@
 
 namespace ODSL {
 
-template <typename T, typename PositionType = uint64_t,
-          typename UidType = uint64_t>
+template <typename T, typename PositionType = uint64_t>
 struct RecursiveORAM {
-  static constexpr short fan_out = 8;
+  typedef PositionType UidType;
+  static constexpr short fan_out = std::max(64 / (int)sizeof(PositionType), 2);
   struct InternalNode {
     PositionType children[fan_out];
   };
 
-  static constexpr short chunk_size = 1;
+  static constexpr short chunk_size = 2;
   struct LeafNode {
     T data[chunk_size];
   };
