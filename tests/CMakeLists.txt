@@ -29,6 +29,18 @@ target_link_libraries(
 )
 
 add_executable(
+  test_cuckoo
+  cuckoo.cpp
+)
+target_compile_definitions(test_cuckoo PRIVATE BOOST_STACKTRACE_USE_ADDR2LINE)
+target_link_libraries(
+  test_cuckoo
+  dl
+  gtest_main
+  common
+)
+
+add_executable(
   test_basic
   basic.cpp
 )
