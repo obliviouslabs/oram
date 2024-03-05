@@ -594,13 +594,13 @@ TEST(RecuriveORAM, testReadAfterInit) {
 
 TEST(RecuriveORAM, testMixed) {
   uint64_t size = 4312;
-  StdVector<int64_t> ref(size);
+  using Vec = EM::CacheFrontVector::Vector<int64_t>;
+  Vec ref(size, 0);
   ODSL::RecursiveORAM<int64_t> oram(size);
   for (uint64_t i = 0; i < size; i++) {
     ref[i] = UniformRandom();
   }
-  StdVector<int64_t>::Reader reader(ref.begin(), ref.end());
-  oram.InitFromReaderInPlace(reader);
+  oram.InitFromVector(ref);
   for (int round = 0; round < 1e6; ++round) {
     int op = UniformRandom(2);
     uint64_t addr = UniformRandom(size - 1);

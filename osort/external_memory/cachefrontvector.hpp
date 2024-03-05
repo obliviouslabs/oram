@@ -215,5 +215,79 @@ struct Vector {
       return extVec->At(i - cacheSize);
     }
   }
+
+  struct Reader {
+    using value_type = T;
+    using iterator_type = Iterator;
+    Iterator it;
+    Iterator end;
+
+    Reader() {}
+
+    Reader(Iterator _begin, Iterator _end, uint32_t _auth = 0)
+        : it(_begin), end(_end) {}
+
+    void init(Iterator _begin, Iterator _end, uint32_t _auth = 0) {
+      it = _begin;
+      end = _end;
+    }
+
+    INLINE T& get() {
+      Assert(!eof());
+      return *it;
+    }
+
+    INLINE const T& get() const {
+      Assert(!eof());
+      return *it;
+    }
+
+    INLINE const T& read() {
+      const T& val = get();
+      ++it;
+      return val;
+    }
+
+    INLINE bool eof() { return end <= it; }
+
+    size_t size() { return end - it; }
+  };
+
+  struct PrefetchReader : public Reader {
+    using value_type = T;
+    using iterator_type = Iterator;
+    PrefetchReader() {}
+
+    PrefetchReader(Iterator _begin, Iterator _end, uint32_t _auth = 0,
+                   uint64_t _heapSize = DEFAULT_HEAP_SIZE)
+        : Reader(_begin, _end, _auth) {}
+  };
+
+  struct Writer {
+    using value_type = T;
+    using iterator_type = Iterator;
+    Iterator it;
+    Iterator end;
+    Writer() {}
+
+    Writer(Iterator _begin, Iterator _end, uint32_t _auth = 0)
+        : it(_begin), end(_end) {}
+
+    void init(Iterator _begin, Iterator _end, uint32_t _auth = 0) {
+      it = _begin;
+      end = _end;
+    }
+
+    INLINE void write(const T& element) {
+      *it = element;
+      ++it;
+    }
+
+    INLINE bool eof() { return end <= it; }
+
+    size_t size() { return end - it; }
+
+    INLINE void flush() {}
+  };
 };
 }  // namespace EM::CacheFrontVector

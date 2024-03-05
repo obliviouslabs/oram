@@ -29,11 +29,34 @@ struct CuckooHashMapEntry {
   bool valid = false;
   K key;
   V value;
+#ifndef ENCLAVE_MODE
+  // cout
+  friend std::ostream& operator<<(std::ostream& os,
+                                  const CuckooHashMapEntry& entry) {
+    os << "(" << entry.valid << ", " << entry.key << ", " << entry.value << ")";
+    return os;
+  }
+#endif
 };
 
 template <typename K, typename V, const short bucketSize>
 struct CuckooHashMapBucket {
   CuckooHashMapEntry<K, V> entries[bucketSize];
+#ifndef ENCLAVE_MODE
+  // cout
+  friend std::ostream& operator<<(std::ostream& os,
+                                  const CuckooHashMapBucket& bucket) {
+    os << "[";
+    for (int i = 0; i < bucketSize; ++i) {
+      os << bucket.entries[i];
+      if (i != bucketSize - 1) {
+        os << ", ";
+      }
+    }
+    os << "]";
+    return os;
+  }
+#endif
 };
 
 template <typename K, typename V, const bool isOblivious,
@@ -46,10 +69,10 @@ struct CuckooHashMap {
   PositionType load;
   PositionType tableSize;
   using BucketType = CuckooHashMapBucket<K, V, bucketSize>;
-  using TableType = std::conditional_t<
-      isOblivious, RecursiveORAM<BucketType, PositionType>,
-      EM::CacheFrontVector::Vector<BucketType, sizeof(BucketType), true, true,
-                                   sizeof(BucketType)>>;
+  using TableType =
+      std::conditional_t<isOblivious, RecursiveORAM<BucketType, PositionType>,
+                         EM::CacheFrontVector::Vector<
+                             BucketType, sizeof(BucketType), true, true, 1024>>;
   TableType table0, table1;
   CuckooHashMapIndexer<K, PositionType> indexer;
   std::vector<CuckooHashMapEntry<K, V>> stash;
@@ -59,7 +82,53 @@ struct CuckooHashMap {
         tableSize(size / (2 * loadFactor * bucketSize)),
         table0(size / (2 * loadFactor * bucketSize), cacheBytes / 2),
         table1(size / (2 * loadFactor * bucketSize), cacheBytes / 2),
-        load(0) {
+        load(0) {}
+  using NonObliviousCuckooHashMap = CuckooHashMap<K, V, false, PositionType>;
+
+  void InitFromNonOblivious(NonObliviousCuckooHashMap& other) {
+    static_assert(isOblivious);
+    if (tableSize != other.tableSize || _size != other._size) {
+      throw std::runtime_error("CuckooHashMap InitFromNonOblivious failed");
+    }
+
+    load = other.load;
+    stash = other.stash;
+    indexer = other.indexer;
+    table0.InitFromVector(other.table0);
+    table1.InitFromVector(other.table1);
+  }
+
+  template <typename Reader>
+  void InitFromReader(Reader& reader) {
+    if constexpr (!isOblivious) {
+      while (!reader.eof()) {
+        std::pair<K, V> entry = reader.read();
+        insert(entry.first, entry.second);
+      }
+      /**
+      std::cout << "CuckooHashMap load: " << load << std::endl;
+      std::cout << "CuckooHashMap table0: " << std::endl;
+      for (int i = 0; i < tableSize; ++i) {
+        std::cout << table0[i] << std::endl;
+      }
+      std::cout << "CuckooHashMap table1: " << std::endl;
+      for (int i = 0; i < tableSize; ++i) {
+        std::cout << table1[i] << std::endl;
+      }
+      std::cout << "CuckooHashMap stash: " << std::endl;
+      for (const auto& entry : stash) {
+        std::cout << entry << " ";
+      }
+      std::cout << std::endl;
+      */
+    } else {
+      NonObliviousCuckooHashMap nonObliviousCuckooHashMap(_size, 0);
+      nonObliviousCuckooHashMap.InitFromReader(reader);
+      InitFromNonOblivious(nonObliviousCuckooHashMap);
+    }
+  }
+
+  void InitDefault() {
     if constexpr (isOblivious) {
       table0.InitDefault(BucketType());
       table1.InitDefault(BucketType());
