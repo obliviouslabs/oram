@@ -40,6 +40,14 @@ struct Block {
   }
 
   INLINE bool isDummy() const { return uid == DUMMY<UidType>(); }
+
+#ifndef ENCLAVE_MODE
+  friend std::ostream& operator<<(std::ostream& os, const Block& block) {
+    os << "Block{data: " << block.data << ", position: " << block.position
+       << ", uid: " << block.uid << "}";
+    return os;
+  }
+#endif
 };
 
 template <typename T, typename UidType = uint64_t>

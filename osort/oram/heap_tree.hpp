@@ -284,6 +284,20 @@ struct HeapTree {
   }
 
   template <typename Iterator>
+  int ReadSubPath(PositionType pos, Iterator pathBegin, int k) {
+    std::vector<PositionType> pathIdx(totalLevel);
+
+    int actualLevel =
+        GetPathIdx(pathIdx.begin(), pathIdx.end(), pos, leafCount, topLevel);
+
+    for (int i = k; i < actualLevel; ++i) {
+      PositionType idx = pathIdx[i];
+      *(pathBegin + i - k) = arr.Get(idx);
+    }
+    return actualLevel;
+  }
+
+  template <typename Iterator>
   int WritePath(PositionType pos, const Iterator pathBegin) {
     std::vector<PositionType> pathIdx(totalLevel);
     int actualLevel =
@@ -292,6 +306,19 @@ struct HeapTree {
     for (int i = 0; i < actualLevel; ++i) {
       PositionType idx = pathIdx[i];
       arr[idx] = *(pathBegin + i);
+    }
+    return actualLevel;
+  }
+
+  template <typename Iterator>
+  int WriteSubPath(PositionType pos, const Iterator pathBegin, int k) {
+    std::vector<PositionType> pathIdx(totalLevel);
+    int actualLevel =
+        GetPathIdx(pathIdx.begin(), pathIdx.end(), pos, leafCount, topLevel);
+
+    for (int i = k; i < actualLevel; ++i) {
+      PositionType idx = pathIdx[i];
+      arr[idx] = *(pathBegin + i - k);
     }
     return actualLevel;
   }
@@ -317,6 +344,21 @@ struct HeapTree {
       const std::function<AggT(T&, const AggT&, const AggT&)>& reduceFunc,
       const std::function<AggT(T&, PositionType)>& leafFunc) {
     return BuildBottomUpHelper<AggT>(0, 0, reduceFunc, leafFunc);
+  }
+
+  void getTopKLevel(int k, T* output) {
+    if (k <= topLevel) {
+      PositionType outputSize = (1UL << k) - 1;
+      for (int i = 0; i < outputSize; ++i) {
+        *output++ = GetByInternalIdx(i);
+      }
+      return;
+    }
+    for (int level = 0; level < k; ++level) {
+      for (int i = 0; i < (1UL << level); ++i) {
+        *output++ = GetByPathAndLevel(i, level);
+      }
+    }
   }
 };
 

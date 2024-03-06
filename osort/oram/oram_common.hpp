@@ -177,6 +177,14 @@ void ReadElementAndRemoveFromPath(PathVec& path, const UidType& uid, T& out) {
   }
 }
 
+template <class Iterator, typename UidType, typename T>
+void ReadElementAndRemoveFromPath(Iterator begin, Iterator end,
+                                  const UidType& uid, T& out) {
+  for (auto it = begin; it != end; ++it) {
+    it->invalidateAndCopyDataIfUidMatch(uid, out);
+  }
+}
+
 // Write a new block to the path, return false if the path is full
 template <class PathVec, typename Block_>
 bool WriteNewBlockToPath(PathVec& path, const Block_& block) {
