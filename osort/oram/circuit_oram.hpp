@@ -1,7 +1,7 @@
 #pragma once
 
+#include "omp.h"
 #include "oram_common.hpp"
-
 namespace ODSL::CircuitORAM {
 template <typename T, const int Z = 2, const int stashSize = 20,
           typename PositionType = uint64_t, typename UidType = uint64_t,
@@ -388,16 +388,22 @@ struct ORAM {
   }
 
   // requires uid to be sorted
-  const std::vector<PositionType> GetRandNewPoses(
-      const std::vector<UidType>& uid) {
-    std::vector<PositionType> newPos(uid.size());
-    for (int i = 0; i < uid.size(); ++i) {
+  const std::vector<PositionType> GetRandNewPoses(uint64_t batchSize) {
+    std::vector<PositionType> newPos(batchSize);
+    for (int i = 0; i < batchSize; ++i) {
       newPos[i] = UniformRandom(size() - 1);
-      if (i > 0) {
-        obliMove(uid[i] == uid[i - 1], newPos[i], newPos[i - 1]);
-      }
     }
     return newPos;
+  }
+
+  const std::vector<PositionType> duplicateNewPoses(
+      const std::vector<PositionType>& newPos,
+      const std::vector<UidType>& uid) {
+    std::vector<PositionType> dupNewPos(newPos);
+    for (int i = 1; i < uid.size(); ++i) {
+      obliMove(uid[i] == uid[i - 1], dupNewPos[i], dupNewPos[i - 1]);
+    }
+    return dupNewPos;
   }
 
   // requires uid to be sorted
@@ -450,10 +456,36 @@ struct ORAM {
     memcpy(stash->blocks, &newStash[0], stashSize * sizeof(Block_));
   }
 
-  void ParBatchReadAndRemove(int k, std::vector<PositionType>& pos,
-                             const std::vector<UidType>& uid,
-                             std::vector<T>& out) {
-    std::vector<Block_> topK = getTopKLevel(k);
+  // void ParBatchReadAndRemove(int k, std::vector<PositionType>& pos,
+  //                            const std::vector<UidType>& uid,
+  //                            std::vector<T>& out) {}
+
+  void duplicateVal(std::vector<T>& out, const std::vector<UidType>& uid) {
+    for (int i = 1; i < out.size(); ++i) {
+      obliMove(uid[i] == uid[i - 1], out[i], out[i - 1]);
+    }
+  }
+
+  void ParBatchUpdate(
+      std::vector<PositionType>& pos, const std::vector<UidType>& uid,
+      const std::vector<PositionType>& newPos,
+      std::function<std::vector<bool>(std::vector<T>&)> updateFunc,
+      std::vector<T>& out, int numThreads) {
+    uint64_t batchSize = pos.size();
+    Assert(batchSize == uid.size());
+    Assert(batchSize == newPos.size());
+    Assert(batchSize == out.size());
+    // std::cout << "Received batch requests" << std::endl;
+    // for (uint64_t i = 0; i < batchSize; ++i) {
+    //   std::cout << "pos = " << pos[i] << ", uid = " << uid[i] << std::endl;
+    // }
+    deDuplicatePoses(pos, uid);
+    // std::cout << "\nDe-duplicated batch requests" << std::endl;
+    // for (uint64_t i = 0; i < batchSize; ++i) {
+    //   std::cout << "pos = " << pos[i] << ", uid = " << uid[i] << std::endl;
+    // }
+    const int k = GetLogBaseTwo(numThreads);
+    const std::vector<Block_>& topK = getTopKLevel(k);
     const PositionType topKSize = topK.size();
     // std::cout << "Top K:" << std::endl;
     // for (const Block_& b : topK) {
@@ -493,12 +525,13 @@ struct ORAM {
     // }
     // std::cout << std::endl;
     // std::cout << std::endl;
-
-    std::vector<std::vector<Block_>> topKCopies((1UL << k),
+    const PositionType numSubtree = 1UL << k;
+    std::vector<std::vector<Block_>> topKCopies(numSubtree,
                                                 std::vector<Block_>(topK));
-    PositionType numSubTree = 1UL << k;
-#pragma omp parallel for
-    for (int subtreeIdx = 0; subtreeIdx < numSubTree; ++subtreeIdx) {
+    const int subStashSize = stashSize + Z * k;
+
+#pragma omp parallel for num_threads(numSubtree)
+    for (int subtreeIdx = 0; subtreeIdx < numSubtree; ++subtreeIdx) {
       auto& topKCopy = topKCopies[subtreeIdx];
       std::vector<PositionType> subPos;
       std::vector<UidType> subUid;
@@ -524,13 +557,13 @@ struct ORAM {
       std::vector<int> prefixSum(topKSize + 1, 0);
       prefixSum[0] = 0;
       for (int i = 0; i < topKSize; ++i) {
-        bool otherSubTreeFlag =
+        bool otherSubtreeFlag =
             (topKCopy[i].position ^ subtreeIdx) & (1UL << k) - 1;
-        obliMove(otherSubTreeFlag, topKCopy[i].uid, DUMMY<UidType>());
+        obliMove(otherSubtreeFlag, topKCopy[i].uid, DUMMY<UidType>());
         bool match = !topKCopy[i].isDummy();
         prefixSum[i + 1] = prefixSum[i] + match;
       }
-      int subStashSize = stashSize + Z * k;
+
       Assert(prefixSum.back() <= subStashSize);
       EM::Algorithm::OrCompactSeparateMark(topKCopy.begin(), topKCopy.end(),
                                            prefixSum.begin());
@@ -542,31 +575,30 @@ struct ORAM {
       //   }
       // }
       // std::cout << std::endl << std::endl;
-      if (subPos.empty()) {
-        continue;
+      if (!subPos.empty()) {
+        // reads elements in the subtree
+        std::vector<Block_> path(stashSize + Z * depth);
+        std::copy(topKCopy.begin(), topKCopy.end(), path.begin());
+        for (int i = 0; i < subPos.size(); ++i) {
+          int actualLevel =
+              tree.ReadSubPath(subPos[i], (Bucket_*)&(path[subStashSize]), k);
+          T tempOut;  // avoid interprocessor write contention
+          ReadElementAndRemoveFromPath(
+              path.begin(), path.begin() + stashSize + Z * actualLevel,
+              subUid[i], tempOut);
+          // change to following if requests are already served by searching the
+          // top K levels:
+          // ReadElementAndRemoveFromPath(path.begin() +
+          // subStashSize,
+          //                              path.begin() + stashSize + Z *
+          //                              actualLevel, subUid[i], tempOut);
+          // obliMove(!found[outputIdx[i]], out[outputIdx[i]], tempOut);
+          out[outputIdx[i]] = tempOut;
+          // EvictPath(path, subPos[i], actualLevel - k, subStashSize, k);
+          tree.WriteSubPath(subPos[i], (Bucket_*)&(path[subStashSize]), k);
+        }
+        std::copy(path.begin(), path.begin() + subStashSize, topKCopy.begin());
       }
-      // reads elements in the subtree
-      std::vector<Block_> path(stashSize + Z * depth);
-      std::copy(topKCopy.begin(), topKCopy.end(), path.begin());
-      for (int i = 0; i < subPos.size(); ++i) {
-        int actualLevel =
-            tree.ReadSubPath(subPos[i], (Bucket_*)&(path[subStashSize]), k);
-        T tempOut;  // avoid interprocessor write contention
-        ReadElementAndRemoveFromPath(path.begin(),
-                                     path.begin() + stashSize + Z * actualLevel,
-                                     subUid[i], tempOut);
-        // change to following if requests are already served by searching the
-        // top K levels:
-        // ReadElementAndRemoveFromPath(path.begin() +
-        // subStashSize,
-        //                              path.begin() + stashSize + Z *
-        //                              actualLevel, subUid[i], tempOut);
-        // obliMove(!found[outputIdx[i]], out[outputIdx[i]], tempOut);
-        out[outputIdx[i]] = tempOut;
-        EvictPath(path, subPos[i], actualLevel - k, subStashSize, k);
-        tree.WriteSubPath(subPos[i], (Bucket_*)&(path[subStashSize]), k);
-      }
-      std::copy(path.begin(), path.begin() + subStashSize, topKCopy.begin());
       // std::cout << "remain in top K Copy of subtree " << subtreeIdx << ": ";
 
       // for (auto b : topKCopy) {
@@ -576,8 +608,66 @@ struct ORAM {
       // }
       // std::cout << std::endl;
     }
+
+    duplicateVal(out, uid);
+    // std::cout << "\nRead results" << std::endl;
+    // for (uint64_t i = 0; i < batchSize; ++i) {
+    //   std::cout << out[i] << std::endl;
+    // }
+    const std::vector<bool>& writeBackFlags = updateFunc(out);
+    std::vector<Block_> toWrite(batchSize);
+    for (uint64_t i = 0; i < batchSize; ++i) {
+      toWrite[i].uid = DUMMY<UidType>();
+      bool writeBack = writeBackFlags[i];
+      if (i > 0) {
+        writeBack &= (uid[i] != uid[i - 1]);
+      }
+      obliMove(writeBack, toWrite[i].uid, uid[i]);
+      // for duplicate uids the positions should be random
+      toWrite[i].position = newPos[i];
+      toWrite[i].data = out[i];
+    }
+
+    PositionType evictCounterCopy = evictCounter;
+#pragma omp parallel for num_threads(numSubtree)
+    for (PositionType subtreeIdx = 0; subtreeIdx < numSubtree; ++subtreeIdx) {
+      PositionType localEvictCounter =
+          evictCounterCopy;  // avoid race condition
+      std::vector<Block_>& topKCopy = topKCopies[subtreeIdx];
+      std::vector<Block_> path(stashSize + Z * depth);
+      std::copy(topKCopy.begin(), topKCopy.end(), path.begin());
+      int freq = std::max(1UL, numSubtree / evict_freq);
+      for (uint64_t i = 0; i < batchSize; ++i) {
+        Block_ toWriteBlock = toWrite[i];
+        bool otherSubtreeFlag =
+            (toWriteBlock.position ^ subtreeIdx) & (numSubtree - 1);
+        obliMove(otherSubtreeFlag, toWriteBlock.uid, DUMMY<UidType>());
+        // if (!toWriteBlock.isDummy()) {
+        //   std::cout << toWriteBlock << std::endl;
+        // }
+
+        // this part may be slow
+        bool success = WriteNewBlockToTreeTop(path, toWriteBlock, subStashSize);
+        Assert(success || toWriteBlock.isDummy());
+        for (int i = 0; i < evict_freq + 1; ++i) {
+          ++localEvictCounter;
+          PositionType p = localEvictCounter % size();
+          if (p % numSubtree == subtreeIdx) {
+            // std::cout << "Subtree " << subtreeIdx << " Evicting at pos " << p
+            //           << std::endl;
+            int actualLevel =
+                tree.ReadSubPath(p, (Bucket_*)&(path[subStashSize]), k);
+            EvictPath(path, p, actualLevel - k, subStashSize, k);
+            tree.WriteSubPath(p, (Bucket_*)&(path[subStashSize]), k);
+          }
+        }
+      }
+      std::copy(path.begin(), path.begin() + subStashSize, topKCopy.begin());
+    }
+
     // combine top K Copies recursively, pack blocks closer to leaves
     packCopiesTopK(topKCopies, k);
+    evictCounter += batchSize * (evict_freq + 1);
     // below is for debug
     // std::vector<Block_> topKAfterBatch = getTopKLevel(k);
     // std::cout << "Top K after batched read:" << std::endl;
@@ -587,45 +677,6 @@ struct ORAM {
     //   }
     // }
     // std::cout << std::endl << std::endl;
-  }
-
-  void restoreDuplicate(std::vector<T>& out, const std::vector<UidType>& uid) {
-    for (int i = 1; i < out.size(); ++i) {
-      obliMove(uid[i] == uid[i - 1], out[i], out[i - 1]);
-    }
-  }
-
-  void ParBatchUpdate(
-      std::vector<PositionType>& pos, const std::vector<UidType>& uid,
-      const std::vector<PositionType>& newPos,
-      std::function<std::vector<bool>(std::vector<T>&)> updateFunc,
-      std::vector<T>& out, int numThreads) {
-    uint64_t batchSize = pos.size();
-    Assert(batchSize == uid.size());
-    Assert(batchSize == newPos.size());
-    Assert(batchSize == out.size());
-    // std::cout << "Received batch requests" << std::endl;
-    // for (uint64_t i = 0; i < batchSize; ++i) {
-    //   std::cout << "pos = " << pos[i] << ", uid = " << uid[i] << std::endl;
-    // }
-    deDuplicatePoses(pos, uid);
-    // std::cout << "\nDe-duplicated batch requests" << std::endl;
-    // for (uint64_t i = 0; i < batchSize; ++i) {
-    //   std::cout << "pos = " << pos[i] << ", uid = " << uid[i] << std::endl;
-    // }
-    int k = GetLogBaseTwo(numThreads) + 1;
-    ParBatchReadAndRemove(k, pos, uid, out);
-    restoreDuplicate(out, uid);
-    // std::cout << "\nRead results" << std::endl;
-    // for (uint64_t i = 0; i < batchSize; ++i) {
-    //   std::cout << out[i] << std::endl;
-    // }
-    const std::vector<bool>& writeBackFlags = updateFunc(out);
-    for (uint64_t i = 0; i < batchSize; ++i) {
-      UidType u = DUMMY<UidType>();
-      obliMove(writeBackFlags[i], u, uid[i]);
-      Write<1>(u, out[i], newPos[i]);
-    }
   }
 
   void ParBatchUpdate(
@@ -641,9 +692,9 @@ struct ORAM {
       std::vector<PositionType>& pos, const std::vector<UidType>& uid,
       std::function<std::vector<bool>(std::vector<T>&)> updateFunc,
       int numThreads) {
-    const std::vector<PositionType>& newPoses = GetRandNewPoses(uid);
+    const std::vector<PositionType>& newPoses = GetRandNewPoses(uid.size());
     ParBatchUpdate(pos, uid, newPoses, updateFunc, numThreads);
-    return newPoses;
+    return duplicateNewPoses(newPoses, uid);
   }
 };
 }  // namespace ODSL::CircuitORAM

@@ -62,6 +62,7 @@ target_link_libraries(
   dl
   gtest_main
   common
+  OpenMP::OpenMP_CXX
 )
 
 add_executable(
