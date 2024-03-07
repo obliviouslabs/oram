@@ -17,7 +17,7 @@ struct LinearORAM {
   StdVector<UidBlock_> data;
   PositionType _size;
 
-  LinearORAM() : _size(0) {}
+  LinearORAM() : _size(0), data(0) {}
   LinearORAM(PositionType size) : _size(size), data(size) {}
 
   template <typename Reader>

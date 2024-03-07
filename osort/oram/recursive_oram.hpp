@@ -126,7 +126,7 @@ struct RecursiveORAM {
     InitFromReaderInPlace(reader);
   }
 
-  void Access(UidType address, std::function<void(T&)> accessor) {
+  void Access(UidType address, const std::function<void(T&)>& accessor) {
     // printf("Access %lu\n", address);
     Assert(hasInited);
     UidType uid = address / chunk_size;
