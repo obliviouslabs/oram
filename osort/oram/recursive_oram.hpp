@@ -25,6 +25,8 @@ struct RecursiveORAM {
   using LeafORAM = ORAM<LeafNode, PositionType, UidType>;
   LeafORAM leafOram;
   std::vector<PositionType> oramSizes;
+  std::vector<UidType> uids;
+  std::vector<short> indices;
   PositionType _size;
 
   bool hasInited = false;
@@ -63,6 +65,8 @@ struct RecursiveORAM {
     }
     oramSizes.push_back(leafOramSize);
     leafOram.SetSize(leafOramSize, remainCacheBytes);
+    uids.resize(oramSizes.size());
+    indices.resize(oramSizes.size());
   }
 
   template <typename Reader>
@@ -117,10 +121,6 @@ struct RecursiveORAM {
   }
 
   void InitDefault(const T& defaultValue) {
-    if (hasInited) {
-      throw std::runtime_error("RecursiveORAM double initialization");
-    }
-    hasInited = true;
     EM::VirtualVector::VirtualReader<T> reader(
         _size, [&](PositionType) { return defaultValue; });
     InitFromReaderInPlace(reader);
@@ -129,8 +129,6 @@ struct RecursiveORAM {
   void Access(UidType address, std::function<void(T&)> accessor) {
     // printf("Access %lu\n", address);
     Assert(hasInited);
-    std::vector<UidType> uids(oramSizes.size());
-    std::vector<short> indices(oramSizes.size());
     UidType uid = address / chunk_size;
     short index = address % chunk_size;
     for (int level = oramSizes.size() - 1; level >= 0; --level) {

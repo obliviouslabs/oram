@@ -592,8 +592,8 @@ void ecall_omap_perf() {
       new EM::Backend::MemServerBackend(BackendSize);
   try {
     // testOmpSpeedup();
-    // testParOMapPerf();
-    testCuckooOMapPerf();
+    testParOMapPerf();
+    // testCuckooOMapPerf();
     // testRecursiveORAMPerf();
     // testOMapPerf();
     // testOMap();

@@ -6,10 +6,10 @@
 #include "external_memory/algorithm/param_select.hpp"
 #include "omap.hpp"
 namespace ODSL {
-template <typename K, typename V>
+template <typename K, typename V, typename PositionType = uint64_t>
 struct ParOMap {
-  // std::vector<OMap<K, V>> shards;
-  std::vector<CuckooHashMap<K, V, true>> shards;
+  // std::vector<OMap<K, V, 9, PositionType>> shards;
+  std::vector<CuckooHashMap<K, V, true, PositionType>> shards;
   uint8_t randSalt[16];
 
   static uint64_t maxQueryPerShard(uint64_t batchSize, uint64_t shardCount,
