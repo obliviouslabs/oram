@@ -544,7 +544,7 @@ struct ORAM {
                                                 std::vector<Block_>(topK));
     const int subStashSize = stashSize + Z * k;
 
-    // #pragma omp parallel for num_threads(numSubtree)
+#pragma omp parallel for num_threads(numSubtree)
     for (int subtreeIdx = 0; subtreeIdx < numSubtree; ++subtreeIdx) {
       auto& topKCopy = topKCopies[subtreeIdx];
       std::vector<PositionType> subPos;
@@ -591,15 +591,16 @@ struct ORAM {
       // std::cout << std::endl << std::endl;
       if (!subPos.empty()) {
         // reads elements in the subtree
-        std::vector<Block_> path(stashSize + Z * depth);
-        std::copy(topKCopy.begin(), topKCopy.end(), path.begin());
+        std::vector<Block_> localPath(stashSize + Z * depth);
+        std::copy(topKCopy.begin(), topKCopy.end(), localPath.begin());
         for (int i = 0; i < subPos.size(); ++i) {
-          int actualLevel =
-              tree.ReadSubPath(subPos[i], (Bucket_*)&(path[subStashSize]), k);
+          int actualLevel = tree.ReadSubPath(
+              subPos[i], (Bucket_*)&(localPath[subStashSize]), k);
           T tempOut;  // avoid interprocessor write contention
           ReadElementAndRemoveFromPath(
-              path.begin(), path.begin() + stashSize + Z * actualLevel,
-              subUid[i], tempOut);
+              localPath.begin(),
+              localPath.begin() + stashSize + Z * actualLevel, subUid[i],
+              tempOut);
           // change to following if requests are already served by searching the
           // top K levels:
           // ReadElementAndRemoveFromPath(path.begin() +
@@ -609,9 +610,10 @@ struct ORAM {
           // obliMove(!found[outputIdx[i]], out[outputIdx[i]], tempOut);
           out[outputIdx[i]] = tempOut;
           // EvictPath(path, subPos[i], actualLevel - k, subStashSize, k);
-          tree.WriteSubPath(subPos[i], (Bucket_*)&(path[subStashSize]), k);
+          tree.WriteSubPath(subPos[i], (Bucket_*)&(localPath[subStashSize]), k);
         }
-        std::copy(path.begin(), path.begin() + subStashSize, topKCopy.begin());
+        std::copy(localPath.begin(), localPath.begin() + subStashSize,
+                  topKCopy.begin());
       }
       // std::cout << "remain in top K Copy of subtree " << subtreeIdx << ": ";
 
