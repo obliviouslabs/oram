@@ -77,7 +77,7 @@ void testOmpSpeedup() {
   printf("%d thread %d.%d s\n", omp_get_max_threads(),
          timediffMultipleThread / 1'000'000'000,
          timediffMultipleThread % 1'000'000'000);
-  printf("speedup for reverse benchmark (cpu intensive task) = %f\n",
+  printf("speedup for reverse benchmark (memory intensive task) = %f\n",
          (double)timediffOneThread / timediffMultipleThread);
 
   printf("\nFloating point benchmark\n");
@@ -112,6 +112,37 @@ void testOmpSpeedup() {
          timediffMultipleThread / 1'000'000'000,
          timediffMultipleThread % 1'000'000'000);
   printf("speedup for floating point benchmark (cpu intensive task) = %f\n",
+         (double)timediffOneThread / timediffMultipleThread);
+
+  printf("\nSgx PRNG benchmark\n");
+  ocall_measure_time(&start);
+  uint64_t sumRand;
+
+  for (uint64_t i = 0; i < (uint64_t)1e6; ++i) {
+    uint64_t rd;
+    read_rand((uint8_t*)&rd, sizeof(uint64_t));
+    sumRand += rd;
+  }
+
+  ocall_measure_time(&end);
+  timediffOneThread = end - start;
+  printf("one thread %d.%d s\n", timediffOneThread / 1'000'000'000,
+         timediffOneThread % 1'000'000'000);
+
+  ocall_measure_time(&start);
+#pragma omp parallel for schedule(static)
+  for (uint64_t i = 0; i < (uint64_t)1e6; ++i) {
+    uint64_t rd;
+    read_rand((uint8_t*)&rd, sizeof(uint64_t));
+    sumRand += rd;
+  }
+  ocall_measure_time(&end);
+  printf("total sum = %f\n", sumRand);
+  timediffMultipleThread = end - start;
+  printf("%d thread %d.%d s\n", omp_get_max_threads(),
+         timediffMultipleThread / 1'000'000'000,
+         timediffMultipleThread % 1'000'000'000);
+  printf("speedup for Sgx PRNG benchmark = %f\n",
          (double)timediffOneThread / timediffMultipleThread);
 }
 
@@ -463,13 +494,13 @@ void testParOMapPerf() {
   printf("oram init time %d.%d s\n", timediff / 1'000'000'000,
          timediff % 1'000'000'000);
   int round = 1e5;
-  uint32_t batchSize = 1000;
+  uint32_t batchSize = 10000;
   ocall_measure_time(&start);
   for (size_t r = 0; r < round / batchSize; ++r) {
     std::vector<ETH_Addr> addr(batchSize);
     std::vector<ERC20_Balance> balance(batchSize);
     for (int i = 0; i < batchSize; ++i) {
-      addr[i].part[0] = i;
+      addr[i].part[0] = initSize + r * batchSize + i;
     }
     omap.insertBatch(addr.begin(), addr.end(), balance.begin());
   }
@@ -477,11 +508,13 @@ void testParOMapPerf() {
   timediff = end - start;
   printf("oram insert time %d.%d us\n", timediff / round / 1'000,
          timediff / round % 1'000);
-
   ocall_measure_time(&start);
   for (size_t r = 0; r < round / batchSize; ++r) {
     std::vector<ETH_Addr> addr(batchSize);
     std::vector<ERC20_Balance> balance(batchSize);
+    for (int i = 0; i < batchSize; ++i) {
+      addr[i].part[0] = initSize + r * batchSize + i;
+    }
     omap.findBatch(addr.begin(), addr.end(), balance.begin());
   }
   ocall_measure_time(&end);

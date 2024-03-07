@@ -193,7 +193,10 @@ struct CuckooHashMap {
     return false;
   }
 
-  bool insert(const K& key, const V& value) {
+  bool insert(const K& key, const V& value, bool isDummy = false) {
+    if (isDummy) {
+      return false;
+    }
     PositionType idx0 = indexer.getHashIdx0(key);
 
     bool inserted = false;
@@ -304,8 +307,16 @@ struct CuckooHashMap {
     }
   }
 
-  bool find(const K& key, V& value) {
+  bool find(const K& key, V& value, bool isDummy = false) {
+    if constexpr (!isOblivious) {
+      if (isDummy) {
+        return false;
+      }
+    }
     PositionType idx0 = indexer.getHashIdx0(key);
+    if constexpr (isOblivious) {
+      obliMove(isDummy, idx0, UniformRandom(tableSize - 1));
+    }
     BucketType bucket;
     readHelper(idx0, table0, bucket);
     bool found = searchBucket(key, value, bucket);
@@ -315,6 +326,10 @@ struct CuckooHashMap {
       }
     }
     PositionType idx1 = indexer.getHashIdx1(key);
+    if constexpr (isOblivious) {
+      obliMove(isDummy, idx1, UniformRandom(tableSize - 1));
+    }
+    obliMove(isDummy, idx0, UniformRandom(tableSize - 1));
     readHelper(idx1, table1, bucket);
     found |= searchBucket(key, value, bucket);
     if constexpr (!isOblivious) {
@@ -323,7 +338,7 @@ struct CuckooHashMap {
       }
     }
     found |= searchStash(key, value, stash);
-    return found;
+    return found & !isDummy;
   }
 
   bool erase(const K& key) {
