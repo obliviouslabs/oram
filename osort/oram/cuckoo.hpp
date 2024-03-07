@@ -153,6 +153,8 @@ struct CuckooHashMap {
     }
   }
 
+  void Init() { InitDefault(); }
+
   static void updateHelper(PositionType addr, TableType& table,
                            const auto& updateFunc) {
     if constexpr (isOblivious) {
@@ -315,7 +317,7 @@ struct CuckooHashMap {
     }
     PositionType idx0 = indexer.getHashIdx0(key);
     if constexpr (isOblivious) {
-      obliMove(isDummy, idx0, UniformRandom(tableSize - 1));
+      obliMove(isDummy, idx0, (PositionType)UniformRandom(tableSize - 1));
     }
     BucketType bucket;
     readHelper(idx0, table0, bucket);
@@ -327,9 +329,8 @@ struct CuckooHashMap {
     }
     PositionType idx1 = indexer.getHashIdx1(key);
     if constexpr (isOblivious) {
-      obliMove(isDummy, idx1, UniformRandom(tableSize - 1));
+      obliMove(isDummy, idx1, (PositionType)UniformRandom(tableSize - 1));
     }
-    obliMove(isDummy, idx0, UniformRandom(tableSize - 1));
     readHelper(idx1, table1, bucket);
     found |= searchBucket(key, value, bucket);
     if constexpr (!isOblivious) {
@@ -341,7 +342,10 @@ struct CuckooHashMap {
     return found & !isDummy;
   }
 
-  bool erase(const K& key) {
+  bool erase(const K& key, bool isDummy = false) {
+    if (isDummy) {
+      return false;
+    }
     bool erased = false;
     auto updateFunc = [&](BucketType& bucket) {
       for (int i = 0; i < bucketSize; ++i) {
