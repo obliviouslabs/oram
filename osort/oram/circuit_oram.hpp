@@ -622,6 +622,7 @@ struct ORAM {
       std::vector<size_t> outputIdx;
       subPos.reserve(uid.size());
       subUid.reserve(uid.size());
+      outputIdx.reserve(uid.size());
       for (int i = 0; i < uid.size(); ++i) {
         // it's fine to reveal pos of each request
         if ((pos[i] ^ subtreeIdx) & (1UL << k) - 1) {
