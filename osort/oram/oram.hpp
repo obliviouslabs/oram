@@ -235,7 +235,7 @@ struct ORAM {
     }
   }
 
-template <class Func>
+  template <class Func>
   PositionType Update(PositionType pos, const UidType& uid, PositionType newPos,
                       const Func& updateFunc) {
     if (isLinear) {
@@ -245,7 +245,7 @@ template <class Func>
     }
   }
 
-template <class Func>
+  template <class Func>
   PositionType Update(PositionType pos, const UidType& uid, PositionType newPos,
                       const Func& updateFunc, T& out) {
     if (isLinear) {
@@ -255,7 +255,7 @@ template <class Func>
     }
   }
 
-template <class Func>
+  template <class Func>
   PositionType Update(PositionType pos, const UidType& uid, PositionType newPos,
                       const Func& updateFunc, T& out,
                       const UidType& updatedUid) {

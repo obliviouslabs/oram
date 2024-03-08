@@ -178,34 +178,34 @@ struct ORAM {
     return Write<evict_freq>(uid, in, newPos);
   }
 
-template <class Func>
+  template <class Func>
   PositionType Update(PositionType pos, const UidType& uid,
                       const Func& updateFunc) {
     T out;
     return Update(pos, uid, updateFunc, out);
   }
 
-template <class Func>
+  template <class Func>
   PositionType Update(PositionType pos, const UidType& uid, PositionType newPos,
                       const Func& updateFunc) {
     T out;
     return Update(pos, uid, newPos, updateFunc, out);
   }
 
-template <class Func>
+  template <class Func>
   PositionType Update(PositionType pos, const UidType& uid,
                       const Func& updateFunc, T& out) {
     return Update(pos, uid, updateFunc, out, uid);  // does not change uid
   }
 
-template <class Func>
+  template <class Func>
   PositionType Update(PositionType pos, const UidType& uid, PositionType newPos,
                       const Func& updateFunc, T& out) {
     return Update(pos, uid, newPos, updateFunc, out,
                   uid);  // does not change uid
   }
 
-template <class Func>
+  template <class Func>
   PositionType Update(PositionType pos, const UidType& uid,
                       const Func& updateFunc, T& out,
                       const UidType& updatedUid) {
