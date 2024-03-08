@@ -166,8 +166,7 @@ void testOmpSpeedup() {
 
     ocall_measure_time(&end);
     timediffOneThread = end - start;
-    printf("one thread %d.%d s\n", timediffOneThread / 1'000'000'000,
-           timediffOneThread % 1'000'000'000);
+    printf("one thread %f s\n", (double)timediffOneThread * 1e-9);
 
     ocall_measure_time(&start);
 #pragma omp parallel for schedule(static)
@@ -183,11 +182,9 @@ void testOmpSpeedup() {
     }
     ocall_measure_time(&end);
     timediffMultipleThread = end - start;
-    printf("%d thread %d.%d s\n", omp_get_max_threads(),
-           timediffMultipleThread / 1'000'000'000,
-           timediffMultipleThread % 1'000'000'000);
-    printf("one thread %d.%d s\n", timediffOneThread / 1'000'000'000,
-           timediffOneThread % 1'000'000'000);
+    printf("%d thread %f s\n", omp_get_max_threads(),
+           (double)timediffMultipleThread * 1e-9);
+    printf("one thread %f s\n", (double)timediffOneThread * 1e-9);
     printf("speedup for heap tree benchmark = %f\n",
            (double)timediffOneThread / timediffMultipleThread);
   }
@@ -210,8 +207,7 @@ void testOmpSpeedup() {
 
   ocall_measure_time(&end);
   timediffOneThread = end - start;
-  printf("one thread %d.%d s\n", timediffOneThread / 1'000'000'000,
-         timediffOneThread % 1'000'000'000);
+  printf("one thread %f s\n", (double)timediffOneThread * 1e-9);
 
   ocall_measure_time(&start);
 #pragma omp parallel for schedule(static)
@@ -229,11 +225,9 @@ void testOmpSpeedup() {
   }
   ocall_measure_time(&end);
   timediffMultipleThread = end - start;
-  printf("%d thread %d.%d s\n", omp_get_max_threads(),
-         timediffMultipleThread / 1'000'000'000,
-         timediffMultipleThread % 1'000'000'000);
-  printf("one thread %d.%d s\n", timediffOneThread / 1'000'000'000,
-         timediffOneThread % 1'000'000'000);
+  printf("%d thread %f s\n", omp_get_max_threads(),
+           (double)timediffMultipleThread * 1e-9);
+  printf("one thread %f s\n", (double)timediffOneThread * 1e-9);
   printf("speedup for circuit oram benchmark = %f\n",
          (double)timediffOneThread / timediffMultipleThread);
 
@@ -255,8 +249,7 @@ void testOmpSpeedup() {
 
   ocall_measure_time(&end);
   timediffOneThread = end - start;
-  printf("one thread %d.%d s\n", timediffOneThread / 1'000'000'000,
-         timediffOneThread % 1'000'000'000);
+  printf("one thread %f s\n", (double)timediffOneThread * 1e-9);
 
   ocall_measure_time(&start);
 #pragma omp parallel for schedule(static)
@@ -274,11 +267,9 @@ void testOmpSpeedup() {
   }
   ocall_measure_time(&end);
   timediffMultipleThread = end - start;
-  printf("%d thread %d.%d s\n", omp_get_max_threads(),
-         timediffMultipleThread / 1'000'000'000,
-         timediffMultipleThread % 1'000'000'000);
-  printf("one thread %d.%d s\n", timediffOneThread / 1'000'000'000,
-         timediffOneThread % 1'000'000'000);
+  printf("%d thread %f s\n", omp_get_max_threads(),
+           (double)timediffMultipleThread * 1e-9);
+  printf("one thread %f s\n", (double)timediffOneThread * 1e-9);
   printf("speedup for linear oram benchmark = %f\n",
          (double)timediffOneThread / timediffMultipleThread);
 
@@ -303,8 +294,7 @@ void testOmpSpeedup() {
 
   ocall_measure_time(&end);
   timediffOneThread = end - start;
-  printf("one thread %d.%d s\n", timediffOneThread / 1'000'000'000,
-         timediffOneThread % 1'000'000'000);
+  printf("one thread %f s\n", (double)timediffOneThread * 1e-9);
 
   ocall_measure_time(&start);
 
@@ -321,11 +311,9 @@ void testOmpSpeedup() {
   }
   ocall_measure_time(&end);
   timediffMultipleThread = end - start;
-  printf("%d thread %d.%d s\n", omp_get_max_threads(),
-         timediffMultipleThread / 1'000'000'000,
-         timediffMultipleThread % 1'000'000'000);
-  printf("one thread %d.%d s\n", timediffOneThread / 1'000'000'000,
-         timediffOneThread % 1'000'000'000);
+  printf("%d thread %f s\n", omp_get_max_threads(),
+           (double)timediffMultipleThread * 1e-9);
+         
   printf("speedup for circuit oram benchmark = %f\n",
          (double)timediffOneThread / timediffMultipleThread);
 }
