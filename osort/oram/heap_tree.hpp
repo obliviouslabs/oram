@@ -51,7 +51,7 @@ struct HeapTree {
   static constexpr size_t actual_page_size = node_per_page * sizeof(T);
   using Vec = EM::CacheFrontVector::Vector<T, actual_page_size, true, true>;
   Vec arr;  // the actual data
-  int topLevel = 0;
+  int cacheLevel = 0;
   int totalLevel = 0;
   PositionType leafCount = 0;
   PositionType cacheSize = 0;
@@ -60,9 +60,9 @@ struct HeapTree {
 
   HeapTree() {}
 
-  HeapTree(PositionType _size, int _topLevel = 62,
+  HeapTree(PositionType _size, int _cacheLevel = 62,
            PositionType realCacheSize = -1) {
-    Init(_size, _topLevel, realCacheSize);
+    Init(_size, _cacheLevel, realCacheSize);
   }
 
   /**
@@ -70,40 +70,40 @@ struct HeapTree {
    *
    * @param _size Number of leaves in the tree
    * @param defaultVal
-   * @param _topLevel The number of top levels to cache, which determines the
+   * @param _cacheLevel The number of top levels to cache, which determines the
    * logical structure of the tree
    * @param realCacheSize Allow caching more/fewer items physically.
    */
   void InitWithDefault(PositionType _size, const T& defaultVal,
-                       int _topLevel = 62, PositionType realCacheSize = -1) {
+                       int _cacheLevel = 62, PositionType realCacheSize = -1) {
     if (totalSize != 0) {
       throw std::runtime_error("Init called on non-empty tree");
     }
-    topLevel = _topLevel;
+    cacheLevel = _cacheLevel;
     leafCount = _size;
     totalLevel = GetLogBaseTwo(_size - 1) + 2;
     totalSize = 2 * _size - 1;
-    cacheSize = std::min((uint64_t)totalSize, (2UL << _topLevel) - 1);
+    cacheSize = std::min((uint64_t)totalSize, (2UL << _cacheLevel) - 1);
     arr.SetSize(totalSize, realCacheSize != -1 ? realCacheSize : cacheSize,
                 defaultVal);
     extSize = totalSize - cacheSize;
   }
 
-  void Init(PositionType _size, int _topLevel = 62,
+  void Init(PositionType _size, int _cacheLevel = 62,
             PositionType realCacheSize = -1) {
-    InitWithDefault(_size, T(), _topLevel, realCacheSize);
+    InitWithDefault(_size, T(), _cacheLevel, realCacheSize);
   }
 
-  int GetCacheLevel() const { return topLevel; }
+  int GetCacheLevel() const { return cacheLevel; }
 
   size_t GetLeafCount() const { return leafCount; }
 
   size_t GetNodeCount() const { return totalSize; }
 
-  static uint64_t GetMemoryUsage(PositionType _size, int _topLevel = 62,
+  static uint64_t GetMemoryUsage(PositionType _size, int _cacheLevel = 62,
                                  PositionType realCacheSize = -1) {
     size_t totalSize = 2 * _size - 1;
-    size_t cacheSize = std::min((uint64_t)totalSize, (2UL << _topLevel) - 1);
+    size_t cacheSize = std::min((uint64_t)totalSize, (2UL << _cacheLevel) - 1);
     return Vec::GetMemoryUsage(totalSize,
                                realCacheSize != -1 ? realCacheSize : cacheSize);
   }
@@ -118,16 +118,16 @@ struct HeapTree {
    * @param outputEnd
    * @param idx idx of the path
    * @param leafCount the number of leaves in the tree
-   * @param topLevel the number of top levels to cache
+   * @param cacheLevel the number of top levels to cache
    * @return int the number of nodes in the path
    */
   template <typename Iterator>
   static int GetPathIdx(Iterator outputBegin, Iterator outputEnd,
                         PositionType idx, PositionType leafCount,
-                        int topLevel) {
+                        int cacheLevel) {
     int totalLevel = GetLogBaseTwo(leafCount - 1) + 2;
-    if ((packLevel == 1 && topLevel < totalLevel) ||
-        topLevel == totalLevel - 1) {
+    if ((packLevel == 1 && cacheLevel < totalLevel) ||
+        cacheLevel == totalLevel - 1) {
       return GetPathIdx(outputBegin, outputEnd, idx, leafCount, totalLevel);
     }
     int pathLen = (idx | (1UL << totalLevel - 2)) < leafCount ? totalLevel
@@ -135,7 +135,7 @@ struct HeapTree {
     auto it = outputBegin;
     int i;
     // set top levels
-    for (i = 0; i < std::min(pathLen, topLevel); ++i, ++it) {
+    for (i = 0; i < std::min(pathLen, cacheLevel); ++i, ++it) {
       PositionType prevNodes = (1UL << i) - 1;
       PositionType subTreeIdx = idx & prevNodes;
       if ((1UL << i) <= leafCount) {
@@ -190,17 +190,17 @@ struct HeapTree {
    * @param leafCount
    * @param level the level of the node we want to get
    * @param totalLevel
-   * @param topLevel
+   * @param cacheLevel
    * @return int
    */
   static int GetIdx(PositionType idx, PositionType leafCount, int level,
-                    int totalLevel, int topLevel) {
-    if ((packLevel == 1 && topLevel < totalLevel) ||
-        topLevel == totalLevel - 1) {
+                    int totalLevel, int cacheLevel) {
+    if ((packLevel == 1 && cacheLevel < totalLevel) ||
+        cacheLevel == totalLevel - 1) {
       return GetIdx(idx, leafCount, level, totalLevel, totalLevel);
     }
 
-    if (level < topLevel) {
+    if (level < cacheLevel) {
       PositionType prevNodes = (1UL << level) - 1;
       PositionType subTreeIdx = idx & prevNodes;
       if ((1UL << level) <= leafCount) {
@@ -214,7 +214,7 @@ struct HeapTree {
       }
     }
 
-    int i = (level - topLevel) / packLevel * packLevel + topLevel;
+    int i = (level - cacheLevel) / packLevel * packLevel + cacheLevel;
 
     if (i < totalLevel - packLevel - 1) {
       PositionType prevNodes = (1UL << i) - 1;
@@ -249,20 +249,21 @@ struct HeapTree {
 
   const T& GetByPathAndLevel(PositionType path, int level) {
     return GetByInternalIdx(
-        GetIdx(path, leafCount, level, totalLevel, topLevel));
+        GetIdx(path, leafCount, level, totalLevel, cacheLevel));
   }
 
   T& GetMutableByInternalIdx(PositionType idx) { return arr.GetMutable(idx); }
 
   T& GetMutableByPathAndLevel(PositionType path, int level) {
     return GetMutableByInternalIdx(
-        GetIdx(path, leafCount, level, totalLevel, topLevel));
+        GetIdx(path, leafCount, level, totalLevel, cacheLevel));
   }
 
   void SetByInternalIdx(PositionType idx, const T& val) { arr[idx] = val; }
 
   void SetByPathAndLevel(PositionType path, int level, const T& val) {
-    SetByInternalIdx(GetIdx(path, leafCount, level, totalLevel, topLevel), val);
+    SetByInternalIdx(GetIdx(path, leafCount, level, totalLevel, cacheLevel),
+                     val);
   }
 
   typename Vec::Iterator beginInternal() { return arr.begin(); }
@@ -274,7 +275,7 @@ struct HeapTree {
     std::vector<PositionType> pathIdx(totalLevel);
 
     int actualLevel =
-        GetPathIdx(pathIdx.begin(), pathIdx.end(), pos, leafCount, topLevel);
+        GetPathIdx(pathIdx.begin(), pathIdx.end(), pos, leafCount, cacheLevel);
 
     for (int i = 0; i < actualLevel; ++i) {
       PositionType idx = pathIdx[i];
@@ -288,7 +289,7 @@ struct HeapTree {
     std::vector<PositionType> pathIdx(totalLevel);
 
     int actualLevel =
-        GetPathIdx(pathIdx.begin(), pathIdx.end(), pos, leafCount, topLevel);
+        GetPathIdx(pathIdx.begin(), pathIdx.end(), pos, leafCount, cacheLevel);
 
     for (int i = k; i < actualLevel; ++i) {
       PositionType idx = pathIdx[i];
@@ -301,7 +302,7 @@ struct HeapTree {
   int WritePath(PositionType pos, const Iterator pathBegin) {
     std::vector<PositionType> pathIdx(totalLevel);
     int actualLevel =
-        GetPathIdx(pathIdx.begin(), pathIdx.end(), pos, leafCount, topLevel);
+        GetPathIdx(pathIdx.begin(), pathIdx.end(), pos, leafCount, cacheLevel);
 
     for (int i = 0; i < actualLevel; ++i) {
       PositionType idx = pathIdx[i];
@@ -314,7 +315,7 @@ struct HeapTree {
   int WriteSubPath(PositionType pos, const Iterator pathBegin, int k) {
     std::vector<PositionType> pathIdx(totalLevel);
     int actualLevel =
-        GetPathIdx(pathIdx.begin(), pathIdx.end(), pos, leafCount, topLevel);
+        GetPathIdx(pathIdx.begin(), pathIdx.end(), pos, leafCount, cacheLevel);
 
     for (int i = k; i < actualLevel; ++i) {
       PositionType idx = pathIdx[i];
@@ -347,7 +348,7 @@ struct HeapTree {
   }
 
   void getTopKLevel(int k, T* output) {
-    if (k <= topLevel) {
+    if (k <= cacheLevel) {
       PositionType outputSize = (1UL << k) - 1;
       for (int i = 0; i < outputSize; ++i) {
         *output++ = GetByInternalIdx(i);

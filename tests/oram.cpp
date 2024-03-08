@@ -245,9 +245,8 @@ TEST(ORAM, ParBatchUpdateLarge) {
     posMap[i] = pos;
     valMap[i] = val;
   }
-  printf("omp threads: %d\n", omp_get_num_threads());
   for (uint64_t i = 0; i < memSize * 5; i++) {
-    uint64_t batchSize = UniformRandom(100, 200);
+    uint64_t batchSize = UniformRandom(500, 600);
     std::vector<uint64_t> batchUid(batchSize);
     std::vector<uint64_t> batchPos(batchSize);
     for (uint64_t j = 0; j < batchSize; j++) {
