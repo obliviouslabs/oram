@@ -189,7 +189,6 @@ void testOmpSpeedup() {
 
   printf("\nLambda benchmark\n");
   ocall_measure_time(&start);
-  uint64_t sumRand = 0;
   for (int i = 0; i < maxThread; ++i) {
     uint64_t localRand = UniformRandom();
     auto inc = [&]() { localRand = localRand * 2 - 1; };
@@ -794,8 +793,8 @@ void ecall_omap_perf() {
   EM::Backend::g_DefaultBackend =
       new EM::Backend::MemServerBackend(BackendSize);
   try {
-    testOmpSpeedup();
-    // testParOMapPerf();
+    // testOmpSpeedup();
+    testParOMapPerf();
     // testCuckooOMapPerf();
     // testRecursiveORAMPerf();
     // testOMapPerf();
