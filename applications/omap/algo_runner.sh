@@ -9,7 +9,7 @@ MAX_ENCLAVE_SIZE=8192
 IO_ROUNDs=(1) # number of rounds encryption/decryption is performed, used to get breakdown
 CORE_ID=5 # the cpu core id to run the program
 DISK_IO=0 # 0: no disk IO, 1: disk IO
-TCS_NUM=17
+TCS_NUM=9
 
 for IO_ROUND in ${IO_ROUNDs[@]}; do
 if [ $IO_ROUND = 0 ]

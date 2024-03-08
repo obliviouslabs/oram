@@ -143,11 +143,13 @@ struct RecursiveORAM {
       PositionType nextPos;
       PositionType nextNewPos = UniformRandom(oramSizes[level + 1] - 1);
       auto updateFunc = [&](InternalNode& node) -> bool {
+        PositionType localNextPos;
         for (short i = 0; i < fan_out; ++i) {
           bool match = i == indices[level];
-          obliMove(match, nextPos, node.children[i]);
+          obliMove(match, localNextPos, node.children[i]);
           obliMove(match, node.children[i], nextNewPos);
         }
+        nextPos = localNextPos;
         return true;
       };
       // printf("level %d: pos %lu, uid %lu, newPos %lu\n", level, pos,

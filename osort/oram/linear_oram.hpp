@@ -65,19 +65,22 @@ struct LinearORAM {
     return 0;
   }
 
+template <class Func>
   PositionType Update(PositionType pos, const UidType& uid,
-                      std::function<bool(T&)> updateFunc) {
+                      const Func& updateFunc) {
     T out;
     return Update(pos, uid, updateFunc, out);
   }
 
+template <class Func>
   PositionType Update(PositionType pos, const UidType& uid,
-                      std::function<bool(T&)> updateFunc, T& out) {
+                      const Func& updateFunc, T& out) {
     return Update(pos, uid, updateFunc, out, uid);
   }
 
+template <class Func>
   PositionType Update(PositionType pos, const UidType& uid,
-                      std::function<bool(T&)> updateFunc, T& out,
+                      const Func& updateFunc, T& out,
                       const UidType& updatedUid) {
     for (const UidBlock_& block : data) {
       bool match = block.uid == uid;

@@ -27,7 +27,6 @@ void testOmpSpeedup() {
   size_t maxThread = omp_get_max_threads();
   uint64_t start, end;
   int64_t timediffOneThread, timediffMultipleThread;
-  if (0) {
     printf("bitonic sort benchmark\n");
     ocall_measure_time(&start);
     for (int i = 0; i < maxThread; ++i) {
@@ -93,7 +92,7 @@ void testOmpSpeedup() {
       totalSum += sum;
     }
     ocall_measure_time(&end);
-    printf("total sum = %f\n", totalSum);
+    printf("total sum = %lu\n", totalSum);
     timediffOneThread = end - start;
     printf("one thread %f s\n", (double)timediffOneThread * 1e-9);
 
@@ -107,7 +106,7 @@ void testOmpSpeedup() {
       totalSum += sum;
     }
     ocall_measure_time(&end);
-    printf("total sum = %f\n", totalSum);
+    printf("total sum = %lu\n", totalSum);
     timediffMultipleThread = end - start;
     printf("%d thread %f s\n", omp_get_max_threads(),
            (double)timediffMultipleThread * 1e-9);
@@ -143,7 +142,7 @@ void testOmpSpeedup() {
       sumRand += localRand;
     }
     ocall_measure_time(&end);
-    printf("total sum = %f\n", sumRand);
+    printf("total sum = %lu\n", sumRand);
     timediffMultipleThread = end - start;
     printf("%d thread %f s\n", omp_get_max_threads(),
            (double)timediffMultipleThread * 1e-9);
@@ -187,7 +186,41 @@ void testOmpSpeedup() {
     printf("one thread %f s\n", (double)timediffOneThread * 1e-9);
     printf("speedup for heap tree benchmark = %f\n",
            (double)timediffOneThread / timediffMultipleThread);
-  }
+  
+
+  printf("\nLambda benchmark\n");
+    ocall_measure_time(&start);
+    uint64_t sumRand = 0;
+    for (int i = 0; i < maxThread; ++i) {
+      uint64_t localRand = UniformRandom();
+      auto inc = [&]() { localRand = localRand * 2 - 1;};
+      for (uint64_t i = 0; i < (uint64_t)1e9; ++i) {
+        inc();
+      }
+      sumRand += localRand;
+    }
+
+    ocall_measure_time(&end);
+    timediffOneThread = end - start;
+    printf("one thread %f s\n", (double)timediffOneThread * 1e-9);
+
+    ocall_measure_time(&start);
+#pragma omp parallel for schedule(static)
+    for (int i = 0; i < maxThread; ++i) {
+      uint64_t localRand = UniformRandom();
+      auto inc = [&]() {localRand = localRand * 2 - 1;};
+      for (uint64_t i = 0; i < (uint64_t)1e9; ++i) {
+        inc();
+      }
+      sumRand += localRand;
+    }
+    ocall_measure_time(&end);
+    printf("total sum = %lu\n", sumRand);
+    timediffMultipleThread = end - start;
+    printf("%d thread %f s\n", omp_get_max_threads(),
+           (double)timediffMultipleThread * 1e-9);
+    printf("speedup for lambda benchmark = %f\n",
+           (double)timediffOneThread / timediffMultipleThread);
 
   printf("\nCircuit ORAM update benchmark\n");
   ocall_measure_time(&start);
@@ -226,9 +259,55 @@ void testOmpSpeedup() {
   ocall_measure_time(&end);
   timediffMultipleThread = end - start;
   printf("%d thread %f s\n", omp_get_max_threads(),
-           (double)timediffMultipleThread * 1e-9);
+         (double)timediffMultipleThread * 1e-9);
   printf("one thread %f s\n", (double)timediffOneThread * 1e-9);
   printf("speedup for circuit oram benchmark = %f\n",
+         (double)timediffOneThread / timediffMultipleThread);
+
+  printf("\nMulti Circuit ORAM update benchmark\n");
+  ocall_measure_time(&start);
+
+  for (int i = 0; i < maxThread; ++i) {
+    std::vector<CircuitORAM::ORAM<SortElement>> orams(8);
+    uint64_t size = 8192;
+    for (int i = 0; i < 8; ++i) {
+      orams[i].SetSize(size);
+    }
+    uint64_t out;
+    for (int r = 0; r < 1e5; ++r) {
+      orams[r % 8].Update(UniformRandom() % size, 0, [](SortElement& val) {
+        val.key++;
+        return true;
+      });
+    }
+  }
+
+  ocall_measure_time(&end);
+  timediffOneThread = end - start;
+  printf("one thread %f s\n", (double)timediffOneThread * 1e-9);
+
+  ocall_measure_time(&start);
+#pragma omp parallel for schedule(static)
+  for (int i = 0; i < maxThread; ++i) {
+    std::vector<CircuitORAM::ORAM<SortElement>> orams(8);
+    uint64_t size = 8192;
+    for (int i = 0; i < 8; ++i) {
+      orams[i].SetSize(size);
+    }
+    uint64_t out;
+    for (int r = 0; r < 1e5; ++r) {
+      orams[r % 8].Update(UniformRandom() % size, 0, [](SortElement& val) {
+        val.key++;
+        return true;
+      });
+    }
+  }
+  ocall_measure_time(&end);
+  timediffMultipleThread = end - start;
+  printf("%d thread %f s\n", omp_get_max_threads(),
+         (double)timediffMultipleThread * 1e-9);
+
+  printf("speedup for multiple (round robin) circuit oram benchmark = %f\n",
          (double)timediffOneThread / timediffMultipleThread);
 
   printf("\nLinear ORAM update benchmark\n");
@@ -268,13 +347,13 @@ void testOmpSpeedup() {
   ocall_measure_time(&end);
   timediffMultipleThread = end - start;
   printf("%d thread %f s\n", omp_get_max_threads(),
-           (double)timediffMultipleThread * 1e-9);
-  printf("one thread %f s\n", (double)timediffOneThread * 1e-9);
+         (double)timediffMultipleThread * 1e-9);
+
   printf("speedup for linear oram benchmark = %f\n",
          (double)timediffOneThread / timediffMultipleThread);
 
   printf("\nRecursive ORAM find benchmark\n");
-  
+
   std::vector<RecursiveORAM<uint64_t>> orams(maxThread);
 
   for (int i = 0; i < maxThread; ++i) {
@@ -282,10 +361,9 @@ void testOmpSpeedup() {
     orams[i].InitDefault(0);
   }
   ocall_measure_time(&start);
-
   for (int i = 0; i < maxThread; ++i) {
     RecursiveORAM<uint64_t>& oram = orams[i];
-    uint64_t size = 4096;    
+    uint64_t size = 4096;
     uint64_t out;
     for (int r = 0; r < 1e5; ++r) {
       oram.Read(UniformRandom() % size, out);
@@ -298,23 +376,22 @@ void testOmpSpeedup() {
 
   ocall_measure_time(&start);
 
-  
-
 #pragma omp parallel for schedule(static)
   for (int i = 0; i < maxThread; ++i) {
     RecursiveORAM<uint64_t>& oram = orams[i];
-    uint64_t size = 4096;    
+    uint64_t size = 4096;
     uint64_t out;
     for (int r = 0; r < 1e5; ++r) {
       oram.Read(UniformRandom() % size, out);
     }
   }
   ocall_measure_time(&end);
+
   timediffMultipleThread = end - start;
   printf("%d thread %f s\n", omp_get_max_threads(),
-           (double)timediffMultipleThread * 1e-9);
-         
-  printf("speedup for circuit oram benchmark = %f\n",
+         (double)timediffMultipleThread * 1e-9);
+
+  printf("speedup for recursive oram benchmark = %f\n",
          (double)timediffOneThread / timediffMultipleThread);
 }
 

@@ -178,38 +178,44 @@ struct ORAM {
     return Write<evict_freq>(uid, in, newPos);
   }
 
+template <class Func>
   PositionType Update(PositionType pos, const UidType& uid,
-                      std::function<bool(T&)> updateFunc) {
+                      const Func& updateFunc) {
     T out;
     return Update(pos, uid, updateFunc, out);
   }
 
+template <class Func>
   PositionType Update(PositionType pos, const UidType& uid, PositionType newPos,
-                      std::function<bool(T&)> updateFunc) {
+                      const Func& updateFunc) {
     T out;
     return Update(pos, uid, newPos, updateFunc, out);
   }
 
+template <class Func>
   PositionType Update(PositionType pos, const UidType& uid,
-                      std::function<bool(T&)> updateFunc, T& out) {
+                      const Func& updateFunc, T& out) {
     return Update(pos, uid, updateFunc, out, uid);  // does not change uid
   }
 
+template <class Func>
   PositionType Update(PositionType pos, const UidType& uid, PositionType newPos,
-                      std::function<bool(T&)> updateFunc, T& out) {
+                      const Func& updateFunc, T& out) {
     return Update(pos, uid, newPos, updateFunc, out,
                   uid);  // does not change uid
   }
 
+template <class Func>
   PositionType Update(PositionType pos, const UidType& uid,
-                      std::function<bool(T&)> updateFunc, T& out,
+                      const Func& updateFunc, T& out,
                       const UidType& updatedUid) {
     PositionType newPos = UniformRandom(size() - 1);
     return Update(pos, uid, newPos, updateFunc, out, updatedUid);
   }
 
+  template <class Func>
   PositionType Update(PositionType pos, const UidType& uid, PositionType newPos,
-                      std::function<bool(T&)> updateFunc, T& out,
+                      const Func& updateFunc, T& out,
                       const UidType& updatedUid) {
     int len = ReadPath(pos, path);
 
@@ -221,6 +227,7 @@ struct ORAM {
     int retry = 10;
     while (true) {
       bool success = WriteNewBlockToTreeTop(path, newBlock, stashSize + Z);
+      success |= !keepFlag;
       EvictPath(path, pos, len);
       WriteBackPath(path, pos);
       Evict();
