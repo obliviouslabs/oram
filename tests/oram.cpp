@@ -181,7 +181,8 @@ TEST(ORAM, BatchUpdate) {
 
 TEST(ORAM, ParBatchUpdate) {
   int memSize = 6543;
-  ODSL::CircuitORAM::ORAM<uint64_t, 2, 20> oram(memSize);
+  int numThreads = 4;
+  ODSL::CircuitORAM::ParORAM<uint64_t> oram(memSize, numThreads);
   std::vector<uint64_t> posMap(memSize);
   std::vector<uint64_t> valMap(memSize);
   for (uint64_t i = 0; i < memSize; i++) {
@@ -199,6 +200,7 @@ TEST(ORAM, ParBatchUpdate) {
       // printf("read %lu %lu\n", i, val);
     }
   }
+  printf("test par batch update\n");
   for (uint64_t i = 0; i < memSize; i++) {
     uint64_t peer = UniformRandom(memSize - 1);
     if (!(UniformRandom() % 10)) {
@@ -217,7 +219,8 @@ TEST(ORAM, ParBatchUpdate) {
       return {true, true};
     };
     std::vector<uint64_t> posPair = {posMap[i], posMap[peer]};
-    const auto& newPoses = oram.ParBatchUpdate(posPair, {i, peer}, swapFunc, 4);
+    const auto& newPoses =
+        oram.ParBatchUpdate(posPair, {i, peer}, swapFunc, numThreads);
     posMap[i] = newPoses[0];
     posMap[peer] = newPoses[1];
     std::swap(valMap[i], valMap[peer]);
@@ -235,8 +238,9 @@ TEST(ORAM, ParBatchUpdate) {
 }
 
 TEST(ORAM, ParBatchUpdateLarge) {
-  int memSize = 6543;
-  ODSL::CircuitORAM::ORAM<uint64_t, 2, 20> oram(memSize);
+  int memSize = 1e5;
+  int numThreads = 8;
+  ODSL::CircuitORAM::ParORAM<uint64_t> oram(memSize, numThreads, 1UL << 20);
   std::vector<uint64_t> posMap(memSize);
   std::vector<uint64_t> valMap(memSize);
   for (uint64_t i = 0; i < memSize; i++) {
@@ -245,7 +249,7 @@ TEST(ORAM, ParBatchUpdateLarge) {
     posMap[i] = pos;
     valMap[i] = val;
   }
-  for (uint64_t i = 0; i < memSize * 5; i++) {
+  for (uint64_t i = 0; i < memSize; i++) {
     uint64_t batchSize = UniformRandom(500, 600);
     std::vector<uint64_t> batchUid(batchSize);
     std::vector<uint64_t> batchPos(batchSize);
@@ -267,7 +271,7 @@ TEST(ORAM, ParBatchUpdateLarge) {
       return std::vector<bool>(batchSize, true);
     };
     const auto& newPoses =
-        oram.ParBatchUpdate(batchPos, batchUid, updateFunc, 8);
+        oram.ParBatchUpdate(batchPos, batchUid, updateFunc, numThreads);
     for (uint64_t j = 0; j < batchSize; j++) {
       posMap[batchUid[j]] = newPoses[j];
     }

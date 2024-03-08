@@ -11,11 +11,32 @@ struct RecursiveORAM {
   static constexpr short fan_out = std::max(64 / (int)sizeof(PositionType), 2);
   struct InternalNode {
     PositionType children[fan_out];
+#ifndef ENCLAVE_MODE
+    friend std::ostream& operator<<(std::ostream& os,
+                                    const InternalNode& node) {
+      os << "InternalNode{";
+      for (int i = 0; i < fan_out; ++i) {
+        os << node.children[i] << " ";
+      }
+      os << "}";
+      return os;
+    }
+#endif
   };
 
   static constexpr short chunk_size = 1;
   struct LeafNode {
     T data[chunk_size];
+#ifndef ENCLAVE_MODE
+    friend std::ostream& operator<<(std::ostream& os, const LeafNode& node) {
+      os << "LeafNode{";
+      for (int i = 0; i < chunk_size; ++i) {
+        os << node.data[i] << " ";
+      }
+      os << "}";
+      return os;
+    }
+#endif
   };
 
   using InternalORAM = ORAM<InternalNode, PositionType, UidType>;

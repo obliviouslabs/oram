@@ -5,16 +5,22 @@
 namespace ODSL::CircuitORAM {
 template <typename T, const int Z = 2, const int stashSize = 20,
           typename PositionType = uint64_t, typename UidType = uint64_t,
-          const uint64_t page_size = 4096, int evict_freq = 2>
+          const uint64_t page_size = 4096, int evict_freq = 2,
+          const bool parallel = false>
 struct ORAM {
   // using Node_ = Node<T, Z, PositionType, UidType>;
   using Stash = Bucket<T, stashSize, PositionType, UidType>;
   using Block_ = Block<T, PositionType, UidType>;
   using Bucket_ = Bucket<T, Z, PositionType, UidType>;
   using UidBlock_ = UidBlock<T, UidType>;
-  using HeapTree_ = HeapTree<Bucket_, PositionType, page_size, evict_freq>;
+  using SingleHeapTree_ =
+      HeapTree<Bucket_, PositionType, page_size, evict_freq>;
+  using ParHeapTree_ =
+      ParHeapTree<Bucket_, PositionType, page_size, evict_freq>;
+  using HeapTree_ = std::conditional_t<parallel, ParHeapTree_, SingleHeapTree_>;
   // Node_* root = nullptr;
   HeapTree_ tree;
+  PositionType maxSubtree = 1;
   Stash* stash = nullptr;
   int depth = 0;
   PositionType _size = 0;
@@ -34,11 +40,30 @@ struct ORAM {
     depth = other.depth;
   }
 
-  ORAM(PositionType size, size_t cacheBytes = 1UL << 62) {
-    SetSize(size, cacheBytes);
+  ORAM(PositionType size) {
+    static_assert(!parallel, "Parallel ORAM requires numThreads as argument");
+    SetSize(size, 1UL << 62);
+  }
+
+  // if oram if parallel second argument is numThreads, otherwise it is
+  // cacheBytes
+  ORAM(PositionType size, size_t numThreadsOrCacheBytes) {
+    if constexpr (parallel) {
+      SetSizeParallel(size, numThreadsOrCacheBytes, 1UL << 62);
+      maxSubtree = numThreadsOrCacheBytes;
+    } else {
+      SetSize(size, numThreadsOrCacheBytes);
+    }
+  }
+
+  ORAM(PositionType size, int numThreads, size_t cacheBytes) {
+    static_assert(parallel, "Non-parallel ORAM too many arguments");
+    maxSubtree = numThreads;
+    SetSizeParallel(size, numThreads, cacheBytes);
   }
 
   void SetSize(PositionType size, size_t cacheBytes = 1UL << 62) {
+    static_assert(!parallel, "Parallel ORAM requires numThreads as argument");
     if (_size) {
       throw std::runtime_error("Circuit ORAM double initialization");
     }
@@ -58,6 +83,41 @@ struct ORAM {
       dummyBucket.blocks[i].uid = DUMMY<UidType>();
     }
     tree.InitWithDefault(size, dummyBucket, cacheLevel);
+    depth = GetLogBaseTwo(size - 1) + 2;
+    if (depth > 64) {
+      throw std::runtime_error("Circuit ORAM too large");
+    }
+    stash = new Stash();
+    path.resize(stashSize + Z * depth);
+  }
+
+  void SetSizeParallel(PositionType size, int numThreads,
+                       size_t cacheBytes = 1UL << 62) {
+    static_assert(parallel);
+    if (numThreads <= 1) {
+      throw std::runtime_error("Parallel Circuit ORAM too few threads");
+    }
+    int topLevel = GetLogBaseTwo(numThreads);
+
+    if (_size) {
+      throw std::runtime_error("Circuit ORAM double initialization");
+    }
+
+    _size = size;
+    int cacheLevel = GetMaxCacheLevel<T, Z, stashSize, PositionType, UidType>(
+        size, cacheBytes);
+    if (cacheLevel < 0) {
+      throw std::runtime_error("Circuit ORAM cache size too small");
+    }
+    // printf(
+    //     "tree size = %lu, cacheBytes = %lu, cacheLevel = %d, element size = "
+    //     "%d\n",
+    //     size, cacheBytes, cacheLevel, sizeof(T));
+    Bucket_ dummyBucket;
+    for (int i = 0; i < Z; ++i) {
+      dummyBucket.blocks[i].uid = DUMMY<UidType>();
+    }
+    tree.InitWithDefault(size, topLevel, dummyBucket, cacheLevel);
     depth = GetLogBaseTwo(size - 1) + 2;
     if (depth > 64) {
       throw std::runtime_error("Circuit ORAM too large");
@@ -293,7 +353,7 @@ struct ORAM {
 
     int level = tree.ReadPath(pos, (Bucket_*)(&path[stashSize]));
 #ifndef NDEBUG
-    for (int i = stashSize; stashSize + Z * level; ++i) {
+    for (int i = stashSize; i < stashSize + Z * level; ++i) {
       int lv = (i - stashSize) / Z;
       size_t mask = (1UL << lv) - 1;
       if (!(path[i].uid == DUMMY<UidType>() ||
@@ -491,7 +551,10 @@ struct ORAM {
       std::vector<PositionType>& pos, const std::vector<UidType>& uid,
       const std::vector<PositionType>& newPos,
       std::function<std::vector<bool>(std::vector<T>&)> updateFunc,
-      std::vector<T>& out, int numThreads) {
+      std::vector<T>& out, int numThreads = 0) {
+    if (numThreads > maxSubtree || numThreads == 0) {
+      numThreads = maxSubtree;
+    }
     uint64_t batchSize = pos.size();
     Assert(batchSize == uid.size());
     Assert(batchSize == newPos.size());
@@ -551,7 +614,7 @@ struct ORAM {
                                                 std::vector<Block_>(topK));
     const int subStashSize = stashSize + Z * k;
 
-#pragma omp parallel for num_threads(numSubtree)
+#pragma omp parallel for num_threads(numSubtree) if (parallel)
     for (int subtreeIdx = 0; subtreeIdx < numSubtree; ++subtreeIdx) {
       auto& topKCopy = topKCopies[subtreeIdx];
       std::vector<PositionType> subPos;
@@ -652,7 +715,7 @@ struct ORAM {
     }
 
     PositionType evictCounterCopy = evictCounter;
-#pragma omp parallel for num_threads(numSubtree)
+#pragma omp parallel for num_threads(numSubtree) if (parallel)
     for (PositionType subtreeIdx = 0; subtreeIdx < numSubtree; ++subtreeIdx) {
       PositionType localEvictCounter =
           evictCounterCopy;  // avoid race condition
@@ -708,7 +771,7 @@ struct ORAM {
       std::vector<PositionType>& pos, const std::vector<UidType>& uid,
       const std::vector<PositionType>& newPos,
       std::function<std::vector<bool>(std::vector<T>&)> updateFunc,
-      int numThreads) {
+      int numThreads = 0) {
     std::vector<T> out(pos.size());
     ParBatchUpdate(pos, uid, newPos, updateFunc, out, numThreads);
   }
@@ -716,10 +779,16 @@ struct ORAM {
   std::vector<PositionType> ParBatchUpdate(
       std::vector<PositionType>& pos, const std::vector<UidType>& uid,
       std::function<std::vector<bool>(std::vector<T>&)> updateFunc,
-      int numThreads) {
+      int numThreads = 0) {
     const std::vector<PositionType>& newPoses = GetRandNewPoses(uid.size());
     ParBatchUpdate(pos, uid, newPoses, updateFunc, numThreads);
     return duplicateNewPoses(newPoses, uid);
   }
 };
+
+template <typename T, const int Z = 2, const int stashSize = 20,
+          typename PositionType = uint64_t, typename UidType = uint64_t,
+          const uint64_t page_size = 4096, int evict_freq = 2>
+using ParORAM =
+    ORAM<T, Z, stashSize, PositionType, UidType, page_size, evict_freq, true>;
 }  // namespace ODSL::CircuitORAM

@@ -11,6 +11,7 @@
 #include "external_memory/stdvector.hpp"
 #include "external_memory/virtualvector.hpp"
 #include "heap_tree.hpp"
+#include "par_heap_tree.hpp"
 namespace ODSL {
 template <typename T, const int Z = 5, const int stashSize = 63,
           typename PositionType = uint64_t, typename UidType = uint64_t,

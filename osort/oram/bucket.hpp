@@ -32,5 +32,17 @@ struct Bucket {
     }
     return cond;
   }
+
+#ifndef ENCLAVE_MODE
+  // cout
+  friend std::ostream& operator<<(std::ostream& os, const Bucket& b) {
+    os << "[ ";
+    for (int i = 0; i < Z; i++) {
+      os << b.blocks[i] << " ";
+    }
+    os << "]";
+    return os;
+  }
+#endif
 };
 };  // namespace ODSL
