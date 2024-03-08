@@ -151,8 +151,9 @@ struct ORAM {
    * element, false to delete it.
    * @return PositionType new position of the element
    */
+  template <class Func>
   PositionType Update(PositionType pos, const UidType& uid,
-                      std::function<bool(T&)> updateFunc) {
+                      const Func& updateFunc) {
     if (isLinear) {
       return linearOram->Update(pos, uid, updateFunc);
     } else {
@@ -161,8 +162,9 @@ struct ORAM {
   }
 
   // allow read the updated value
+  template <class Func>
   PositionType Update(PositionType pos, const UidType& uid,
-                      std::function<bool(T&)> updateFunc, T& out) {
+                      const Func& updateFunc, T& out) {
     if (isLinear) {
       return linearOram->Update(pos, uid, updateFunc, out);
     } else {
@@ -171,8 +173,9 @@ struct ORAM {
   }
 
   // allow update the uid
+  template <class Func>
   PositionType Update(PositionType pos, const UidType& uid,
-                      std::function<bool(T&)> updateFunc, T& out,
+                      const Func& updateFunc, T& out,
                       const UidType& updatedUid) {
     if (isLinear) {
       return linearOram->Update(pos, uid, updateFunc, out, updatedUid);
@@ -232,8 +235,9 @@ struct ORAM {
     }
   }
 
+  template <class Func>
   PositionType Update(PositionType pos, const UidType& uid, PositionType newPos,
-                      std::function<bool(T&)> updateFunc) {
+                      const Func& updateFunc) {
     if (isLinear) {
       return linearOram->Update(pos, uid, updateFunc);
     } else {
@@ -241,8 +245,9 @@ struct ORAM {
     }
   }
 
+  template <class Func>
   PositionType Update(PositionType pos, const UidType& uid, PositionType newPos,
-                      std::function<bool(T&)> updateFunc, T& out) {
+                      const Func& updateFunc, T& out) {
     if (isLinear) {
       return linearOram->Update(pos, uid, updateFunc, out);
     } else {
@@ -250,8 +255,9 @@ struct ORAM {
     }
   }
 
+  template <class Func>
   PositionType Update(PositionType pos, const UidType& uid, PositionType newPos,
-                      std::function<bool(T&)> updateFunc, T& out,
+                      const Func& updateFunc, T& out,
                       const UidType& updatedUid) {
     if (isLinear) {
       return linearOram->Update(pos, uid, updateFunc, out, updatedUid);

@@ -2,12 +2,14 @@
 
 #include <omp.h>
 
+#include "cuckoo.hpp"
 #include "external_memory/algorithm/param_select.hpp"
 #include "omap.hpp"
 namespace ODSL {
-template <typename K, typename V>
+template <typename K, typename V, typename PositionType = uint64_t>
 struct ParOMap {
-  std::vector<OMap<K, V>> shards;
+  // std::vector<OMap<K, V, 9, PositionType>> shards;
+  std::vector<CuckooHashMap<K, V, true, PositionType>> shards;
   uint8_t randSalt[16];
 
   static uint64_t maxQueryPerShard(uint64_t batchSize, uint64_t shardCount,
@@ -41,6 +43,85 @@ struct ParOMap {
       shard.Init();
     }
   }
+
+  // the following code hides the number of dummies initially in each shard
+  /*
+    template <class Reader>
+    void InitFromReaderInPlace(Reader& reader) {
+      uint64_t shardCount = shards.size();
+      std::vector<uint64_t> shardCounter(shardCount);
+      uint64_t initSize = reader.size();
+      uint64_t initSizePerShard =
+          maxQueryPerShard(reader.size(), shardCount, -60);
+      struct Element {
+        bool isDummy = false;
+        uint32_t shardIdx;
+        std::pair<K, V> kvPair;
+        bool operator<(const Element& other) const {
+          bool lessShard = shardIdx < other.shardIdx;
+          bool equalShard = shardIdx == other.shardIdx;
+          bool lessDummy = isDummy < other.isDummy;
+          bool equalDummy = isDummy == other.isDummy;
+          bool lessKey = kvPair.first < other.kvPair.first;
+          return (lessShard |
+                  (equalShard & (lessDummy | (equalDummy & lessKey))));
+        }
+      };
+      uint64_t sortVecSize = initSizePerShard * shardCount;
+      std::vector<uint64_t> shardRealCounter;
+      EM::VirtualVector::VirtualReader<Element> sortReader(
+          sortVecSize, [&](uint64_t i) {
+            Element sortElement;
+            if (i < initSize) {
+              sortElement.kvPair = reader.read();
+              uint64_t hash = secure_hash_with_salt(
+                  (uint8_t*)&sortElement.kvPair.first, sizeof(K), randSalt);
+              sortElement.shardIdx = hash % shardCount;
+              for (uint32_t j = 0; j < shardCount; ++j) {
+                bool matchFlag = sortElement.shardIdx == j;
+                shardCounter[j] += matchFlag;
+              }
+            } else {
+              if (shardRealCounter.size() == 0) {
+                shardRealCounter = shardCounter;
+              }
+              sortElement.isDummy = true;
+              bool selectedShardFlag = false;
+              for (uint32_t j = 0; j < shardCount; ++j) {
+                bool matchFlag =
+                    (shardCounter[j] < initSizePerShard) & !selectedShardFlag;
+                shardCounter[j] += matchFlag;
+                obliMove(matchFlag, sortElement.shardIdx, j);
+                selectedShardFlag |= matchFlag;
+              }
+
+              // set as random so that the comparison based sorting within each
+              // shard doesn't leak which elements are dummy
+              read_rand((uint8_t*)&sortElement.kvPair.first, sizeof(K));
+            }
+            return sortElement;
+          });
+
+      using SortVec = EM::NonCachedVector::Vector<Element>;
+      SortVec sortVec(sortVecSize);
+      typename SortVec::Writer sortWriter(sortVec.begin(), sortVec.end());
+      EM::Algorithm::KWayButterflySort(sortReader, sortWriter,
+                                       (ENCLAVE_SIZE << 20) / 5);
+  #pragma omp parallel for schedule(static) num_threads(shardCount)
+      for (uint32_t i = 0; i < shardCount; ++i) {
+        typename SortVec::Reader shardReader(
+            sortVec.begin() + i * initSizePerShard,
+            sortVec.begin() + (i + 1) * initSizePerShard);
+        EM::VirtualVector::VirtualReader<std::pair<K, V>> shardKvReader(
+            initSizePerShard,
+            [&](uint64_t j) { return shardReader.read().kvPair; });
+        shards[i].InitFromReaderInPlaceWithDummy(shardKvReader,
+                                                 shardRealCounter[i]);
+      }
+
+      // TODO: init each sub omap
+    }
+    */
 
   template <class Reader>
   void InitFromReaderInPlace(Reader& reader) {
@@ -109,10 +190,9 @@ struct ParOMap {
           sortVec.begin() + i * initSizePerShard,
           sortVec.begin() + (i + 1) * initSizePerShard);
       EM::VirtualVector::VirtualReader<std::pair<K, V>> shardKvReader(
-          initSizePerShard,
+          shardRealCounter[i],
           [&](uint64_t j) { return shardReader.read().kvPair; });
-      shards[i].InitFromReaderInPlaceWithDummy(shardKvReader,
-                                               shardRealCounter[i]);
+      shards[i].InitFromReaderInPlace(shardKvReader);
     }
 
     // TODO: init each sub omap
@@ -233,23 +313,41 @@ struct ParOMap {
         keyVec.begin(), keyVec.end(), recoveryInfo.isDuplicate);
     std::vector<std::vector<V>> valueShard(shardCount,
                                            std::vector<V>(batchSize));
+    std::vector<std::vector<V>> valueShardTable1(shardCount,
+                                                 std::vector<V>(batchSize));
     std::vector<std::vector<uint8_t>> foundFlagsShard(
         shardCount, std::vector<uint8_t>(batchSize));
+    std::vector<std::vector<uint8_t>> foundFlagsShardTable1(
+        shardCount, std::vector<uint8_t>(batchSize));
 
-#pragma omp parallel for schedule(static)
+#pragma omp parallel for schedule(static) num_threads(shardCount * 2)
     for (uint64_t i = 0; i < shardCount; ++i) {
       const auto& [keyShard, prefixSum] = extractKeyByShard(
           keyVec.begin(), keyVec.end(), shardIndexVec.begin(), i, shardSize);
       uint32_t numReal = prefixSum.back();
-      //       omp_set_num_threads(2);
-      // #pragma omp parallel for schedule(static)
+//       omp_set_num_threads(2);
+// #pragma omp parallel for schedule(static)
+// ocall_measure_time(&start);
+#pragma omp task
+      {
+        for (uint32_t j = 0; j < keyShard.size(); ++j) {
+          foundFlagsShard[i][j] =
+              shards[i].findTable0(keyShard[j], valueShard[i][j], j >= numReal);
+        }
+      }
+#pragma omp task
+      {
+        for (uint32_t j = 0; j < keyShard.size(); ++j) {
+          foundFlagsShardTable1[i][j] = shards[i].findTable1(
+              keyShard[j], valueShardTable1[i][j], j >= numReal);
+        }
+      }
+#pragma omp taskwait
+      // ocall_measure_time(&end);
       for (uint32_t j = 0; j < keyShard.size(); ++j) {
-        foundFlagsShard[i][j] =
-            shards[i].find(keyShard[j], valueShard[i][j], j >= numReal);
-        // std::cout << "shard " << i << " find: " << keyShard[j] << " "
-        //           << valueShard[j] << " real = " << (j < numReal)
-        //           << " findRes = " << foundFlagsTmp.get()[j] <<
-        // std::endl;
+        foundFlagsShard[i][j] |= foundFlagsShardTable1[i][j];
+        obliMove(foundFlagsShardTable1[i][j], valueShard[i][j],
+                 valueShardTable1[i][j]);
       }
 
       EM::Algorithm::OrDistributeSeparateMark(
@@ -257,6 +355,10 @@ struct ParOMap {
       EM::Algorithm::OrDistributeSeparateMark(foundFlagsShard[i].begin(),
                                               foundFlagsShard[i].end(),
                                               prefixSum.begin());
+
+      // printf("thread %d takes %lu ns to handle %lu queries\n", i, end -
+      // start,
+      //        keyShard.size());
     }
     mergeShardOutput(valueShard, shardIndexVec, valueBegin);
     std::vector<uint8_t> foundFlags(batchSize);

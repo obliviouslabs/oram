@@ -82,6 +82,7 @@ struct HeapTree {
     cacheLevel = _cacheLevel;
     leafCount = _size;
     totalLevel = GetLogBaseTwo(_size - 1) + 2;
+    Assert(totalLevel <= 64);
     totalSize = 2 * _size - 1;
     cacheSize = std::min((uint64_t)totalSize, (2UL << _cacheLevel) - 1);
     arr.SetSize(totalSize, realCacheSize != -1 ? realCacheSize : cacheSize,
@@ -272,10 +273,10 @@ struct HeapTree {
 
   template <typename Iterator>
   int ReadPath(PositionType pos, Iterator pathBegin) {
-    std::vector<PositionType> pathIdx(totalLevel);
+    PositionType pathIdx[64];
 
-    int actualLevel =
-        GetPathIdx(pathIdx.begin(), pathIdx.end(), pos, leafCount, cacheLevel);
+    int actualLevel = GetPathIdx(&pathIdx[0], &pathIdx[totalLevel], pos,
+                                 leafCount, cacheLevel);
 
     for (int i = 0; i < actualLevel; ++i) {
       PositionType idx = pathIdx[i];
@@ -286,10 +287,10 @@ struct HeapTree {
 
   template <typename Iterator>
   int ReadSubPath(PositionType pos, Iterator pathBegin, int k) {
-    std::vector<PositionType> pathIdx(totalLevel);
+    PositionType pathIdx[64];
 
-    int actualLevel =
-        GetPathIdx(pathIdx.begin(), pathIdx.end(), pos, leafCount, cacheLevel);
+    int actualLevel = GetPathIdx(&pathIdx[0], &pathIdx[totalLevel], pos,
+                                 leafCount, cacheLevel);
 
     for (int i = k; i < actualLevel; ++i) {
       PositionType idx = pathIdx[i];
@@ -300,9 +301,9 @@ struct HeapTree {
 
   template <typename Iterator>
   int WritePath(PositionType pos, const Iterator pathBegin) {
-    std::vector<PositionType> pathIdx(totalLevel);
-    int actualLevel =
-        GetPathIdx(pathIdx.begin(), pathIdx.end(), pos, leafCount, cacheLevel);
+    PositionType pathIdx[64];
+    int actualLevel = GetPathIdx(&pathIdx[0], &pathIdx[totalLevel], pos,
+                                 leafCount, cacheLevel);
 
     for (int i = 0; i < actualLevel; ++i) {
       PositionType idx = pathIdx[i];
@@ -313,9 +314,9 @@ struct HeapTree {
 
   template <typename Iterator>
   int WriteSubPath(PositionType pos, const Iterator pathBegin, int k) {
-    std::vector<PositionType> pathIdx(totalLevel);
-    int actualLevel =
-        GetPathIdx(pathIdx.begin(), pathIdx.end(), pos, leafCount, cacheLevel);
+    PositionType pathIdx[64];
+    int actualLevel = GetPathIdx(&pathIdx[0], &pathIdx[totalLevel], pos,
+                                 leafCount, cacheLevel);
 
     for (int i = k; i < actualLevel; ++i) {
       PositionType idx = pathIdx[i];

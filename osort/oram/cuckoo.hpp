@@ -153,6 +153,8 @@ struct CuckooHashMap {
     }
   }
 
+  void Init() { InitDefault(); }
+
   static void updateHelper(PositionType addr, TableType& table,
                            const auto& updateFunc) {
     if constexpr (isOblivious) {
@@ -193,7 +195,10 @@ struct CuckooHashMap {
     return false;
   }
 
-  bool insert(const K& key, const V& value) {
+  bool insert(const K& key, const V& value, bool isDummy = false) {
+    if (isDummy) {
+      return false;
+    }
     PositionType idx0 = indexer.getHashIdx0(key);
 
     bool inserted = false;
@@ -304,29 +309,78 @@ struct CuckooHashMap {
     }
   }
 
-  bool find(const K& key, V& value) {
-    PositionType idx0 = indexer.getHashIdx0(key);
-    BucketType bucket;
-    readHelper(idx0, table0, bucket);
-    bool found = searchBucket(key, value, bucket);
+  bool find(const K& key, V& value, bool isDummy = false) {
     if constexpr (!isOblivious) {
+      if (isDummy) {
+        return false;
+      }
+      PositionType idx0 = indexer.getHashIdx0(key);
+      BucketType bucket;
+      readHelper(idx0, table0, bucket);
+      bool found = searchBucket(key, value, bucket);
       if (found) {
         return true;
       }
-    }
-    PositionType idx1 = indexer.getHashIdx1(key);
-    readHelper(idx1, table1, bucket);
-    found |= searchBucket(key, value, bucket);
-    if constexpr (!isOblivious) {
+      PositionType idx1 = indexer.getHashIdx1(key);
+      readHelper(idx1, table1, bucket);
+      found = searchBucket(key, value, bucket);
       if (found) {
         return true;
       }
+      found = searchStash(key, value, stash);
+      return found & !isDummy;
+    } else {
+      bool found = false;
+      PositionType idx0 = indexer.getHashIdx0(key);
+
+      obliMove(isDummy, idx0, (PositionType)UniformRandom(tableSize - 1));
+
+      BucketType bucket;
+      readHelper(idx0, table0, bucket);
+      found = searchBucket(key, value, bucket);
+
+      PositionType idx1 = indexer.getHashIdx1(key);
+      obliMove(isDummy, idx1, (PositionType)UniformRandom(tableSize - 1));
+      readHelper(idx1, table1, bucket);
+      found |= searchBucket(key, value, bucket);
+      found |= searchStash(key, value, stash);
+      return found & !isDummy;
     }
-    found |= searchStash(key, value, stash);
-    return found;
   }
 
-  bool erase(const K& key) {
+  bool findTable0(const K& key, V& value, bool isDummy = false) {
+    static_assert(isOblivious);
+    bool found = false;
+
+    PositionType idx0 = indexer.getHashIdx0(key);
+
+    obliMove(isDummy, idx0, (PositionType)UniformRandom(tableSize - 1));
+
+    BucketType bucket;
+    readHelper(idx0, table0, bucket);
+    found = searchBucket(key, value, bucket);
+    found |= searchStash(key, value, stash);
+
+    return found & !isDummy;
+  }
+
+  bool findTable1(const K& key, V& value, bool isDummy = false) {
+    static_assert(isOblivious);
+    bool found = false;
+
+    PositionType idx1 = indexer.getHashIdx1(key);
+    obliMove(isDummy, idx1, (PositionType)UniformRandom(tableSize - 1));
+    BucketType bucket;
+    readHelper(idx1, table1, bucket);
+    found = searchBucket(key, value, bucket);
+
+    return found & !isDummy;
+  }
+
+  bool erase(const K& key, bool isDummy = false) {
+    if (isDummy) {
+      return false;
+    }
     bool erased = false;
     auto updateFunc = [&](BucketType& bucket) {
       for (int i = 0; i < bucketSize; ++i) {
@@ -359,5 +413,5 @@ struct CuckooHashMap {
     }
     return false;
   }
-};
+};  // namespace ODSL
 }  // namespace ODSL

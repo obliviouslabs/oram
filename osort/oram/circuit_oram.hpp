@@ -21,6 +21,8 @@ struct ORAM {
 
   PositionType evictCounter = 0;
 
+  std::vector<Block_> path;
+
   ORAM() {}
 
   // ORAM(const ORAM& other) = default;
@@ -38,14 +40,14 @@ struct ORAM {
 
   void SetSize(PositionType size, size_t cacheBytes = 1UL << 62) {
     if (_size) {
-      throw std::runtime_error("Path ORAM double initialization");
+      throw std::runtime_error("Circuit ORAM double initialization");
     }
 
     _size = size;
     int cacheLevel = GetMaxCacheLevel<T, Z, stashSize, PositionType, UidType>(
         size, cacheBytes);
     if (cacheLevel < 0) {
-      throw std::runtime_error("Path ORAM cache size too small");
+      throw std::runtime_error("Circuit ORAM cache size too small");
     }
     // printf(
     //     "tree size = %lu, cacheBytes = %lu, cacheLevel = %d, element size = "
@@ -57,7 +59,11 @@ struct ORAM {
     }
     tree.InitWithDefault(size, dummyBucket, cacheLevel);
     depth = GetLogBaseTwo(size - 1) + 2;
+    if (depth > 64) {
+      throw std::runtime_error("Circuit ORAM too large");
+    }
     stash = new Stash();
+    path.resize(stashSize + Z * depth);
   }
 
   static size_t GetMemoryUsage(PositionType size,
@@ -100,15 +106,15 @@ struct ORAM {
 
   PositionType Read(PositionType pos, const UidType& uid, T& out,
                     PositionType newPos) {
-    std::vector<Block_> path = ReadPath(pos);
+    int len = ReadPath(pos, path);
 
-    ReadElementAndRemoveFromPath(path, uid, out);
+    ReadElementAndRemoveFromPath(path.begin(), path.begin() + len, uid, out);
 
     Block_ newBlock(out, newPos, uid);
     int retry = 10;
     while (true) {
       bool success = WriteNewBlockToTreeTop(path, newBlock, stashSize + Z);
-      EvictPath(path, pos);
+      EvictPath(path, pos, len);
       WriteBackPath(path, pos);
       Evict();
       if (success) {
@@ -119,14 +125,14 @@ struct ORAM {
       }
       --retry;
       pos = (evictCounter++) % size();
-      path = ReadPath(pos);
+      len = ReadPath(pos, path);
     }
     return newPos;
   }
 
   void Evict(PositionType pos) {
-    std::vector<Block_> path = ReadPath(pos);
-    EvictPath(path, pos);
+    int len = ReadPath(pos, path);
+    EvictPath(path, pos, len);
     WriteBackPath(path, pos);
   }
 
@@ -145,12 +151,12 @@ struct ORAM {
   template <const int _evict_freq = evict_freq>
   PositionType Write(const UidType& uid, const T& in, PositionType newPos) {
     PositionType pos = (evictCounter++) % size();
-    std::vector<Block_> path = ReadPath(pos);
+    int len = ReadPath(pos, path);
     Block_ newBlock(in, newPos, uid);
     int retry = 10;
     while (true) {
       bool success = WriteNewBlockToTreeTop(path, newBlock, stashSize + Z);
-      EvictPath(path, pos);
+      EvictPath(path, pos, len);
       WriteBackPath(path, pos);
       Evict<_evict_freq>();
       if (success) {
@@ -161,7 +167,7 @@ struct ORAM {
       }
       --retry;
       pos = (evictCounter++) % size();
-      path = ReadPath(pos);
+      len = ReadPath(pos, path);
     }
     return newPos;
   }
@@ -172,40 +178,46 @@ struct ORAM {
     return Write<evict_freq>(uid, in, newPos);
   }
 
+  template <class Func>
   PositionType Update(PositionType pos, const UidType& uid,
-                      std::function<bool(T&)> updateFunc) {
+                      const Func& updateFunc) {
     T out;
     return Update(pos, uid, updateFunc, out);
   }
 
+  template <class Func>
   PositionType Update(PositionType pos, const UidType& uid, PositionType newPos,
-                      std::function<bool(T&)> updateFunc) {
+                      const Func& updateFunc) {
     T out;
     return Update(pos, uid, newPos, updateFunc, out);
   }
 
+  template <class Func>
   PositionType Update(PositionType pos, const UidType& uid,
-                      std::function<bool(T&)> updateFunc, T& out) {
+                      const Func& updateFunc, T& out) {
     return Update(pos, uid, updateFunc, out, uid);  // does not change uid
   }
 
+  template <class Func>
   PositionType Update(PositionType pos, const UidType& uid, PositionType newPos,
-                      std::function<bool(T&)> updateFunc, T& out) {
+                      const Func& updateFunc, T& out) {
     return Update(pos, uid, newPos, updateFunc, out,
                   uid);  // does not change uid
   }
 
+  template <class Func>
   PositionType Update(PositionType pos, const UidType& uid,
-                      std::function<bool(T&)> updateFunc, T& out,
+                      const Func& updateFunc, T& out,
                       const UidType& updatedUid) {
     PositionType newPos = UniformRandom(size() - 1);
     return Update(pos, uid, newPos, updateFunc, out, updatedUid);
   }
 
+  template <class Func>
   PositionType Update(PositionType pos, const UidType& uid, PositionType newPos,
-                      std::function<bool(T&)> updateFunc, T& out,
+                      const Func& updateFunc, T& out,
                       const UidType& updatedUid) {
-    std::vector<Block_> path = ReadPath(pos);
+    int len = ReadPath(pos, path);
 
     ReadElementAndRemoveFromPath(path, uid, out);
     bool keepFlag = updateFunc(out);
@@ -215,7 +227,8 @@ struct ORAM {
     int retry = 10;
     while (true) {
       bool success = WriteNewBlockToTreeTop(path, newBlock, stashSize + Z);
-      EvictPath(path, pos);
+      success |= !keepFlag;
+      EvictPath(path, pos, len);
       WriteBackPath(path, pos);
       Evict();
       if (success) {
@@ -226,7 +239,7 @@ struct ORAM {
       }
       --retry;
       pos = (evictCounter++) % size();
-      path = ReadPath(pos);
+      len = ReadPath(pos, path);
     }
     return newPos;
   }
@@ -260,9 +273,9 @@ struct ORAM {
     Assert(batchSize == newPos.size());
     Assert(batchSize == out.size());
     for (uint64_t i = 0; i < batchSize; ++i) {
-      std::vector<Block_> path = ReadPath(pos[i]);
+      int len = ReadPath(pos[i], path);
       ReadElementAndRemoveFromPath(path, uid[i], out[i]);
-      EvictPath(path, pos[i]);
+      EvictPath(path, pos[i], len);
       WriteBackPath(path, pos[i]);
     }
     const std::vector<bool>& writeBackFlags = updateFunc(out);
@@ -273,15 +286,14 @@ struct ORAM {
     }
   }
 
-  std::vector<Block_> ReadPath(PositionType pos) {
-    std::vector<Block_> path(stashSize + Z * depth);
+  int ReadPath(PositionType pos, std::vector<Block_>& path) {
+    Assert(path.size() == stashSize + Z * depth);
 
     memcpy(&path[0], stash->blocks, stashSize * sizeof(Block_));
 
     int level = tree.ReadPath(pos, (Bucket_*)(&path[stashSize]));
-    path.resize(stashSize + Z * level);
 #ifndef NDEBUG
-    for (int i = stashSize; i < path.size(); ++i) {
+    for (int i = stashSize; stashSize + Z * level; ++i) {
       int lv = (i - stashSize) / Z;
       size_t mask = (1UL << lv) - 1;
       if (!(path[i].uid == DUMMY<UidType>() ||
@@ -294,12 +306,18 @@ struct ORAM {
       }
     }
 #endif
-    return path;
+    return stashSize + Z * level;
   }
 
   void WriteBackPath(const std::vector<Block_>& path, PositionType pos) {
     memcpy(stash->blocks, &path[0], stashSize * sizeof(Block_));
     tree.WritePath(pos, (Bucket_*)(&path[stashSize]));
+  }
+
+  static void EvictPath(std::vector<Block_>& path, PositionType pos,
+                        int pathLen) {
+    int depth = (pathLen - stashSize) / Z;
+    return EvictPath(path, pos, depth, stashSize, 0);
   }
 
   static void EvictPath(std::vector<Block_>& path, PositionType pos) {
@@ -309,8 +327,12 @@ struct ORAM {
 
   static void EvictPath(std::vector<Block_>& path, PositionType pos, int depth,
                         int actualStashSize, int k) {
-    std::vector<int> deepest(depth, -1);
-    std::vector<int> deepestIdx(depth, 0);
+    int deepest[64];
+    int deepestIdx[64];
+    int target[64];
+    std::fill(&deepest[0], &deepest[depth], -1);
+    std::fill(&deepestIdx[0], &deepestIdx[depth], 0);
+    std::fill(&target[0], &target[depth], -1);
     int src = -1;
     int goal = -1;
 
@@ -332,7 +354,6 @@ struct ORAM {
 
     int dest = -1;
     src = -1;
-    std::vector<int> target(depth, -1);
     for (int i = depth - 1; i > 0; --i) {
       obliMove(i == src, target[i], dest);
       obliMove(i == src, dest, -1);
@@ -577,15 +598,16 @@ struct ORAM {
       // std::cout << std::endl << std::endl;
       if (!subPos.empty()) {
         // reads elements in the subtree
-        std::vector<Block_> path(stashSize + Z * depth);
-        std::copy(topKCopy.begin(), topKCopy.end(), path.begin());
+        std::vector<Block_> localPath(stashSize + Z * depth);
+        std::copy(topKCopy.begin(), topKCopy.end(), localPath.begin());
         for (int i = 0; i < subPos.size(); ++i) {
-          int actualLevel =
-              tree.ReadSubPath(subPos[i], (Bucket_*)&(path[subStashSize]), k);
+          int actualLevel = tree.ReadSubPath(
+              subPos[i], (Bucket_*)&(localPath[subStashSize]), k);
           T tempOut;  // avoid interprocessor write contention
           ReadElementAndRemoveFromPath(
-              path.begin(), path.begin() + stashSize + Z * actualLevel,
-              subUid[i], tempOut);
+              localPath.begin(),
+              localPath.begin() + stashSize + Z * actualLevel, subUid[i],
+              tempOut);
           // change to following if requests are already served by searching the
           // top K levels:
           // ReadElementAndRemoveFromPath(path.begin() +
@@ -595,9 +617,10 @@ struct ORAM {
           // obliMove(!found[outputIdx[i]], out[outputIdx[i]], tempOut);
           out[outputIdx[i]] = tempOut;
           // EvictPath(path, subPos[i], actualLevel - k, subStashSize, k);
-          tree.WriteSubPath(subPos[i], (Bucket_*)&(path[subStashSize]), k);
+          tree.WriteSubPath(subPos[i], (Bucket_*)&(localPath[subStashSize]), k);
         }
-        std::copy(path.begin(), path.begin() + subStashSize, topKCopy.begin());
+        std::copy(localPath.begin(), localPath.begin() + subStashSize,
+                  topKCopy.begin());
       }
       // std::cout << "remain in top K Copy of subtree " << subtreeIdx << ": ";
 
@@ -634,8 +657,8 @@ struct ORAM {
       PositionType localEvictCounter =
           evictCounterCopy;  // avoid race condition
       std::vector<Block_>& topKCopy = topKCopies[subtreeIdx];
-      std::vector<Block_> path(stashSize + Z * depth);
-      std::copy(topKCopy.begin(), topKCopy.end(), path.begin());
+      std::vector<Block_> localPath(stashSize + Z * depth);
+      std::copy(topKCopy.begin(), topKCopy.end(), localPath.begin());
       int freq = std::max(1UL, numSubtree / evict_freq);
       for (uint64_t i = 0; i < batchSize; ++i) {
         Block_ toWriteBlock = toWrite[i];
@@ -647,7 +670,8 @@ struct ORAM {
         // }
 
         // this part may be slow
-        bool success = WriteNewBlockToTreeTop(path, toWriteBlock, subStashSize);
+        bool success =
+            WriteNewBlockToTreeTop(localPath, toWriteBlock, subStashSize);
         Assert(success || toWriteBlock.isDummy());
         for (int i = 0; i < evict_freq + 1; ++i) {
           ++localEvictCounter;
@@ -656,13 +680,14 @@ struct ORAM {
             // std::cout << "Subtree " << subtreeIdx << " Evicting at pos " << p
             //           << std::endl;
             int actualLevel =
-                tree.ReadSubPath(p, (Bucket_*)&(path[subStashSize]), k);
-            EvictPath(path, p, actualLevel - k, subStashSize, k);
-            tree.WriteSubPath(p, (Bucket_*)&(path[subStashSize]), k);
+                tree.ReadSubPath(p, (Bucket_*)&(localPath[subStashSize]), k);
+            EvictPath(localPath, p, actualLevel - k, subStashSize, k);
+            tree.WriteSubPath(p, (Bucket_*)&(localPath[subStashSize]), k);
           }
         }
       }
-      std::copy(path.begin(), path.begin() + subStashSize, topKCopy.begin());
+      std::copy(localPath.begin(), localPath.begin() + subStashSize,
+                topKCopy.begin());
     }
 
     // combine top K Copies recursively, pack blocks closer to leaves
