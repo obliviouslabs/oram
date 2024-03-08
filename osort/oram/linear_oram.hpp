@@ -65,20 +65,20 @@ struct LinearORAM {
     return 0;
   }
 
-template <class Func>
+  template <class Func>
   PositionType Update(PositionType pos, const UidType& uid,
                       const Func& updateFunc) {
     T out;
     return Update(pos, uid, updateFunc, out);
   }
 
-template <class Func>
+  template <class Func>
   PositionType Update(PositionType pos, const UidType& uid,
                       const Func& updateFunc, T& out) {
     return Update(pos, uid, updateFunc, out, uid);
   }
 
-template <class Func>
+  template <class Func>
   PositionType Update(PositionType pos, const UidType& uid,
                       const Func& updateFunc, T& out,
                       const UidType& updatedUid) {
