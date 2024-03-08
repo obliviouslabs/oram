@@ -722,7 +722,7 @@ void testParOMapPerf() {
   printf("actual working thread max %d\n", omp_get_max_threads());
   size_t mapSize = 5e6;
   size_t initSize = 4e6;
-  ParOMap<ETH_Addr, ERC20_Balance> omap(mapSize, omp_get_max_threads());
+  ParOMap<ETH_Addr, ERC20_Balance> omap(mapSize, omp_get_max_threads() / 2);
   std::function<std::pair<ETH_Addr, ERC20_Balance>(uint64_t)> readerFunc =
       [](uint64_t i) {
         std::pair<ETH_Addr, ERC20_Balance> pr;
