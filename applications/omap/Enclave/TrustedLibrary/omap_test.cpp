@@ -681,6 +681,56 @@ void testCuckooOMapPerf() {
          timediff / round % 1'000);
 }
 
+void testParCuckooOMapPerf(int numThreads = omp_get_max_threads()) {
+  printf("test cuckoo omap perf with %d threads\n", numThreads);
+  size_t mapSize = 5e6;
+  size_t initSize = 4e6;
+  CuckooHashMap<ETH_Addr, ERC20_Balance, true, uint32_t, true, true> omap(
+      mapSize);
+
+  std::function<std::pair<ETH_Addr, ERC20_Balance>(uint64_t)> readerFunc =
+      [](uint64_t i) { return std::pair<ETH_Addr, ERC20_Balance>(); };
+
+  EM::VirtualVector::VirtualReader<std::pair<ETH_Addr, ERC20_Balance>> reader(
+      initSize, readerFunc);
+  uint64_t start, end;
+  printf("init omap of size %lu\n", mapSize);
+  ocall_measure_time(&start);
+  omap.InitFromReaderInPlace(reader);
+  ocall_measure_time(&end);
+  uint64_t timediff = end - start;
+  printf("oram init time %d.%d s\n", timediff / 1'000'000'000,
+         timediff % 1'000'000'000);
+  int round = 1e5;
+  int batchSize = 1000;
+  ocall_measure_time(&start);
+  for (size_t r = 0; r < round; ++r) {
+    ETH_Addr addr;
+    addr.part[0] = r;
+    ERC20_Balance balance;
+    bool res = omap.insert(addr, balance);
+  }
+  ocall_measure_time(&end);
+  timediff = end - start;
+  printf("oram insert time %d.%d us\n", timediff / round / 1'000,
+         timediff / round % 1'000);
+
+  ocall_measure_time(&start);
+  for (size_t r = 0; r < round; r += batchSize) {
+    std::vector<ETH_Addr> addr(batchSize);
+    for (int i = 0; i < batchSize; ++i) {
+      addr[i].part[0] = r + i;
+    }
+    std::vector<ERC20_Balance> balance(batchSize);
+    omap.findBatch(addr, balance, std::vector<bool>(batchSize, false),
+                   numThreads);
+  }
+  ocall_measure_time(&end);
+  timediff = end - start;
+  printf("oram find time %d.%d us\n", timediff / round / 1'000,
+         timediff / round % 1'000);
+}
+
 void testRecursiveORAMPerf() {
   printf("test recursive oram perf with %d threads\n", TCS_NUM);
   printf("actual working thread max %d\n", omp_get_max_threads());
@@ -773,10 +823,11 @@ void testParOMapPerfDiffCond() {
   size_t BackendSize = 1e10;
   EM::Backend::g_DefaultBackend =
       new EM::Backend::MemServerBackend(BackendSize);
-  for (uint32_t mapSize: {1e5, 2e5, 5e5, 1e6, 2e6, 5e6, 1e7, 2e7, 5e7, 1e8}) {
-    for (int threadCount: {2, 4, 8, 16, 32}) {
-      for (uint32_t batchSize: {100, 200, 500, 1000, 2000, 5000, 10000}) {
-        printf("mapSize = %u, threadCount = %d, batchSize = %u\n", mapSize, threadCount, batchSize);
+  for (uint32_t mapSize : {1e5, 2e5, 5e5, 1e6, 2e6, 5e6, 1e7, 2e7, 5e7, 1e8}) {
+    for (int threadCount : {2, 4, 8, 16, 32}) {
+      for (uint32_t batchSize : {100, 200, 500, 1000, 2000, 5000, 10000}) {
+        printf("mapSize = %u, threadCount = %d, batchSize = %u\n", mapSize,
+               threadCount, batchSize);
         testParOMapPerf(mapSize, batchSize, threadCount);
       }
     }
@@ -807,9 +858,10 @@ void ecall_omap_perf() {
       new EM::Backend::MemServerBackend(BackendSize);
   try {
     // testOmpSpeedup();
-    testParOMapPerfDiffCond();
+    // testParOMapPerfDiffCond();
     // testParOMapPerf();
     // testCuckooOMapPerf();
+    testParCuckooOMapPerf(8);
     // testRecursiveORAMPerf();
     // testOMapPerf();
     // testOMap();

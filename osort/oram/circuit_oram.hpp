@@ -697,7 +697,7 @@ struct ORAM {
       // std::cout << std::endl;
     }
     duplicateVal(out, uid);
-    
+
     const std::vector<bool>& writeBackFlags = updateFunc(out);
     std::vector<Block_> toWrite(batchSize);
     for (uint64_t i = 0; i < batchSize; ++i) {
@@ -720,7 +720,7 @@ struct ORAM {
       std::vector<Block_>& topKCopy = topKCopies[subtreeIdx];
       std::vector<Block_> localPath(stashSize + Z * depth);
       std::copy(topKCopy.begin(), topKCopy.end(), localPath.begin());
-      int freq = std::max(1UL, numSubtree / evict_freq);
+      int freq = std::max(1, (int)numSubtree / evict_freq);
       for (uint64_t i = 0; i < batchSize; ++i) {
         Block_ toWriteBlock = toWrite[i];
         bool otherSubtreeFlag =
