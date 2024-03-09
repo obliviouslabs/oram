@@ -54,7 +54,7 @@ struct StdVector : public std::vector<T> {
 
     size_t get_page_offset() { return 0; }
   };
-
+  StdVector() : std::vector<T>() {}
   StdVector(uint64_t N) : std::vector<T>(N) {}
   StdVector(Iterator begin, Iterator end) : std::vector<T>(begin, end) {}
 
@@ -67,7 +67,7 @@ struct StdVector : public std::vector<T> {
   Iterator end() { return Iterator(std::vector<T>::end()); }
 
   void resize(uint64_t N) { std::vector<T>::resize(N); }
-
+  void SetSize(uint64_t N, uint64_t _ignore = 0) { resize(N); }
   INLINE size_t size() { return std::vector<T>::size(); }
 
   struct Reader {

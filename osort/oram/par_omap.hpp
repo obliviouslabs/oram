@@ -9,7 +9,7 @@ namespace ODSL {
 template <typename K, typename V, typename PositionType = uint64_t>
 struct ParOMap {
   // std::vector<OMap<K, V, 9, PositionType>> shards;
-  std::vector<CuckooHashMap<K, V, true, PositionType>> shards;
+  std::vector<CuckooHashMap<K, V, true, PositionType, true>> shards;
   uint8_t randSalt[16];
 
   static uint64_t maxQueryPerShard(uint64_t batchSize, uint64_t shardCount,
@@ -39,6 +39,7 @@ struct ParOMap {
   }
 
   void Init() {
+#pragma omp parallel for
     for (auto& shard : shards) {
       shard.Init();
     }
@@ -235,7 +236,7 @@ struct ParOMap {
     uint64_t shardCount = shards.size();
     uint64_t batchSize = keyEnd - keyBegin;
     std::vector<uint32_t> shardIndexVec(batchSize);
-#pragma omp parallel for schedule(static)
+#pragma omp parallel for schedule(static) num_threads(2 * shardCount)
     for (uint64_t i = 0; i < batchSize; ++i) {
       uint64_t keyHash =
           secure_hash_with_salt((uint8_t*)&keyBegin[i], sizeof(K), randSalt);
@@ -290,7 +291,8 @@ struct ParOMap {
                         const std::vector<uint32_t>& shardIndexVec,
                         OutIterator outBegin) {
     uint32_t batchSize = shardIndexVec.size();
-#pragma omp parallel for schedule(static)
+    uint64_t shardCount = shards.size();
+#pragma omp parallel for schedule(static) num_threads(2 * shardCount)
     for (uint32_t i = 0; i < batchSize; ++i) {
       for (uint32_t j = 0; j < shardOutput.size(); ++j) {
         bool matchFlag = shardIndexVec[i] == j;
@@ -320,7 +322,7 @@ struct ParOMap {
     std::vector<std::vector<uint8_t>> foundFlagsShardTable1(
         shardCount, std::vector<uint8_t>(batchSize));
 
-#pragma omp parallel for schedule(static) num_threads(shardCount * 2)
+#pragma omp parallel for schedule(static)
     for (uint64_t i = 0; i < shardCount; ++i) {
       const auto& [keyShard, prefixSum] = extractKeyByShard(
           keyVec.begin(), keyVec.end(), shardIndexVec.begin(), i, shardSize);

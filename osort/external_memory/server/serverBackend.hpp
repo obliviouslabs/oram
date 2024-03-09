@@ -72,15 +72,11 @@ struct MemServerBackend : ServerBackend {
   ~MemServerBackend() { ocall_DeleteServer(); }
 
   void Read(uint64_t offset, uint64_t sz, uint8_t* to) {
-    for (int r = 0; r < IO_ROUND; ++r) {
-      ocall_Read(offset, sz, to);
-    }
+    ocall_Read(offset, sz, to);
   }
 
   void Write(uint64_t offset, uint64_t sz, const uint8_t* from) {
-    for (int r = 0; r < IO_ROUND; ++r) {
-      ocall_Write(offset, sz, from);
-    }
+    ocall_Write(offset, sz, from);
   }
 
   const static uint64_t maxChunkNum = 16;

@@ -66,7 +66,7 @@ struct CuckooHashMapBucket {
 };
 
 template <typename K, typename V, const bool isOblivious,
-          typename PositionType = uint64_t>
+          typename PositionType = uint64_t, const bool parallel_init = false>
 struct CuckooHashMap {
   static constexpr int saltLength = 16;
   static constexpr double loadFactor = 0.7;
@@ -77,6 +77,7 @@ struct CuckooHashMap {
   using BucketType = CuckooHashMapBucket<K, V, bucketSize>;
   using TableType =
       std::conditional_t<isOblivious, RecursiveORAM<BucketType, PositionType>,
+                         //  StdVector<BucketType>>;
                          EM::CacheFrontVector::Vector<
                              BucketType, sizeof(BucketType), true, true, 1024>>;
   TableType table0, table1;
@@ -108,12 +109,20 @@ struct CuckooHashMap {
     if (tableSize != other.tableSize || _size != other._size) {
       throw std::runtime_error("CuckooHashMap InitFromNonOblivious failed");
     }
-
     load = other.load;
     stash = other.stash;
     indexer = other.indexer;
-    table0.InitFromVector(other.table0);
-    table1.InitFromVector(other.table1);
+    if constexpr (false && parallel_init) {
+      // seems to have concurrency bug
+#pragma omp task
+      { table0.InitFromVector(other.table0); }
+#pragma omp task
+      { table1.InitFromVector(other.table1); }
+#pragma omp taskwait
+    } else {
+      table0.InitFromVector(other.table0);
+      table1.InitFromVector(other.table1);
+    }
   }
 
   template <typename Reader>
@@ -148,8 +157,16 @@ struct CuckooHashMap {
 
   void InitDefault() {
     if constexpr (isOblivious) {
-      table0.InitDefault(BucketType());
-      table1.InitDefault(BucketType());
+      if constexpr (parallel_init) {
+#pragma omp task
+        { table0.InitDefault(BucketType()); }
+#pragma omp task
+        { table1.InitDefault(BucketType()); }
+#pragma omp taskwait
+      } else {
+        table0.InitDefault(BucketType());
+        table1.InitDefault(BucketType());
+      }
     }
   }
 

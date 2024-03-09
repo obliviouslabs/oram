@@ -238,9 +238,15 @@ TEST(ORAM, ParBatchUpdate) {
 }
 
 TEST(ORAM, ParBatchUpdateLarge) {
+  if (EM::Backend::g_DefaultBackend) {
+    delete EM::Backend::g_DefaultBackend;
+  }
+  size_t BackendSize = 1e9;
+  EM::Backend::g_DefaultBackend =
+      new EM::Backend::MemServerBackend(BackendSize);
   int memSize = 1e5;
-  int numThreads = 8;
-  ODSL::CircuitORAM::ParORAM<uint64_t> oram(memSize, numThreads, 1UL << 20);
+  int numThreads = 32;
+  ODSL::CircuitORAM::ParORAM<uint64_t> oram(memSize, numThreads);
   std::vector<uint64_t> posMap(memSize);
   std::vector<uint64_t> valMap(memSize);
   for (uint64_t i = 0; i < memSize; i++) {
@@ -250,7 +256,7 @@ TEST(ORAM, ParBatchUpdateLarge) {
     valMap[i] = val;
   }
   for (uint64_t i = 0; i < memSize; i++) {
-    uint64_t batchSize = UniformRandom(500, 600);
+    uint64_t batchSize = 1000;
     std::vector<uint64_t> batchUid(batchSize);
     std::vector<uint64_t> batchPos(batchSize);
     for (uint64_t j = 0; j < batchSize; j++) {

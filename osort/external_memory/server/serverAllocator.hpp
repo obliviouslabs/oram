@@ -3,6 +3,8 @@
 #include <cinttypes>
 #include <vector>
 
+#include "common/lock_util.hpp"
+
 namespace EM {
 // LargeBlockAllocator
 // This is a slow allocator used only in oblivious structures constructors.
@@ -18,6 +20,7 @@ struct LargeBlockAllocator {
   };
 
   Size_t size;
+  Lock lock;
 
   // $Invariant: IsSorted(freeList)
   //
@@ -29,6 +32,7 @@ struct LargeBlockAllocator {
   }
 
   const AllocatorSlot Allocate(Size_t _size) {
+    Critical section(lock);
     TRACE_FUNCTION(_size);
 
     uint64_t bestIdx = -1;
@@ -54,11 +58,11 @@ struct LargeBlockAllocator {
     if (freeList[bestIdx].size == 0) {
       freeList.erase(freeList.begin() + bestIdx);
     }
-
     return ret;
   }
 
   void Free(const AllocatorSlot& slot) {
+    Critical section(lock);
     TRACE_FUNCTION(slot.base, slot.size);
 
     if (slot.size == 0) return;
