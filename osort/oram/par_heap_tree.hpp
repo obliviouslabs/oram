@@ -80,8 +80,8 @@ struct ParHeapTree {
       subTrees[i].InitWithDefault(_size >> _topLevel, defaultVal,
                                   remainCacheLevel, subtreeRealCacheSize);
     }
-    printf("ParHeapTree: topLevel %d, cacheLevel %d, realCacheSize %lu\n",
-           topLevel, cacheLevel, realCacheSize);
+    // printf("ParHeapTree: topLevel %d, cacheLevel %d, realCacheSize %lu\n",
+    //        topLevel, cacheLevel, realCacheSize);
   }
 
   void Init(PositionType _size, int _cacheLevel = 62,

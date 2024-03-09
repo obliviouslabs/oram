@@ -5,7 +5,8 @@
 
 namespace ODSL {
 
-template <typename T, typename PositionType = uint64_t>
+template <typename T, typename PositionType = uint64_t,
+          const bool parallel = false>
 struct RecursiveORAM {
   typedef PositionType UidType;
   static constexpr short fan_out = std::max(64 / (int)sizeof(PositionType), 2);
@@ -39,11 +40,11 @@ struct RecursiveORAM {
 #endif
   };
 
-  using InternalORAM = ORAM<InternalNode, PositionType, UidType>;
+  using InternalORAM = ORAM<InternalNode, PositionType, UidType, parallel>;
 
   std::vector<InternalORAM> internalOrams;
 
-  using LeafORAM = ORAM<LeafNode, PositionType, UidType>;
+  using LeafORAM = ORAM<LeafNode, PositionType, UidType, parallel>;
   LeafORAM leafOram;
   std::vector<PositionType> oramSizes;
   std::vector<UidType> uids;
@@ -60,8 +61,19 @@ struct RecursiveORAM {
     SetSize(size, cacheBytes);
   }
 
+  RecursiveORAM(PositionType size, size_t cacheBytes, size_t numThreads) {
+    SetSize(size, cacheBytes, numThreads);
+  }
+
   void SetSize(PositionType size,
-               size_t cacheBytes = ((uint64_t)ENCLAVE_SIZE << 20) * 3UL / 4UL) {
+               size_t cacheBytes = ((uint64_t)ENCLAVE_SIZE << 20) * 3UL / 4UL,
+               int numThreads = 0) {
+    if constexpr (parallel) {
+      if (numThreads == 0) {
+        numThreads = omp_get_max_threads();
+      }
+    }
+
     _size = size;
     PositionType leafOramSize = divRoundUp(size, chunk_size);
     int numLevel = 0;
@@ -78,14 +90,22 @@ struct RecursiveORAM {
     size_t remainCacheBytes = cacheBytes;
     for (PositionType size : oramSizes) {
       size_t levelCacheBytes = remainCacheBytes / (numLevel + 1);
-      internalOrams.emplace_back(size, levelCacheBytes);
+      if constexpr (parallel) {
+        internalOrams.emplace_back(size, levelCacheBytes, numThreads);
+      } else {
+        internalOrams.emplace_back(size, levelCacheBytes);
+      }
       size_t memUsed = internalOrams.back().GetMemoryUsage();
       // printf("level %d: size %lu, cache mem %lu\n", numLevel, size, memUsed);
       remainCacheBytes -= memUsed;
       --numLevel;
     }
     oramSizes.push_back(leafOramSize);
-    leafOram.SetSize(leafOramSize, remainCacheBytes);
+    if constexpr (parallel) {
+      leafOram.SetSize(leafOramSize, remainCacheBytes, numThreads);
+    } else {
+      leafOram.SetSize(leafOramSize, remainCacheBytes);
+    }
     uids.resize(oramSizes.size());
     indices.resize(oramSizes.size());
   }
@@ -147,7 +167,8 @@ struct RecursiveORAM {
     InitFromReaderInPlace(reader);
   }
 
-  void Access(UidType address, const std::function<void(T&)>& accessor) {
+  template <class Func>
+  void Access(UidType address, const Func& accessor) {
     // printf("Access %lu\n", address);
     Assert(hasInited);
     UidType uid = address / chunk_size;
@@ -200,12 +221,119 @@ struct RecursiveORAM {
     leafOram.Update(pos, uids.back(), newPos, updateFunc);
   }
 
+  template <class Func>
+  void ParBatchAccess(const std::vector<UidType>& address, const Func& accessor,
+                      int numThreads = 0) {
+    // printf("Access %lu\n", address);
+    Assert(hasInited);
+    std::vector<std::vector<UidType>> uids(
+        oramSizes.size(), std::vector<UidType>(address.size()));
+    std::vector<std::vector<short>> indices(oramSizes.size(),
+                                            std::vector<short>(address.size()));
+    for (size_t i = 0; i < address.size(); ++i) {
+      UidType uid = address[i] / chunk_size;
+      short index = address[i] % chunk_size;
+      for (int level = oramSizes.size() - 1; level >= 0; --level) {
+        uids[level][i] = uid;
+        indices[level][i] = index;
+        index = uid % fan_out;
+        uid /= fan_out;
+      }
+    }
+    std::vector<PositionType> pos(address.size(), 0);
+    std::vector<PositionType> newPos(address.size());
+    for (int level = 0; level < oramSizes.size() - 1; ++level) {
+      std::vector<PositionType> nextPos;
+      std::vector<PositionType> nextNewPos(address.size());
+      for (size_t i = 0; i < address.size(); ++i) {
+        nextNewPos[i] = UniformRandom(oramSizes[level + 1] - 1);
+      }
+      auto updateFunc = [&](std::vector<InternalNode>& node) {
+        std::vector<PositionType> localNextPos(address.size());
+        for (int64_t i = address.size() - 1; i >= 0; --i) {
+          // in case of duplicate uid we need to copy what we've updated to maintain consistency
+          // scan backward since only the first duplicate uid will be updated
+
+          // we first read the positions of the next level
+          for (short j = 0; j < fan_out; ++j) {
+            bool match = j == indices[level][i];
+            obliMove(match, localNextPos[i], node[i].children[j]);
+          
+          }
+          // then duplicate what we already updated
+          if (i != address.size() - 1) {
+            bool copyFlag = uids[level][i] == uids[level][i + 1];
+            obliMove(copyFlag, node[i], node[i + 1]);
+          }
+          // and finally update the node to point to the new children
+          for (short j = 0; j < fan_out; ++j) {
+            bool match = j == indices[level][i];
+            
+            obliMove(match, node[i].children[j], nextNewPos[i]);
+          }
+        }
+        nextPos = localNextPos;
+        return std::vector<bool>(address.size(), true);
+      };
+      // printf("level %d: pos %lu, uid %lu, newPos %lu\n", level, pos,
+      //        uids[level], newPos);
+      // printf("level %d\n", level);
+      internalOrams[level].ParBatchUpdate(pos, uids[level], newPos, updateFunc,
+                                          numThreads);
+      // printf("complete level %d\n", level);
+      pos = nextPos;
+      newPos = nextNewPos;
+    }
+    auto updateFunc = [&](std::vector<LeafNode>& node) {
+      std::vector<T> data(address.size());
+
+      const std::vector<short>& index = indices.back();
+      for (size_t i = 0; i < address.size(); ++i) {
+        if constexpr (chunk_size == 1) {
+          data[i] = node[i].data[0];
+        } else {
+          short idx = index[i];
+          for (short j = 0; j < chunk_size; ++j) {
+            obliMove(j == idx, data[i], node[i].data[j]);
+          }
+        }
+      }
+
+      accessor(data);
+      for (size_t i = 0; i < address.size(); ++i) {
+        if constexpr (chunk_size == 1) {
+          node[i].data[0] = data[i];
+        } else {
+          short idx = index[i];
+          for (short j = 0; j < chunk_size; ++j) {
+            obliMove(j == idx, node[i].data[j], data[i]);
+          }
+        }
+      }
+
+      return std::vector<bool>(address.size(), true);
+    };
+    // printf("level %ld: pos %lu, uid %lu, newPos %lu\n", oramSizes.size() - 1,
+    //        pos, uids.back(), newPos);
+    leafOram.ParBatchUpdate(pos, uids.back(), newPos, updateFunc, numThreads);
+  }
+
   void Read(UidType address, T& out) {
     Access(address, [&](T& data) { out = data; });
   }
 
   void Write(UidType address, const T& in) {
     Access(address, [&](T& data) { data = in; });
+  }
+
+  void ParBatchRead(const std::vector<UidType>& address, std::vector<T>& out, int numThreads = 0) {
+    if constexpr (parallel) {
+      ParBatchAccess(address, [&](const std::vector<T>& data) { out = data; }, numThreads);
+    } else {
+      for (size_t i = 0; i < address.size(); ++i) {
+        Read(address[i], out[i]);
+      }
+    }
   }
 };
 }  // namespace ODSL

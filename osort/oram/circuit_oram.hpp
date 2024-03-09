@@ -41,25 +41,26 @@ struct ORAM {
   }
 
   ORAM(PositionType size) {
-    static_assert(!parallel, "Parallel ORAM requires numThreads as argument");
-    SetSize(size, 1UL << 62);
+    if constexpr (parallel) {
+      SetSizeParallel(size);
+    } else {
+      SetSize(size);
+    }
   }
 
   // if oram if parallel second argument is numThreads, otherwise it is
   // cacheBytes
-  ORAM(PositionType size, size_t numThreadsOrCacheBytes) {
+  ORAM(PositionType size, size_t cacheBytes) {
     if constexpr (parallel) {
-      SetSizeParallel(size, numThreadsOrCacheBytes, 1UL << 62);
-      maxSubtree = numThreadsOrCacheBytes;
+      SetSizeParallel(size, cacheBytes);
     } else {
-      SetSize(size, numThreadsOrCacheBytes);
+      SetSize(size, cacheBytes);
     }
   }
 
-  ORAM(PositionType size, int numThreads, size_t cacheBytes) {
+  ORAM(PositionType size, size_t cacheBytes, int numThreads) {
     static_assert(parallel, "Non-parallel ORAM too many arguments");
-    maxSubtree = numThreads;
-    SetSizeParallel(size, numThreads, cacheBytes);
+    SetSizeParallel(size, cacheBytes, numThreads);
   }
 
   void SetSize(PositionType size, size_t cacheBytes = 1UL << 62) {
@@ -91,12 +92,16 @@ struct ORAM {
     path.resize(stashSize + Z * depth);
   }
 
-  void SetSizeParallel(PositionType size, int numThreads,
-                       size_t cacheBytes = 1UL << 62) {
+  void SetSizeParallel(PositionType size, size_t cacheBytes = 1UL << 62,
+                       int numThreads = 0) {
     static_assert(parallel);
+    if (numThreads == 0) {
+      numThreads = omp_get_max_threads();
+    }
     if (numThreads <= 1) {
       throw std::runtime_error("Parallel Circuit ORAM too few threads");
     }
+    maxSubtree = numThreads;
     int topLevel = GetLogBaseTwo(numThreads);
 
     if (_size) {
@@ -547,11 +552,12 @@ struct ORAM {
     }
   }
 
-  void ParBatchUpdate(
-      std::vector<PositionType>& pos, const std::vector<UidType>& uid,
-      const std::vector<PositionType>& newPos,
-      std::function<std::vector<bool>(std::vector<T>&)> updateFunc,
-      std::vector<T>& out, int numThreads = 0) {
+  template <class Func>
+  void ParBatchUpdate(std::vector<PositionType>& pos,
+                      const std::vector<UidType>& uid,
+                      const std::vector<PositionType>& newPos,
+                      const Func& updateFunc, std::vector<T>& out,
+                      int numThreads = 0) {
     if (numThreads > maxSubtree || numThreads == 0) {
       numThreads = maxSubtree;
     }
@@ -633,11 +639,6 @@ struct ORAM {
         outputIdx.push_back(i);
       }
 
-      // std::cout << "Subtree " << subtreeIdx << " requests:" << std::endl;
-      // for (int i = 0; i < subPos.size(); ++i) {
-      //   std::cout << "pos = " << subPos[i] << ", uid = " << subUid[i]
-      //             << std::endl;
-      // }
       // filter elements in top k levels belonging to the subtree
       std::vector<int> prefixSum(topKSize + 1, 0);
       prefixSum[0] = 0;
@@ -695,12 +696,8 @@ struct ORAM {
       // }
       // std::cout << std::endl;
     }
-
     duplicateVal(out, uid);
-    // std::cout << "\nRead results" << std::endl;
-    // for (uint64_t i = 0; i < batchSize; ++i) {
-    //   std::cout << out[i] << std::endl;
-    // }
+    
     const std::vector<bool>& writeBackFlags = updateFunc(out);
     std::vector<Block_> toWrite(batchSize);
     for (uint64_t i = 0; i < batchSize; ++i) {
@@ -729,9 +726,6 @@ struct ORAM {
         bool otherSubtreeFlag =
             (toWriteBlock.position ^ subtreeIdx) & (numSubtree - 1);
         obliMove(otherSubtreeFlag, toWriteBlock.uid, DUMMY<UidType>());
-        // if (!toWriteBlock.isDummy()) {
-        //   std::cout << toWriteBlock << std::endl;
-        // }
 
         // this part may be slow
         bool success =
@@ -768,19 +762,20 @@ struct ORAM {
     // std::cout << std::endl << std::endl;
   }
 
-  void ParBatchUpdate(
-      std::vector<PositionType>& pos, const std::vector<UidType>& uid,
-      const std::vector<PositionType>& newPos,
-      std::function<std::vector<bool>(std::vector<T>&)> updateFunc,
-      int numThreads = 0) {
+  template <class Func>
+  void ParBatchUpdate(std::vector<PositionType>& pos,
+                      const std::vector<UidType>& uid,
+                      const std::vector<PositionType>& newPos,
+                      const Func& updateFunc, int numThreads = 0) {
     std::vector<T> out(pos.size());
     ParBatchUpdate(pos, uid, newPos, updateFunc, out, numThreads);
   }
 
-  std::vector<PositionType> ParBatchUpdate(
-      std::vector<PositionType>& pos, const std::vector<UidType>& uid,
-      std::function<std::vector<bool>(std::vector<T>&)> updateFunc,
-      int numThreads = 0) {
+  template <class Func>
+  std::vector<PositionType> ParBatchUpdate(std::vector<PositionType>& pos,
+                                           const std::vector<UidType>& uid,
+                                           const Func& updateFunc,
+                                           int numThreads = 0) {
     const std::vector<PositionType>& newPoses = GetRandNewPoses(uid.size());
     ParBatchUpdate(pos, uid, newPoses, updateFunc, numThreads);
     return duplicateNewPoses(newPoses, uid);

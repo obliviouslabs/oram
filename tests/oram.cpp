@@ -182,7 +182,7 @@ TEST(ORAM, BatchUpdate) {
 TEST(ORAM, ParBatchUpdate) {
   int memSize = 6543;
   int numThreads = 4;
-  ODSL::CircuitORAM::ParORAM<uint64_t> oram(memSize, numThreads);
+  ODSL::CircuitORAM::ParORAM<uint64_t> oram(memSize, 1UL << 62, numThreads);
   std::vector<uint64_t> posMap(memSize);
   std::vector<uint64_t> valMap(memSize);
   for (uint64_t i = 0; i < memSize; i++) {
@@ -246,7 +246,7 @@ TEST(ORAM, ParBatchUpdateLarge) {
       new EM::Backend::MemServerBackend(BackendSize);
   int memSize = 1e5;
   int numThreads = 32;
-  ODSL::CircuitORAM::ParORAM<uint64_t> oram(memSize, numThreads);
+  ODSL::CircuitORAM::ParORAM<uint64_t> oram(memSize, 1UL << 62, numThreads);
   std::vector<uint64_t> posMap(memSize);
   std::vector<uint64_t> valMap(memSize);
   for (uint64_t i = 0; i < memSize; i++) {
@@ -741,6 +741,52 @@ TEST(RecuriveORAM, testMixed) {
         oram.Access(addr, incFunc);
         ++ref[addr];
       } break;
+    }
+  }
+}
+
+TEST(RecuriveORAM, testBatchAccessUnique) {
+  uint64_t size = 123456;
+  StdVector<uint64_t> ref(size);
+  int numThreads = 8;
+  ODSL::RecursiveORAM<uint64_t, uint64_t, true> oram(size, 1UL << 62,
+                                                    numThreads);
+  for (uint64_t i = 0; i < size; i++) {
+    ref[i] = UniformRandom();
+  }
+  StdVector<uint64_t>::Reader reader(ref.begin(), ref.end());
+  oram.InitFromReaderInPlace(reader);
+  for (int round = 0; round < 1e3; ++round) {
+    // uint64_t addr = UniformRandom(size - 1);
+    // int64_t val;
+    // oram.Read(addr, val);
+    // ASSERT_EQ(val, ref[addr]);
+    std::vector<uint64_t> addrs(1000);
+    for (uint64_t& addr : addrs) {
+      addr = UniformRandom(size - 1);
+    }
+    std::sort(addrs.begin(), addrs.end());
+
+    auto incFunc = [&](std::vector<uint64_t>& xs) {
+      for (size_t i = 0; i < addrs.size(); ++i) {
+        if (xs[i] != ref[addrs[i]]) {
+          printf("Read wrong result for uid %lu, expected %lu, got %lu\n",
+                 addrs[i], ref[addrs[i]], xs[i]);
+          abort();
+        } 
+        // else {
+        //   printf("Read correct result for uid %lu, got %lu\n", addrs[i],
+        //          ref[addrs[i]]);
+        // }
+        ++xs[i];
+      }
+    };
+
+    oram.ParBatchAccess(addrs, incFunc, numThreads);
+    for (size_t i = 0; i < addrs.size(); ++i) {
+      if (i == 0 || addrs[i] != addrs[i - 1]) {
+        ++ref[addrs[i]];
+      }
     }
   }
 }

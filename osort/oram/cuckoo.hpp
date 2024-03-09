@@ -66,7 +66,8 @@ struct CuckooHashMapBucket {
 };
 
 template <typename K, typename V, const bool isOblivious,
-          typename PositionType = uint64_t, const bool parallel_init = false>
+          typename PositionType = uint64_t, const bool parallel_init = true,
+          const bool parallel_batch = false>
 struct CuckooHashMap {
   static constexpr int saltLength = 16;
   static constexpr double loadFactor = 0.7;
@@ -75,11 +76,11 @@ struct CuckooHashMap {
   PositionType load;
   PositionType tableSize;
   using BucketType = CuckooHashMapBucket<K, V, bucketSize>;
-  using TableType =
-      std::conditional_t<isOblivious, RecursiveORAM<BucketType, PositionType>,
-                         //  StdVector<BucketType>>;
-                         EM::CacheFrontVector::Vector<
-                             BucketType, sizeof(BucketType), true, true, 1024>>;
+  using TableType = std::conditional_t<
+      isOblivious, RecursiveORAM<BucketType, PositionType, parallel_batch>,
+      //  StdVector<BucketType>>;
+      EM::CacheFrontVector::Vector<BucketType, sizeof(BucketType), true, true,
+                                   1024>>;
   TableType table0, table1;
   CuckooHashMapIndexer<K, PositionType> indexer;
   std::vector<CuckooHashMapEntry<K, V>> stash;
@@ -92,15 +93,36 @@ struct CuckooHashMap {
     SetSize(size, cacheBytes);
   }
 
-  void SetSize(PositionType size,
-               uint64_t cacheBytes = ((uint64_t)ENCLAVE_SIZE << 20) * 3UL /
-                                     4UL) {
+  CuckooHashMap(PositionType size, uint64_t cacheBytes, int maxThreads) {
+    SetSize(size, cacheBytes, maxThreads);
+  }
+
+  void SetSize(PositionType size) {
+    SetSize(size, ((uint64_t)ENCLAVE_SIZE << 20) * 3UL / 4UL);
+  }
+
+  void SetSize(PositionType size, uint64_t cacheBytes) {
     _size = size;
     load = 0;
     tableSize = size / (2 * loadFactor * bucketSize);
     indexer.SetSize(tableSize);
     table0.SetSize(tableSize, cacheBytes / 2);
     table1.SetSize(tableSize, cacheBytes / 2);
+  }
+
+  void SetSize(PositionType size, uint64_t cacheBytes, int maxThreads) {
+    static_assert(parallel_batch, "too many arguments for non-parallel_batch");
+    _size = size;
+    load = 0;
+    tableSize = size / (2 * loadFactor * bucketSize);
+    indexer.SetSize(tableSize);
+    if constexpr (isOblivious) {
+      table0.SetSize(tableSize, cacheBytes / 2, maxThreads / 2);
+      table1.SetSize(tableSize, cacheBytes / 2, maxThreads / 2);
+    } else {
+      table0.SetSize(tableSize, cacheBytes / 2);
+      table1.SetSize(tableSize, cacheBytes / 2);
+    }
   }
   using NonObliviousCuckooHashMap = CuckooHashMap<K, V, false, PositionType>;
 
@@ -429,6 +451,93 @@ struct CuckooHashMap {
       }
     }
     return false;
+  }
+
+  std::vector<uint8_t> findBatch(const std::vector<K>& keys,
+                                 std::vector<V>& values,
+                                 const std::vector<bool>& isDummy,
+                                 int numThreads = 0) {
+    static_assert(parallel_batch);
+    if (numThreads == 0) {
+      numThreads = omp_get_max_threads();
+    }
+    if constexpr (!isOblivious) {
+      std::vector<uint64_t> found(keys.size());  // reduce false sharing
+                                                 // #pragma omp parallel for
+      for (size_t i = 0; i < keys.size(); ++i) {
+        found[i] = find(keys[i], values[i], isDummy[i]);
+      }
+      // convert to bool
+      std::vector<uint8_t> foundFlag(keys.size());
+      for (size_t i = 0; i < keys.size(); ++i) {
+        foundFlag[i] = found[i];
+      }
+      return foundFlag;
+    } else {
+      // query table0 and table1 in parallel via omp task
+      std::vector<uint8_t> foundFlag(keys.size());
+      std::vector<uint8_t> foundFlagTable1(keys.size());
+      std::vector<V> valuesTable1(keys.size());
+      omp_set_nested(1);
+
+#pragma omp parallel num_threads(numThreads)
+      {
+#pragma omp single
+        {
+#pragma omp task
+          {
+            std::vector<PositionType> hashIndices0(keys.size());
+            for (size_t i = 0; i < keys.size(); ++i) {
+              hashIndices0[i] = indexer.getHashIdx0(keys[i]);
+            }
+            std::vector<PositionType> recoveryVec(keys.size());
+            for (PositionType i = 0; i < keys.size(); ++i) {
+              recoveryVec[i] = i;
+            }
+            EM::Algorithm::BitonicSortSepPayload(
+                hashIndices0.begin(), hashIndices0.end(), recoveryVec.begin());
+            std::vector<BucketType> buckets0(keys.size());
+
+            table0.ParBatchRead(hashIndices0, buckets0, numThreads / 2);
+
+            EM::Algorithm::BitonicSortSepPayload(
+                recoveryVec.begin(), recoveryVec.end(), buckets0.begin());
+            for (size_t i = 0; i < keys.size(); ++i) {
+              foundFlag[i] = searchBucket(keys[i], values[i], buckets0[i]);
+            }
+          }
+
+#pragma omp task
+          {
+            std::vector<PositionType> hashIndices1(keys.size());
+            for (PositionType i = 0; i < keys.size(); ++i) {
+              hashIndices1[i] = indexer.getHashIdx1(keys[i]);
+            }
+            std::vector<PositionType> recoveryVec(keys.size());
+            for (PositionType i = 0; i < keys.size(); ++i) {
+              recoveryVec[i] = i;
+            }
+            EM::Algorithm::BitonicSortSepPayload(
+                hashIndices1.begin(), hashIndices1.end(), recoveryVec.begin());
+            std::vector<BucketType> buckets1(keys.size());
+            table1.ParBatchRead(hashIndices1, buckets1, numThreads / 2);
+            EM::Algorithm::BitonicSortSepPayload(
+                recoveryVec.begin(), recoveryVec.end(), buckets1.begin());
+            for (PositionType i = 0; i < keys.size(); ++i) {
+              foundFlagTable1[i] =
+                  searchBucket(keys[i], valuesTable1[i], buckets1[i]);
+            }
+          }
+#pragma omp taskwait
+        }
+      }
+      for (size_t i = 0; i < keys.size(); ++i) {
+        foundFlag[i] |= foundFlagTable1[i];
+        obliMove(foundFlagTable1[i], values[i], valuesTable1[i]);
+        foundFlag[i] |= searchStash(keys[i], values[i], stash);
+      }
+      return foundFlag;
+    }
   }
 };  // namespace ODSL
 }  // namespace ODSL

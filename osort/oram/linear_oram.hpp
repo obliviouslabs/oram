@@ -1,4 +1,6 @@
 #pragma once
+#include <omp.h>
+
 #include <functional>
 
 #include "common/cpp_extended.hpp"
@@ -124,6 +126,57 @@ struct LinearORAM {
         obliMove(match & !writeBackFlags[i], block.uid, DUMMY<UidType>());
       }
     }
+  }
+
+  // require uid to be sorted, can change uid
+  // require oram to be sorted and contain keys 0 to size - 1
+  template <class Func>
+  void ParBatchUpdate(std::vector<UidType>& uid, const Func& updateFunc,
+                      std::vector<T>& out, int numThreads = 0) {
+    // TODO: Implement hash table index / compaction
+    if (numThreads == 0) {
+      numThreads = omp_get_max_threads();
+    }
+    if (true || size() < 2 * GetLogBaseTwo(uid.size())) {
+      // printf("Using linear oram\n");
+#pragma omp parallel for num_threads(numThreads)
+      for (uint64_t i = 0; i < uid.size(); i++) {
+        Read(0, uid[i], out[i]);
+      }
+
+      std::vector<bool> keepFlag = updateFunc(out);
+      // printf("Update done %lu, numthreads = %d\n", uid.size(), numThreads);
+      // deduplicate uids
+      for (size_t i = uid.size() - 1; i > 0; --i) {
+        obliMove(uid[i] == uid[i - 1], uid[i], DUMMY<UidType>());
+      }
+      int chunkSize = divRoundUp(uid.size(), numThreads);
+
+// avoid write contention and false sharing
+#pragma omp parallel for num_threads(numThreads) schedule(static, chunkSize)
+      for (UidBlock_& block : data) {
+        for (uint64_t i = 0; i < uid.size(); i++) {
+          bool match = block.uid == uid[i];
+          obliMove(match, block.data, out[i]);
+          obliMove(match & !keepFlag[i], block.uid, DUMMY<UidType>());
+        }
+      }
+      // printf("Write done\n");
+      return;
+    }
+    // std::vector<uint32_t> queryPrefixSum(uid.size() + 1, 0);
+    // queryPrefixSum[0] = 0;
+    // for (uint64_t i = 0; i < uid.size(); i++) {
+    //   queryPrefixSum[i + 1] = queryPrefixSum[i] + (uid[i] !=
+    //   DUMMY<UidType>());
+    // }
+  }
+
+  template <class Func>
+  void ParBatchUpdate(std::vector<UidType>& uid, const Func& updateFunc,
+                      int numThreads = 0) {
+    std::vector<T> out(uid.size());
+    ParBatchUpdate(uid, updateFunc, out, numThreads);
   }
 };
 };  // namespace ODSL::LinearORAM

@@ -12,10 +12,11 @@
  */
 namespace ODSL {
 template <typename T, typename PositionType = uint64_t,
-          typename UidType = uint64_t>
+          typename UidType = uint64_t, const bool parallel = false>
 struct ORAM {
   using LinearORAM_ = LinearORAM::LinearORAM<T, PositionType, UidType>;
-  using ORAM_ = CircuitORAM::ORAM<T, 2, 20, PositionType, UidType>;
+  using ORAM_ =
+      CircuitORAM::ORAM<T, 2, 20, PositionType, UidType, 4096, 2, parallel>;
   // using ORAM_ = PathORAM::ORAM<T, 5, 64, PositionType, UidType>;
   LinearORAM_* linearOram = NULL;
   ORAM_* treeOram = NULL;
@@ -29,6 +30,11 @@ struct ORAM {
   ORAM(PositionType size) { SetSize(size); }
 
   ORAM(PositionType size, size_t cacheBytes) { SetSize(size, cacheBytes); }
+
+  ORAM(PositionType size, size_t cacheBytes, int numThreads) {
+    static_assert(parallel, "Non-parallel ORAM too many arguments");
+    SetSize(size, cacheBytes, numThreads);
+  }
 
   // TODO add copy constructor
 
@@ -77,7 +83,13 @@ struct ORAM {
     }
   }
 
-  void SetSize(PositionType size, size_t cacheBytes = 1UL << 62) {
+  void SetSize(PositionType size, size_t cacheBytes = 1UL << 62,
+               int numThreads = 0) {
+    if constexpr (parallel) {
+      if (numThreads == 0) {
+        numThreads = omp_get_max_threads();
+      }
+    }
     if (linearOram || treeOram) {
       throw std::runtime_error("SetSize can only be called on empty oram");
     }
@@ -89,7 +101,11 @@ struct ORAM {
       }
       linearOram = new LinearORAM_(size);
     } else {
-      treeOram = new ORAM_(size, cacheBytes);
+      if constexpr (parallel) {
+        treeOram = new ORAM_(size, cacheBytes, numThreads);
+      } else {
+        treeOram = new ORAM_(size, cacheBytes);
+      }
     }
   }
 
@@ -263,6 +279,43 @@ struct ORAM {
       return linearOram->Update(pos, uid, updateFunc, out, updatedUid);
     } else {
       return treeOram->Update(pos, uid, newPos, updateFunc, out, updatedUid);
+    }
+  }
+
+  template <class Func>
+  void ParBatchUpdate(std::vector<PositionType>& pos,
+                      const std::vector<UidType>& uid,
+                      const std::vector<PositionType>& newPos,
+                      const Func& updateFunc, std::vector<T>& out,
+                      int numThreads = 0) {
+    if (isLinear) {
+      linearOram->ParBatchUpdate(uid, updateFunc, out, numThreads);
+    } else {
+      treeOram->ParBatchUpdate(pos, uid, newPos, updateFunc, out, numThreads);
+    }
+  }
+
+  template <class Func>
+  void ParBatchUpdate(std::vector<PositionType>& pos, std::vector<UidType>& uid,
+                      const std::vector<PositionType>& newPos,
+                      const Func& updateFunc, int numThreads = 0) {
+    if (isLinear) {
+      linearOram->ParBatchUpdate(uid, updateFunc, numThreads);
+    } else {
+      treeOram->ParBatchUpdate(pos, uid, newPos, updateFunc, numThreads);
+    }
+  }
+
+  template <class Func>
+  std::vector<PositionType> ParBatchUpdate(std::vector<PositionType>& pos,
+                                           std::vector<UidType>& uid,
+                                           const Func& updateFunc,
+                                           int numThreads = 0) {
+    if (isLinear) {
+      linearOram->ParBatchUpdate(pos, uid, updateFunc, numThreads);
+      return std::vector<PositionType>(uid.size(), 0);
+    } else {
+      return treeOram->ParBatchUpdate(uid, updateFunc, numThreads);
     }
   }
 
