@@ -74,16 +74,16 @@ void testCuckooHashMapInitFromReader() {
   }
 }
 
-
 template <bool isOblivious>
 void testCuckooHashMapFindBatch() {
   for (int r = 0; r < 10; ++r) {
     int mapSize = 5000;
-    int keySpace = 10000;
-    int batchSize = 100;
+    int keySpace = 1000;
+    int batchSize = 1000;
     int numBatch = 100;
     int numThreads = 4;
-    CuckooHashMap<int, int, isOblivious, uint64_t, true, true> map(mapSize, 1UL << 62, numThreads);
+    CuckooHashMap<int, int, isOblivious, uint64_t, true, true> map(
+        mapSize, 1UL << 62, numThreads);
     std::unordered_map<int, int> std_map;
     for (int r = 0; r < mapSize; ++r) {
       int key = rand() % keySpace;
@@ -100,8 +100,8 @@ void testCuckooHashMapFindBatch() {
       for (int i = 0; i < batchSize; ++i) {
         keys[i] = rand() % keySpace;
       }
-      std::vector<uint8_t> findExistFlag =
-          map.findBatch(keys, vals, std::vector<bool>(batchSize, false), numThreads);
+      std::vector<uint8_t> findExistFlag = map.findBatch(
+          keys, vals, std::vector<bool>(batchSize, false), numThreads);
       for (size_t i = 0; i < keys.size(); ++i) {
         auto it = std_map.find(keys[i]);
         if (it != std_map.end()) {
@@ -112,6 +112,27 @@ void testCuckooHashMapFindBatch() {
         }
       }
     }
+  }
+}
+
+template <bool isOblivious>
+void testCuckooHashMapFindBatchPerf() {
+  int mapSize = 100000;
+  int keySpace = 1000;
+  int batchSize = 1000;
+  int numBatch = 1000;
+  int numThreads = 8;
+  CuckooHashMap<int64_t, int64_t, isOblivious, uint64_t, true, true> map(
+      mapSize, 1UL << 62, numThreads);
+
+  map.InitDefault();
+  for (int r = 0; r < numBatch; ++r) {
+    std::vector<int64_t> keys(batchSize);
+    std::vector<int64_t> vals(batchSize);
+    for (int i = 0; i < batchSize; ++i) {
+      keys[i] = rand() % keySpace;
+    }
+    map.findBatch(keys, vals, std::vector<bool>(batchSize, false), numThreads);
   }
 }
 
@@ -133,4 +154,8 @@ TEST(Cuckoo, CuckooHashMapFindBatchNonOblivious) {
 
 TEST(Cuckoo, CuckooHashMapFindBatchOblivious) {
   testCuckooHashMapFindBatch<true>();
+}
+
+TEST(Cuckoo, CuckooHashMapFindBatchPerfOblivious) {
+  testCuckooHashMapFindBatchPerf<true>();
 }

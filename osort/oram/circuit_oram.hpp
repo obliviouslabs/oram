@@ -727,10 +727,11 @@ struct ORAM {
             (toWriteBlock.position ^ subtreeIdx) & (numSubtree - 1);
         obliMove(otherSubtreeFlag, toWriteBlock.uid, DUMMY<UidType>());
 
-        // this part may be slow
+        // this part may be slow (5% run time for batch size = 1000)
         bool success =
             WriteNewBlockToTreeTop(localPath, toWriteBlock, subStashSize);
         Assert(success || toWriteBlock.isDummy());
+        // ~50% run time
         for (int i = 0; i < evict_freq + 1; ++i) {
           ++localEvictCounter;
           PositionType p = localEvictCounter % size();
@@ -739,6 +740,7 @@ struct ORAM {
             //           << std::endl;
             int actualLevel =
                 tree.ReadSubPath(p, (Bucket_*)&(localPath[subStashSize]), k);
+            // ~40%
             EvictPath(localPath, p, actualLevel - k, subStashSize, k);
             tree.WriteSubPath(p, (Bucket_*)&(localPath[subStashSize]), k);
           }

@@ -1398,3 +1398,56 @@ mapSize = 100000000, threadCount = 32, batchSize = 10000
 oram init time 24.752622 s
 oram insert time 6.883488 us
 oram find time 7.724266 us
+mapSize = 200000000, threadCount = 2, batchSize = 100
+oram init time 1185.492446 s
+oram insert time 80.178885 us
+oram find time 45.110467 us
+mapSize = 200000000, threadCount = 2, batchSize = 200
+oram init time 1208.397262 s
+oram insert time 88.062608 us
+oram find time 44.535949 us
+mapSize = 200000000, threadCount = 2, batchSize = 500
+oram init time 1208.186204 s
+oram insert time 79.135798 us
+oram find time 40.690531 us
+mapSize = 200000000, threadCount = 2, batchSize = 1000
+oram init time 1189.532146 s
+oram insert time 78.424314 us
+oram find time 40.607114 us
+mapSize = 200000000, threadCount = 2, batchSize = 2000
+oram init time 1207.172808 s
+oram insert time 84.548774 us
+oram find time 39.997987 us
+mapSize = 200000000, threadCount = 2, batchSize = 5000
+oram init time 1210.131771 s
+oram insert time 77.407907 us
+oram find time 40.008071 us
+mapSize = 200000000, threadCount = 2, batchSize = 10000
+oram init time 1210.524916 s
+oram insert time 71.864013 us
+oram find time 39.515192 us
+mapSize = 200000000, threadCount = 4, batchSize = 100
+oram init time 599.422566 s
+oram insert time 45.773497 us
+oram find time 39.746642 us
+mapSize = 200000000, threadCount = 4, batchSize = 200
+oram init time 602.348471 s
+oram insert time 41.438948 us
+oram find time 32.522314 us
+mapSize = 200000000, threadCount = 4, batchSize = 500
+oram init time 606.470649 s
+oram insert time 40.504121 us
+oram find time 27.518544 us
+mapSize = 200000000, threadCount = 4, batchSize = 1000
+oram init time 606.481899 s
+oram insert time 39.822863 us
+oram find time 25.150773 us
+mapSize = 200000000, threadCount = 4, batchSize = 2000
+oram init time 604.504448 s
+oram insert time 39.203756 us
+oram find time 23.858258 us
+mapSize = 200000000, threadCount = 4, batchSize = 5000
+oram init time 604.497187 s
+oram insert time 38.782504 us
+oram find time 22.567507 us
+mapSize = 200000000, threadCount = 4, batchSize = 10000

@@ -479,6 +479,8 @@ struct CuckooHashMap {
       std::vector<uint8_t> foundFlagTable1(keys.size());
       std::vector<V> valuesTable1(keys.size());
       omp_set_nested(1);
+      int halfThreads = numThreads / 2;
+      int chunkSize = (keys.size() + halfThreads - 1) / halfThreads;
 
 #pragma omp parallel num_threads(numThreads)
       {
@@ -487,6 +489,7 @@ struct CuckooHashMap {
 #pragma omp task
           {
             std::vector<PositionType> hashIndices0(keys.size());
+#pragma omp parallel for num_threads(halfThreads) schedule(static, chunkSize)
             for (size_t i = 0; i < keys.size(); ++i) {
               hashIndices0[i] = indexer.getHashIdx0(keys[i]);
             }
@@ -510,6 +513,7 @@ struct CuckooHashMap {
 #pragma omp task
           {
             std::vector<PositionType> hashIndices1(keys.size());
+#pragma omp parallel for num_threads(halfThreads) schedule(static, chunkSize)
             for (PositionType i = 0; i < keys.size(); ++i) {
               hashIndices1[i] = indexer.getHashIdx1(keys[i]);
             }

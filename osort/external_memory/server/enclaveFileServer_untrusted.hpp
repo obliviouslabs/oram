@@ -19,16 +19,24 @@ uint8_t* ocall_InitServer(uint64_t sizeOfT, uint64_t N_) {
 }
 
 void ocall_Read(size_t pos, uint64_t length, uint8_t* page) {
-  Assert(length <= 4096);
+  std::ifstream file(DEFAULT_FILENAME, std::ios::binary);
   std::streampos filePos = pos;
-  lbios->seekg(filePos);
-  lbios->read((char*)page, length);
+  file.seekg(filePos, std::ios::beg);
+  file.read((char*)page, length);
+  if (!file) {
+    throw std::runtime_error("read failed");
+  }
 }
 
 void ocall_Write(uint64_t pos, uint64_t length, const uint8_t* page) {
+  std::ofstream file(DEFAULT_FILENAME,
+                     std::ios::binary | std::ios::in | std::ios::out);
   std::streampos filePos = pos;
-  lbios->seekp(filePos);
-  lbios->write((char*)page, length);
+  file.seekp(filePos, std::ios::beg);
+  file.write((char*)page, length);
+  if (!file) {
+    throw std::runtime_error("write failed");
+  }
 }
 
 uint64_t compressChunks(uint64_t* offsets, uint64_t* sizes, uint64_t chunkNum) {
