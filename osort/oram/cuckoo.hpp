@@ -78,9 +78,9 @@ struct CuckooHashMap {
   using BucketType = CuckooHashMapBucket<K, V, bucketSize>;
   using TableType = std::conditional_t<
       isOblivious, RecursiveORAM<BucketType, PositionType, parallel_batch>,
-      //  StdVector<BucketType>>;
-      EM::CacheFrontVector::Vector<BucketType, sizeof(BucketType), true, true,
-                                   1024>>;
+       StdVector<BucketType>>;
+      // EM::CacheFrontVector::Vector<BucketType, sizeof(BucketType), true, true,
+                                  //  1024>>;
   TableType table0, table1;
   CuckooHashMapIndexer<K, PositionType> indexer;
   std::vector<CuckooHashMapEntry<K, V>> stash;
@@ -134,7 +134,7 @@ struct CuckooHashMap {
     load = other.load;
     stash = other.stash;
     indexer = other.indexer;
-    if constexpr (false && parallel_init) {
+    if constexpr (parallel_init) {
       // seems to have concurrency bug
 #pragma omp task
       { table0.InitFromVector(other.table0); }
