@@ -129,28 +129,19 @@ struct ParOMap {
     uint64_t shardCount = shards.size();
     std::vector<uint64_t> shardCounter(shardCount);
     uint64_t initSize = reader.size();
-    uint64_t initSizePerShard =
-        maxQueryPerShard(reader.size(), shardCount, -60);
+
     struct Element {
-      bool isDummy = false;
       uint32_t shardIdx;
       std::pair<K, V> kvPair;
       bool operator<(const Element& other) const {
-        bool lessShard = shardIdx < other.shardIdx;
-        bool equalShard = shardIdx == other.shardIdx;
-        bool lessDummy = isDummy < other.isDummy;
-        bool equalDummy = isDummy == other.isDummy;
-        bool lessKey = kvPair.first < other.kvPair.first;
-        return (lessShard |
-                (equalShard & (lessDummy | (equalDummy & lessKey))));
+        return shardIdx < other.shardIdx;;
       }
     };
-    uint64_t sortVecSize = initSizePerShard * shardCount;
-    std::vector<uint64_t> shardRealCounter;
+
     EM::VirtualVector::VirtualReader<Element> sortReader(
-        sortVecSize, [&](uint64_t i) {
+        initSize, [&](uint64_t i) {
           Element sortElement;
-          if (i < initSize) {
+
             sortElement.kvPair = reader.read();
             uint64_t hash = secure_hash_with_salt(
                 (uint8_t*)&sortElement.kvPair.first, sizeof(K), randSalt);
@@ -159,44 +150,29 @@ struct ParOMap {
               bool matchFlag = sortElement.shardIdx == j;
               shardCounter[j] += matchFlag;
             }
-          } else {
-            if (shardRealCounter.size() == 0) {
-              shardRealCounter = shardCounter;
-            }
-            sortElement.isDummy = true;
-            bool selectedShardFlag = false;
-            for (uint32_t j = 0; j < shardCount; ++j) {
-              bool matchFlag =
-                  (shardCounter[j] < initSizePerShard) & !selectedShardFlag;
-              shardCounter[j] += matchFlag;
-              obliMove(matchFlag, sortElement.shardIdx, j);
-              selectedShardFlag |= matchFlag;
-            }
-
-            // set as random so that the comparison based sorting within each
-            // shard doesn't leak which elements are dummy
-            read_rand((uint8_t*)&sortElement.kvPair.first, sizeof(K));
-          }
-          return sortElement;
-        });
+            return sortElement;
+          } );
 
     using SortVec = EM::NonCachedVector::Vector<Element>;
-    SortVec sortVec(sortVecSize);
+    SortVec sortVec(initSize);
     typename SortVec::Writer sortWriter(sortVec.begin(), sortVec.end());
     EM::Algorithm::KWayButterflySort(sortReader, sortWriter,
-                                     (ENCLAVE_SIZE << 20) / 5);
+                                     ((uint64_t)ENCLAVE_SIZE << 20) / 5);
+    std::vector<PositionType> shardPrefixSum(shardCount + 1);
+    shardPrefixSum[0] = 0;
+    for (int i = 0; i < shardCount; ++i) {
+      shardPrefixSum[i+1] = shardPrefixSum[i] + shardCounter[i];
+    }
 #pragma omp parallel for schedule(static)
     for (uint32_t i = 0; i < shardCount; ++i) {
       typename SortVec::Reader shardReader(
-          sortVec.begin() + i * initSizePerShard,
-          sortVec.begin() + (i + 1) * initSizePerShard);
+          sortVec.begin() + shardPrefixSum[i],
+          sortVec.begin() + shardPrefixSum[i+1]);
       EM::VirtualVector::VirtualReader<std::pair<K, V>> shardKvReader(
-          shardRealCounter[i],
+          shardCounter[i],
           [&](uint64_t j) { return shardReader.read().kvPair; });
       shards[i].InitFromReaderInPlace(shardKvReader);
     }
-
-    // TODO: init each sub omap
   }
 
   template <class KeyIterator, class ShardIdxIterator>
