@@ -230,7 +230,8 @@ struct ParOMap {
     RecoveryInfo(uint32_t size) : recoveryArray(size), isDuplicate(size) {}
   };
 
-  RecoveryInfo sortAndSuppressDuplicateKeys(std::vector<K>& keyVec) {
+  RecoveryInfo sortAndSuppressDuplicateKeys(std::vector<K>& keyVec,
+                                            int bitonicThread = 4) {
     RecoveryInfo recoveryInfo(keyVec.size());
     for (uint32_t i = 0; i < keyVec.size(); ++i) {
       recoveryInfo.recoveryArray[i] = i;
@@ -239,8 +240,9 @@ struct ParOMap {
     // {
     // EM::Algorithm::BitonicSortSepPayload(keyVec.begin(), keyVec.end(),
     //                                   recoveryInfo.recoveryArray.begin());
-    EM::Algorithm::ParBitonicSortSepPayload(
-        keyVec.begin(), keyVec.end(), recoveryInfo.recoveryArray.begin(), 4);
+    EM::Algorithm::ParBitonicSortSepPayload(keyVec.begin(), keyVec.end(),
+                                            recoveryInfo.recoveryArray.begin(),
+                                            bitonicThread);
 
     // }
     recoveryInfo.isDuplicate[0] = false;
@@ -276,8 +278,8 @@ struct ParOMap {
                         OutIterator outBegin) {
     uint32_t batchSize = shardIndexVec.size();
     uint64_t shardCount = shards.size();
-    int threadNum = omp_get_num_threads();
-    int chunkSize = divRoundUp(batchSize, threadNum);
+    // int threadNum = omp_get_num_threads();
+    // int chunkSize = divRoundUp(batchSize, threadNum);
     // #pragma omp for schedule(static, chunkSize)
     for (uint32_t i = 0; i < batchSize; ++i) {
       for (uint32_t j = 0; j < shardOutput.size(); ++j) {
@@ -311,7 +313,7 @@ struct ParOMap {
     {
 #pragma omp single
       {
-        recoveryInfo = sortAndSuppressDuplicateKeys(keyVec);
+        recoveryInfo = sortAndSuppressDuplicateKeys(keyVec, 4);
         shardIndexVec = getShardIndexVec(keyVec.begin(), keyVec.end(),
                                          recoveryInfo.isDuplicate);
       }
@@ -363,9 +365,15 @@ struct ParOMap {
       obliSwap(cond, *(valueBegin + idx0), *(valueBegin + idx1));
       obliSwap(cond, foundFlags[idx0], foundFlags[idx1]);
     };
-    EM::Algorithm::BitonicSortCustomSwap(recoveryInfo.recoveryArray.begin(),
-                                         recoveryInfo.recoveryArray.end(),
-                                         customSwap);
+#pragma omp parallel num_threads(4)
+    {
+#pragma omp single
+      {
+        EM::Algorithm::ParBitonicSortCustomSwap(
+            recoveryInfo.recoveryArray.begin(),
+            recoveryInfo.recoveryArray.end(), customSwap, 4);
+      }
+    }
     return foundFlags;
   }
 
