@@ -212,7 +212,7 @@ struct ParOMap {
     uint64_t shardCount = shards.size();
     uint64_t batchSize = keyEnd - keyBegin;
     std::vector<uint32_t> shardIndexVec(batchSize);
-#pragma omp parallel for schedule(static) num_threads(2 * shardCount)
+// #pragma omp for schedule(static)
     for (uint64_t i = 0; i < batchSize; ++i) {
       uint64_t keyHash =
           secure_hash_with_salt((uint8_t*)&keyBegin[i], sizeof(K), randSalt);
@@ -225,21 +225,30 @@ struct ParOMap {
   struct RecoveryInfo {
     std::vector<uint32_t> recoveryArray;
     std::vector<bool> isDuplicate;
+    RecoveryInfo() {}
     RecoveryInfo(uint32_t size) : recoveryArray(size), isDuplicate(size) {}
   };
 
   RecoveryInfo sortAndSuppressDuplicateKeys(std::vector<K>& keyVec) {
+
     RecoveryInfo recoveryInfo(keyVec.size());
     for (uint32_t i = 0; i < keyVec.size(); ++i) {
       recoveryInfo.recoveryArray[i] = i;
     }
-    EM::Algorithm::BitonicSortSepPayload(keyVec.begin(), keyVec.end(),
-                                         recoveryInfo.recoveryArray.begin());
+    // #pragma omp parallel num_threads(4) 
+    // {
+      // EM::Algorithm::BitonicSortSepPayload(keyVec.begin(), keyVec.end(),
+      //                                   recoveryInfo.recoveryArray.begin());
+    EM::Algorithm::ParBitonicSortSepPayload(keyVec.begin(), keyVec.end(),
+                                        recoveryInfo.recoveryArray.begin(), 4);
+      
+    // }
     recoveryInfo.isDuplicate[0] = false;
     for (uint32_t i = 1; i < keyVec.size(); ++i) {
       recoveryInfo.isDuplicate[i] = keyVec[i] == keyVec[i - 1];
     }
     return recoveryInfo;
+    
   }
   /**
     RecoveryInfo sortAndSuppressDuplicateKeysInInsert(std::vector<K>& keyVec,
@@ -268,7 +277,9 @@ struct ParOMap {
                         OutIterator outBegin) {
     uint32_t batchSize = shardIndexVec.size();
     uint64_t shardCount = shards.size();
-#pragma omp parallel for schedule(static) num_threads(2 * shardCount)
+    int threadNum = omp_get_num_threads();
+    int chunkSize = divRoundUp(batchSize, threadNum);
+// #pragma omp for schedule(static, chunkSize)
     for (uint32_t i = 0; i < batchSize; ++i) {
       for (uint32_t j = 0; j < shardOutput.size(); ++j) {
         bool matchFlag = shardIndexVec[i] == j;
@@ -286,9 +297,8 @@ struct ParOMap {
     uint64_t shardSize = maxQueryPerShard(batchSize, shardCount);
 
     std::vector<K> keyVec(keyBegin, keyEnd);
-    RecoveryInfo recoveryInfo = sortAndSuppressDuplicateKeys(keyVec);
-    std::vector<uint32_t> shardIndexVec = getShardIndexVec(
-        keyVec.begin(), keyVec.end(), recoveryInfo.isDuplicate);
+    RecoveryInfo recoveryInfo;
+    std::vector<uint32_t> shardIndexVec;
     std::vector<std::vector<V>> valueShard(shardCount,
                                            std::vector<V>(batchSize));
     std::vector<std::vector<V>> valueShardTable1(shardCount,
@@ -297,15 +307,20 @@ struct ParOMap {
         shardCount, std::vector<uint8_t>(batchSize));
     std::vector<std::vector<uint8_t>> foundFlagsShardTable1(
         shardCount, std::vector<uint8_t>(batchSize));
-
-#pragma omp parallel for schedule(static)
+    std::vector<uint8_t> foundFlags(batchSize);
+#pragma omp parallel num_threads(shardCount * 2) 
+{
+  #pragma omp single
+  {
+  recoveryInfo = sortAndSuppressDuplicateKeys(keyVec);
+  shardIndexVec = getShardIndexVec(
+        keyVec.begin(), keyVec.end(), recoveryInfo.isDuplicate);
+  }
+#pragma omp for schedule(static)
     for (uint64_t i = 0; i < shardCount; ++i) {
       const auto& [keyShard, prefixSum] = extractKeyByShard(
           keyVec.begin(), keyVec.end(), shardIndexVec.begin(), i, shardSize);
       uint32_t numReal = prefixSum.back();
-//       omp_set_num_threads(2);
-// #pragma omp parallel for schedule(static)
-// ocall_measure_time(&start);
 #pragma omp task
       {
         for (uint32_t j = 0; j < keyShard.size(); ++j) {
@@ -313,7 +328,7 @@ struct ParOMap {
               shards[i].findTable0(keyShard[j], valueShard[i][j], j >= numReal);
         }
       }
-#pragma omp task
+// #pragma omp task  // seems faster if remove one task
       {
         for (uint32_t j = 0; j < keyShard.size(); ++j) {
           foundFlagsShardTable1[i][j] = shards[i].findTable1(
@@ -333,14 +348,13 @@ struct ParOMap {
       EM::Algorithm::OrDistributeSeparateMark(foundFlagsShard[i].begin(),
                                               foundFlagsShard[i].end(),
                                               prefixSum.begin());
-
-      // printf("thread %d takes %lu ns to handle %lu queries\n", i, end -
-      // start,
-      //        keyShard.size());
     }
+#pragma omp single
+ {
     mergeShardOutput(valueShard, shardIndexVec, valueBegin);
-    std::vector<uint8_t> foundFlags(batchSize);
     mergeShardOutput(foundFlagsShard, shardIndexVec, foundFlags.begin());
+  }
+}
     for (uint32_t i = 1; i < recoveryInfo.isDuplicate.size(); ++i) {
       obliMove(recoveryInfo.isDuplicate[i], *(valueBegin + i),
                *(valueBegin + i - 1));
@@ -384,7 +398,10 @@ struct ParOMap {
         getShardIndexVec(keyBegin, keyEnd, std::vector<bool>(batchSize, false));
     std::vector<std::vector<uint8_t>> foundFlagsShard(
         shardCount, std::vector<uint8_t>(batchSize));
-#pragma omp parallel for schedule(static)
+    std::vector<uint8_t> foundFlags(batchSize);
+#pragma omp parallel num_threads(shardCount) 
+{
+#pragma omp for schedule(static)
     for (uint64_t i = 0; i < shardCount; ++i) {
       const auto& [keyShard, prefixSum] = extractKeyByShard(
           keyBegin, keyEnd, shardIndexVec.begin(), i, shardSize);
@@ -403,8 +420,9 @@ struct ParOMap {
                                               foundFlagsShard[i].end(),
                                               prefixSum.begin());
     }
-    std::vector<uint8_t> foundFlags(batchSize);
+    
     mergeShardOutput(foundFlagsShard, shardIndexVec, foundFlags.begin());
+}
     return foundFlags;
   }
 

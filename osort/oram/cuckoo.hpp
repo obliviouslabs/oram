@@ -138,7 +138,7 @@ struct CuckooHashMap {
       // seems to have concurrency bug
 #pragma omp task
       { table0.InitFromVector(other.table0); }
-#pragma omp task
+
       { table1.InitFromVector(other.table1); }
 #pragma omp taskwait
     } else {
@@ -182,7 +182,7 @@ struct CuckooHashMap {
       if constexpr (parallel_init) {
 #pragma omp task
         { table0.InitDefault(BucketType()); }
-#pragma omp task
+
         { table1.InitDefault(BucketType()); }
 #pragma omp taskwait
       } else {
@@ -510,7 +510,6 @@ struct CuckooHashMap {
             }
           }
 
-#pragma omp task
           {
             std::vector<PositionType> hashIndices1(keys.size());
 #pragma omp parallel for num_threads(halfThreads) schedule(static, chunkSize)
