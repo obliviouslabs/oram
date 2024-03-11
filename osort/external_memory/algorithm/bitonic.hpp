@@ -270,7 +270,7 @@ void ParBitonicMergePow2SepPayload(KeyIterator keyBegin, KeyIterator keyEnd,
     KeyIterator midIt = keyBegin + halfSize;
     PayloadIterator midPayloadIt = payloadBegin + halfSize;
     // int chunkSize = divRoundUp(halfSize, numThreads);
-// #pragma omp for schedule(static, chunkSize)
+    // #pragma omp for schedule(static, chunkSize)
     for (size_t i = 0; i < halfSize; ++i) {
       KeyIterator leftKeyIt = keyBegin + i;
       KeyIterator rightKeyIt = midIt + i;
@@ -283,22 +283,17 @@ void ParBitonicMergePow2SepPayload(KeyIterator keyBegin, KeyIterator keyEnd,
     int leftThreads = numThreads / 2;
     int rightThreads = numThreads - leftThreads;
     if (leftThreads > 1) {
-      ParBitonicMergePow2SepPayload(keyBegin, midIt, payloadBegin,
-                                    leftThreads, dire);
+      ParBitonicMergePow2SepPayload(keyBegin, midIt, payloadBegin, leftThreads,
+                                    dire);
     } else {
-
       BitonicMergePow2SepPayload(keyBegin, midIt, payloadBegin, dire);
-      
     }
     if (rightThreads > 1) {
-      ParBitonicMergePow2SepPayload(midIt, keyEnd, midPayloadIt,
-                                    rightThreads, dire);
+      ParBitonicMergePow2SepPayload(midIt, keyEnd, midPayloadIt, rightThreads,
+                                    dire);
     } else {
-     
       BitonicMergePow2SepPayload(midIt, keyEnd, midPayloadIt, dire);
-      
     }
-    
   }
 }
 
@@ -314,7 +309,7 @@ void ParBitonicMergeSepPayload(KeyIterator keyBegin, KeyIterator keyEnd,
     PayloadIterator midPayloadIt = payloadBegin + halfSize;
     size_t loopCycle = size - halfSize;
     // int chunkSize = divRoundUp(loopCycle, numThreads);
-// #pragma omp for schedule(static, chunkSize)
+    // #pragma omp for schedule(static, chunkSize)
     for (size_t i = 0; i < loopCycle; ++i) {
       KeyIterator leftKeyIt = keyBegin + i;
       KeyIterator rightKeyIt = midIt + i;
@@ -323,7 +318,6 @@ void ParBitonicMergeSepPayload(KeyIterator keyBegin, KeyIterator keyEnd,
       bool swapFlag = dire != (*leftKeyIt < *rightKeyIt);
       condSwap(swapFlag, *leftKeyIt, *rightKeyIt);
       condSwap(swapFlag, *leftPayloadIt, *rightPayloadIt);
-      
     }
     int leftThreads = numThreads * halfSize / size;
     int rightThreads = numThreads - leftThreads;
@@ -340,12 +334,9 @@ void ParBitonicMergeSepPayload(KeyIterator keyBegin, KeyIterator keyEnd,
       }
 #pragma omp taskwait
     } else {
-
-        BitonicMergePow2SepPayload(keyBegin, midIt, payloadBegin, dire);
-        BitonicMergeSepPayload(midIt, keyEnd, midPayloadIt, dire);
-      
+      BitonicMergePow2SepPayload(keyBegin, midIt, payloadBegin, dire);
+      BitonicMergeSepPayload(midIt, keyEnd, midPayloadIt, dire);
     }
-    
   }
 }
 
@@ -362,28 +353,145 @@ void ParBitonicSortSepPayload(KeyIterator keyBegin, KeyIterator keyEnd,
       int leftThreads = numThreads / 2;
       int rightThreads = numThreads - leftThreads;
 #pragma omp task
-    {
-      ParBitonicSortSepPayload(keyBegin, keyMid, payloadBegin, leftThreads,
-                                    !dire);
-    }
+      {
+        ParBitonicSortSepPayload(keyBegin, keyMid, payloadBegin, leftThreads,
+                                 !dire);
+      }
 #pragma omp task
-    {
-      ParBitonicSortSepPayload(keyMid, keyEnd, payloadMid, rightThreads, dire);
-    }
+      {
+        ParBitonicSortSepPayload(keyMid, keyEnd, payloadMid, rightThreads,
+                                 dire);
+      }
 #pragma omp taskwait
-      ParBitonicMergeSepPayload(keyBegin, keyEnd, payloadBegin, numThreads, dire);
-    } 
-  } else {
-
-        BitonicSortSepPayload(keyBegin, keyEnd, payloadBegin, dire);
-      
+      ParBitonicMergeSepPayload(keyBegin, keyEnd, payloadBegin, numThreads,
+                                dire);
     }
+  } else {
+    BitonicSortSepPayload(keyBegin, keyEnd, payloadBegin, dire);
+  }
 }
 
 template <class KeyIterator, class PayloadIterator>
 void ParBitonicSortSepPayload(KeyIterator keyBegin, KeyIterator keyEnd,
                               PayloadIterator payloadBegin, int numThreads) {
   ParBitonicSortSepPayload(keyBegin, keyEnd, payloadBegin, numThreads, true);
+}
+
+template <class KeyIterator, class Swap>
+void ParBitonicMergePow2CustomSwap(KeyIterator keyBegin, KeyIterator keyEnd,
+                                   const Swap& swap, uint64_t beginIdx,
+                                   int numThreads, bool dire) {
+  size_t size = keyEnd - keyBegin;
+  if (size > 1) {
+    size_t halfSize = size / 2;
+    KeyIterator midIt = keyBegin + halfSize;
+    uint64_t midIdx = beginIdx + halfSize;
+    // int chunkSize = divRoundUp(halfSize, numThreads);
+    // #pragma omp for schedule(static, chunkSize)
+    for (size_t i = 0; i < halfSize; ++i) {
+      KeyIterator leftKeyIt = keyBegin + i;
+      KeyIterator rightKeyIt = midIt + i;
+      uint64_t leftIdx = beginIdx + i;
+      uint64_t rightIdx = midIdx + i;
+      bool swapFlag = dire != (*leftKeyIt < *rightKeyIt);
+      condSwap(swapFlag, *leftKeyIt, *rightKeyIt);
+      swap(swapFlag, leftIdx, rightIdx);
+    }
+    int leftThreads = numThreads / 2;
+    int rightThreads = numThreads - leftThreads;
+    if (leftThreads > 1) {
+      ParBitonicMergePow2CustomSwap(keyBegin, midIt, swap, beginIdx,
+                                    leftThreads, dire);
+    } else {
+      BitonicMergePow2CustomSwap(keyBegin, midIt, swap, beginIdx, dire);
+    }
+    if (rightThreads > 1) {
+      ParBitonicMergePow2CustomSwap(midIt, keyEnd, swap, midIdx, rightThreads,
+                                    dire);
+    } else {
+      BitonicMergePow2CustomSwap(midIt, keyEnd, swap, midIdx, dire);
+    }
+  }
+}
+
+template <class KeyIterator, class Swap>
+void ParBitonicMergeCustomSwap(KeyIterator keyBegin, KeyIterator keyEnd,
+                               const Swap& swap, uint64_t beginIdx,
+                               int numThreads, bool dire) {
+  Assert(numThreads > 1);
+  size_t size = keyEnd - keyBegin;
+  if (size > 1) {
+    size_t halfSize = GetNextPowerOfTwo(size) / 2;
+    KeyIterator midIt = keyBegin + halfSize;
+    uint64_t midIdx = beginIdx + halfSize;
+    size_t loopCycle = size - halfSize;
+    // int chunkSize = divRoundUp(loopCycle, numThreads);
+    // #pragma omp for schedule(static, chunkSize)
+    for (size_t i = 0; i < loopCycle; ++i) {
+      KeyIterator leftKeyIt = keyBegin + i;
+      KeyIterator rightKeyIt = midIt + i;
+      uint64_t leftIdx = beginIdx + i;
+      uint64_t rightIdx = midIdx + i;
+      bool swapFlag = dire != (*leftKeyIt < *rightKeyIt);
+      condSwap(swapFlag, *leftKeyIt, *rightKeyIt);
+      swap(swapFlag, leftIdx, rightIdx);
+    }
+    int leftThreads = numThreads * halfSize / size;
+    int rightThreads = numThreads - leftThreads;
+    if (rightThreads > 1) {
+#pragma omp task
+      {
+        ParBitonicMergePow2CustomSwap(keyBegin, midIt, swap, beginIdx,
+                                      leftThreads, dire);
+      }
+#pragma omp task
+      {
+        ParBitonicMergeCustomSwap(midIt, keyEnd, swap, midIdx, rightThreads,
+                                  dire);
+      }
+#pragma omp taskwait
+    } else {
+      BitonicMergePow2CustomSwap(keyBegin, midIt, swap, beginIdx, dire);
+      BitonicMergeCustomSwap(midIt, keyEnd, swap, midIdx, dire);
+    }
+  }
+}
+
+template <class KeyIterator, class Swap>
+void ParBitonicSortCustomSwap(KeyIterator keyBegin, KeyIterator keyEnd,
+                              const Swap& swap, uint64_t beginIdx,
+                              int numThreads, bool dire) {
+  if (numThreads > 1) {
+    size_t size = keyEnd - keyBegin;
+    if (size > 1) {
+      size_t halfSize = size / 2;
+      KeyIterator keyMid = keyBegin + halfSize;
+      uint64_t midIdx = beginIdx + halfSize;
+      int leftThreads = numThreads / 2;
+      int rightThreads = numThreads - leftThreads;
+#pragma omp task
+      {
+        ParBitonicSortCustomSwap(keyBegin, keyMid, swap, beginIdx, leftThreads,
+                                 !dire);
+      }
+#pragma omp task
+      {
+        ParBitonicSortCustomSwap(keyMid, keyEnd, swap, midIdx, rightThreads,
+                                 dire);
+      }
+#pragma omp taskwait
+      ParBitonicMergeCustomSwap(keyBegin, keyEnd, swap, beginIdx, numThreads,
+                                dire);
+    }
+  } else {
+    BitonicSortCustomSwap(keyBegin, keyEnd, swap, beginIdx, dire);
+  }
+}
+
+template <class KeyIterator, class Swap>
+void ParBitonicSortCustomSwap(KeyIterator keyBegin, KeyIterator keyEnd,
+                              const Swap& swap, int numThreads) {
+  ParBitonicSortCustomSwap(keyBegin, keyEnd, swap, 0, numThreads, true);
 }
 
 }  // namespace EM::Algorithm

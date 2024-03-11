@@ -134,7 +134,8 @@ struct ParOMap {
       uint32_t shardIdx;
       std::pair<K, V> kvPair;
       bool operator<(const Element& other) const {
-        return shardIdx < other.shardIdx;;
+        return shardIdx < other.shardIdx;
+        ;
       }
     };
 
@@ -142,16 +143,16 @@ struct ParOMap {
         initSize, [&](uint64_t i) {
           Element sortElement;
 
-            sortElement.kvPair = reader.read();
-            uint64_t hash = secure_hash_with_salt(
-                (uint8_t*)&sortElement.kvPair.first, sizeof(K), randSalt);
-            sortElement.shardIdx = hash % shardCount;
-            for (uint32_t j = 0; j < shardCount; ++j) {
-              bool matchFlag = sortElement.shardIdx == j;
-              shardCounter[j] += matchFlag;
-            }
-            return sortElement;
-          } );
+          sortElement.kvPair = reader.read();
+          uint64_t hash = secure_hash_with_salt(
+              (uint8_t*)&sortElement.kvPair.first, sizeof(K), randSalt);
+          sortElement.shardIdx = hash % shardCount;
+          for (uint32_t j = 0; j < shardCount; ++j) {
+            bool matchFlag = sortElement.shardIdx == j;
+            shardCounter[j] += matchFlag;
+          }
+          return sortElement;
+        });
 
     using SortVec = EM::NonCachedVector::Vector<Element>;
     SortVec sortVec(initSize);
@@ -161,13 +162,13 @@ struct ParOMap {
     std::vector<PositionType> shardPrefixSum(shardCount + 1);
     shardPrefixSum[0] = 0;
     for (int i = 0; i < shardCount; ++i) {
-      shardPrefixSum[i+1] = shardPrefixSum[i] + shardCounter[i];
+      shardPrefixSum[i + 1] = shardPrefixSum[i] + shardCounter[i];
     }
 #pragma omp parallel for schedule(static)
     for (uint32_t i = 0; i < shardCount; ++i) {
       typename SortVec::Reader shardReader(
           sortVec.begin() + shardPrefixSum[i],
-          sortVec.begin() + shardPrefixSum[i+1]);
+          sortVec.begin() + shardPrefixSum[i + 1]);
       EM::VirtualVector::VirtualReader<std::pair<K, V>> shardKvReader(
           shardCounter[i],
           [&](uint64_t j) { return shardReader.read().kvPair; });
@@ -212,7 +213,7 @@ struct ParOMap {
     uint64_t shardCount = shards.size();
     uint64_t batchSize = keyEnd - keyBegin;
     std::vector<uint32_t> shardIndexVec(batchSize);
-// #pragma omp for schedule(static)
+    // #pragma omp for schedule(static)
     for (uint64_t i = 0; i < batchSize; ++i) {
       uint64_t keyHash =
           secure_hash_with_salt((uint8_t*)&keyBegin[i], sizeof(K), randSalt);
@@ -230,25 +231,23 @@ struct ParOMap {
   };
 
   RecoveryInfo sortAndSuppressDuplicateKeys(std::vector<K>& keyVec) {
-
     RecoveryInfo recoveryInfo(keyVec.size());
     for (uint32_t i = 0; i < keyVec.size(); ++i) {
       recoveryInfo.recoveryArray[i] = i;
     }
-    // #pragma omp parallel num_threads(4) 
+    // #pragma omp parallel num_threads(4)
     // {
-      // EM::Algorithm::BitonicSortSepPayload(keyVec.begin(), keyVec.end(),
-      //                                   recoveryInfo.recoveryArray.begin());
-    EM::Algorithm::ParBitonicSortSepPayload(keyVec.begin(), keyVec.end(),
-                                        recoveryInfo.recoveryArray.begin(), 4);
-      
+    // EM::Algorithm::BitonicSortSepPayload(keyVec.begin(), keyVec.end(),
+    //                                   recoveryInfo.recoveryArray.begin());
+    EM::Algorithm::ParBitonicSortSepPayload(
+        keyVec.begin(), keyVec.end(), recoveryInfo.recoveryArray.begin(), 4);
+
     // }
     recoveryInfo.isDuplicate[0] = false;
     for (uint32_t i = 1; i < keyVec.size(); ++i) {
       recoveryInfo.isDuplicate[i] = keyVec[i] == keyVec[i - 1];
     }
     return recoveryInfo;
-    
   }
   /**
     RecoveryInfo sortAndSuppressDuplicateKeysInInsert(std::vector<K>& keyVec,
@@ -279,7 +278,7 @@ struct ParOMap {
     uint64_t shardCount = shards.size();
     int threadNum = omp_get_num_threads();
     int chunkSize = divRoundUp(batchSize, threadNum);
-// #pragma omp for schedule(static, chunkSize)
+    // #pragma omp for schedule(static, chunkSize)
     for (uint32_t i = 0; i < batchSize; ++i) {
       for (uint32_t j = 0; j < shardOutput.size(); ++j) {
         bool matchFlag = shardIndexVec[i] == j;
@@ -308,53 +307,51 @@ struct ParOMap {
     std::vector<std::vector<uint8_t>> foundFlagsShardTable1(
         shardCount, std::vector<uint8_t>(batchSize));
     std::vector<uint8_t> foundFlags(batchSize);
-#pragma omp parallel num_threads(shardCount * 2) 
-{
-  #pragma omp single
-  {
-  recoveryInfo = sortAndSuppressDuplicateKeys(keyVec);
-  shardIndexVec = getShardIndexVec(
-        keyVec.begin(), keyVec.end(), recoveryInfo.isDuplicate);
-  }
-#pragma omp for schedule(static)
-    for (uint64_t i = 0; i < shardCount; ++i) {
-      const auto& [keyShard, prefixSum] = extractKeyByShard(
-          keyVec.begin(), keyVec.end(), shardIndexVec.begin(), i, shardSize);
-      uint32_t numReal = prefixSum.back();
-#pragma omp task
-      {
-        for (uint32_t j = 0; j < keyShard.size(); ++j) {
-          foundFlagsShard[i][j] =
-              shards[i].findTable0(keyShard[j], valueShard[i][j], j >= numReal);
-        }
-      }
-// #pragma omp task  // seems faster if remove one task
-      {
-        for (uint32_t j = 0; j < keyShard.size(); ++j) {
-          foundFlagsShardTable1[i][j] = shards[i].findTable1(
-              keyShard[j], valueShardTable1[i][j], j >= numReal);
-        }
-      }
-#pragma omp taskwait
-      // ocall_measure_time(&end);
-      for (uint32_t j = 0; j < keyShard.size(); ++j) {
-        foundFlagsShard[i][j] |= foundFlagsShardTable1[i][j];
-        obliMove(foundFlagsShardTable1[i][j], valueShard[i][j],
-                 valueShardTable1[i][j]);
-      }
-
-      EM::Algorithm::OrDistributeSeparateMark(
-          valueShard[i].begin(), valueShard[i].end(), prefixSum.begin());
-      EM::Algorithm::OrDistributeSeparateMark(foundFlagsShard[i].begin(),
-                                              foundFlagsShard[i].end(),
-                                              prefixSum.begin());
-    }
+#pragma omp parallel num_threads(shardCount * 2)
+    {
 #pragma omp single
- {
+      {
+        recoveryInfo = sortAndSuppressDuplicateKeys(keyVec);
+        shardIndexVec = getShardIndexVec(keyVec.begin(), keyVec.end(),
+                                         recoveryInfo.isDuplicate);
+      }
+#pragma omp for schedule(static)
+      for (uint64_t i = 0; i < shardCount; ++i) {
+        const auto& [keyShard, prefixSum] = extractKeyByShard(
+            keyVec.begin(), keyVec.end(), shardIndexVec.begin(), i, shardSize);
+        uint32_t numReal = prefixSum.back();
+#pragma omp task
+        {
+          for (uint32_t j = 0; j < keyShard.size(); ++j) {
+            foundFlagsShard[i][j] = shards[i].findTable0(
+                keyShard[j], valueShard[i][j], j >= numReal);
+          }
+        }
+        // #pragma omp task  // seems faster if remove one task
+        {
+          for (uint32_t j = 0; j < keyShard.size(); ++j) {
+            foundFlagsShardTable1[i][j] = shards[i].findTable1(
+                keyShard[j], valueShardTable1[i][j], j >= numReal);
+          }
+        }
+#pragma omp taskwait
+        // ocall_measure_time(&end);
+        for (uint32_t j = 0; j < keyShard.size(); ++j) {
+          foundFlagsShard[i][j] |= foundFlagsShardTable1[i][j];
+          obliMove(foundFlagsShardTable1[i][j], valueShard[i][j],
+                   valueShardTable1[i][j]);
+        }
+
+        EM::Algorithm::OrDistributeSeparateMark(
+            valueShard[i].begin(), valueShard[i].end(), prefixSum.begin());
+        EM::Algorithm::OrDistributeSeparateMark(foundFlagsShard[i].begin(),
+                                                foundFlagsShard[i].end(),
+                                                prefixSum.begin());
+      }
+    }
     mergeShardOutput(valueShard, shardIndexVec, valueBegin);
     mergeShardOutput(foundFlagsShard, shardIndexVec, foundFlags.begin());
-  }
-}
+
     for (uint32_t i = 1; i < recoveryInfo.isDuplicate.size(); ++i) {
       obliMove(recoveryInfo.isDuplicate[i], *(valueBegin + i),
                *(valueBegin + i - 1));
@@ -399,30 +396,30 @@ struct ParOMap {
     std::vector<std::vector<uint8_t>> foundFlagsShard(
         shardCount, std::vector<uint8_t>(batchSize));
     std::vector<uint8_t> foundFlags(batchSize);
-#pragma omp parallel num_threads(shardCount) 
-{
+#pragma omp parallel num_threads(shardCount)
+    {
 #pragma omp for schedule(static)
-    for (uint64_t i = 0; i < shardCount; ++i) {
-      const auto& [keyShard, prefixSum] = extractKeyByShard(
-          keyBegin, keyEnd, shardIndexVec.begin(), i, shardSize);
-      std::vector<V> valueShard(valueBegin, valueBegin + batchSize);
-      EM::Algorithm::OrCompactSeparateMark(valueShard.begin(), valueShard.end(),
-                                           prefixSum.begin());
-      uint32_t numReal = prefixSum.back();
-      for (uint32_t j = 0; j < keyShard.size(); ++j) {
-        foundFlagsShard[i][j] =
-            shards[i].insert(keyShard[j], valueShard[j], j >= numReal);
-        // std::cout << "shard " << i << " insert: " << keyShard[j] << " "
-        //           << valueShard[j] << " real = " << (j < numReal)
-        //           << " insertRes = " << foundFlagsTmp.get()[j] << std::endl;
+      for (uint64_t i = 0; i < shardCount; ++i) {
+        const auto& [keyShard, prefixSum] = extractKeyByShard(
+            keyBegin, keyEnd, shardIndexVec.begin(), i, shardSize);
+        std::vector<V> valueShard(valueBegin, valueBegin + batchSize);
+        EM::Algorithm::OrCompactSeparateMark(
+            valueShard.begin(), valueShard.end(), prefixSum.begin());
+        uint32_t numReal = prefixSum.back();
+        for (uint32_t j = 0; j < keyShard.size(); ++j) {
+          foundFlagsShard[i][j] =
+              shards[i].insert(keyShard[j], valueShard[j], j >= numReal);
+          // std::cout << "shard " << i << " insert: " << keyShard[j] << " "
+          //           << valueShard[j] << " real = " << (j < numReal)
+          //           << " insertRes = " << foundFlagsTmp.get()[j] <<
+          //           std::endl;
+        }
+        EM::Algorithm::OrDistributeSeparateMark(foundFlagsShard[i].begin(),
+                                                foundFlagsShard[i].end(),
+                                                prefixSum.begin());
       }
-      EM::Algorithm::OrDistributeSeparateMark(foundFlagsShard[i].begin(),
-                                              foundFlagsShard[i].end(),
-                                              prefixSum.begin());
     }
-    
     mergeShardOutput(foundFlagsShard, shardIndexVec, foundFlags.begin());
-}
     return foundFlags;
   }
 
