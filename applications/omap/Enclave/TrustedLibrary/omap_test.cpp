@@ -769,7 +769,7 @@ void testRecursiveORAMPerf() {
 
 void testParOMapPerf(size_t mapSize = 5e6,
                      int threadCount = omp_get_max_threads()) {
-  size_t initSize = mapSize;
+  size_t initSize = mapSize - 1e5;
   ParOMap<ETH_Addr, ERC20_Balance, uint32_t> omap(mapSize, threadCount / 2);
   std::function<std::pair<ETH_Addr, ERC20_Balance>(uint64_t)> readerFunc =
       [](uint64_t i) {
@@ -784,8 +784,8 @@ void testParOMapPerf(size_t mapSize = 5e6,
   uint64_t start, end;
   // printf("init omap of size %lu\n", mapSize);
   ocall_measure_time(&start);
-  // omap.InitFromReaderInPlace(reader);
-  omap.Init();
+  omap.InitFromReaderInPlace(reader);
+  // omap.Init();
   ocall_measure_time(&end);
   uint64_t initTimediff = end - start;
   for (uint32_t batchSize : {100, 200, 500, 1000, 2000, 5000, 10000}) {
@@ -829,7 +829,16 @@ void testParOMapPerfSignal(size_t mapSize = 5e6,
   size_t initSize = mapSize;
   
   ParOMap<uint64_t, Bytes<240>, uint32_t> omap(mapSize, threadCount / 2);
-  
+  std::function<std::pair<uint64_t, Bytes<240>>(uint64_t)> readerFunc =
+      [](uint64_t i) {
+        std::pair<uint64_t, Bytes<240>> pr;
+        pr.first = i;
+        return pr;
+      };
+
+  EM::VirtualVector::VirtualReader<std::pair<uint64_t, Bytes<240>>>
+  reader(
+      initSize, readerFunc);
   uint64_t start, end;
   // printf("init omap of size %lu\n", mapSize);
   ocall_measure_time(&start);
@@ -842,18 +851,18 @@ void testParOMapPerfSignal(size_t mapSize = 5e6,
                threadCount, batchSize);
     printf("oram init time %f s\n", initTimediff * 1e-9);
     int round = 1e5;
-    ocall_measure_time(&start);
-    for (size_t r = 0; r < round / batchSize; ++r) {
-      std::vector<uint64_t> addr(batchSize);
-      std::vector<Bytes<240>> balance(batchSize);
-      for (int i = 0; i < batchSize; ++i) {
-        addr[i] = initSize + batchSize * (100000UL + r) + i;
-      }
-      omap.insertBatch(addr.begin(), addr.end(), balance.begin());
-    }
-    ocall_measure_time(&end);
-    uint64_t timediff = end - start;
-    printf("oram insert time %f us\n", timediff * 1e-3 / round);
+    // ocall_measure_time(&start);
+    // for (size_t r = 0; r < round / batchSize; ++r) {
+    //   std::vector<uint64_t> addr(batchSize);
+    //   std::vector<Bytes<240>> balance(batchSize);
+    //   for (int i = 0; i < batchSize; ++i) {
+    //     addr[i] = initSize + batchSize * (100000UL + r) + i;
+    //   }
+    //   omap.insertBatch(addr.begin(), addr.end(), balance.begin());
+    // }
+    // ocall_measure_time(&end);
+    // uint64_t timediff = end - start;
+    // printf("oram insert time %f us\n", timediff * 1e-3 / round);
     ocall_measure_time(&start);
     for (size_t r = 0; r < round / batchSize; ++r) {
       std::vector<uint64_t> addr(batchSize);
@@ -864,7 +873,7 @@ void testParOMapPerfSignal(size_t mapSize = 5e6,
       omap.findBatch(addr.begin(), addr.end(), balance.begin());
     }
     ocall_measure_time(&end);
-    timediff = end - start;
+    uint64_t timediff = end - start;
     printf("oram find time %f us\n", timediff * 1e-3 / round);
   }
 }
@@ -873,7 +882,7 @@ void testParOMapPerfDiffCond() {
   if (EM::Backend::g_DefaultBackend) {
     delete EM::Backend::g_DefaultBackend;
   }
-  size_t BackendSize = 1e11;
+  size_t BackendSize = 1e10;
   EM::Backend::g_DefaultBackend =
       new EM::Backend::MemServerBackend(BackendSize);
   for (uint32_t mapSize : {1e5, 2e5, 5e5, 1e6, 2e6, 5e6, 1e7, 2e7, 5e7, 1e8, 2e8, 5e8, 1e9}) {
