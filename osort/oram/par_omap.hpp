@@ -309,7 +309,7 @@ struct ParOMap {
     std::vector<std::vector<uint8_t>> foundFlagsShardTable1(
         shardCount, std::vector<uint8_t>(batchSize));
     std::vector<uint8_t> foundFlags(batchSize);
-#pragma omp parallel num_threads(shardCount)
+#pragma omp parallel num_threads(shardCount * 2)
     {
 #pragma omp single
       {
@@ -353,9 +353,9 @@ struct ParOMap {
         // shards[i].writeBackTable(1);
         EM::Algorithm::OrDistributeSeparateMark(
             valueShard[i].begin(), valueShard[i].end(), prefixSum.begin());
-        for (uint32_t j = 0; j < keyShard.size(); ++j) {
-          foundFlagsShard[i][j] &= j < numReal;
-        }
+        // for (uint32_t j = 0; j < keyShard.size(); ++j) {
+        //   foundFlagsShard[i][j] &= j < numReal;
+        // }
         EM::Algorithm::OrDistributeSeparateMark(foundFlagsShard[i].begin(),
                                                 foundFlagsShard[i].end(),
                                                 prefixSum.begin());
