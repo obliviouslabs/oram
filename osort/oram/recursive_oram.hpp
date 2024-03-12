@@ -50,7 +50,7 @@ struct RecursiveORAM {
   std::vector<UidType> uids;
   std::vector<short> indices;
   PositionType _size;
-
+  Lock _lock;
   bool hasInited = false;
 
   RecursiveORAM() {}
@@ -170,6 +170,7 @@ struct RecursiveORAM {
   template <class Func>
   void Access(UidType address, const Func& accessor) {
     // printf("Access %lu\n", address);
+    Critical section(_lock);
     Assert(hasInited);
     UidType uid = address / chunk_size;
     short index = address % chunk_size;
@@ -221,10 +222,146 @@ struct RecursiveORAM {
     leafOram.Update(pos, uids.back(), newPos, updateFunc);
   }
 
+  struct WriteBackBuffer {
+    std::vector<std::vector<UidType>> uids;
+    std::vector<std::vector<PositionType>> newPoses;
+    std::vector<std::vector<InternalNode>> internalNodes;
+    std::vector<LeafNode> leafNodes;
+  };
+
+  WriteBackBuffer oramWriteBackBuffer;
+
+  template <class Func>
+  void BatchAccessDeferWriteBack(const std::vector<UidType>& address,
+                                 const Func& accessor,
+                                 WriteBackBuffer& writeBackBuffer) {
+    // printf("Access %lu\n", address);
+    _lock.lock();
+    Assert(hasInited);
+    std::vector<std::vector<UidType>>& uids = writeBackBuffer.uids;
+    uids.resize(oramSizes.size(), std::vector<UidType>(address.size()));
+    std::vector<std::vector<short>> indices(oramSizes.size(),
+                                            std::vector<short>(address.size()));
+    std::vector<std::vector<PositionType>>& newPoses = writeBackBuffer.newPoses;
+    newPoses.resize(oramSizes.size(),
+                    std::vector<PositionType>(address.size()));
+    std::vector<std::vector<InternalNode>>& internalNodes =
+        writeBackBuffer.internalNodes;
+    internalNodes.resize(oramSizes.size() - 1,
+                         std::vector<InternalNode>(address.size()));
+    std::vector<LeafNode>& leafNodes = writeBackBuffer.leafNodes;
+    leafNodes.resize(address.size());
+    for (size_t i = 0; i < address.size(); ++i) {
+      UidType uid = address[i] / chunk_size;
+      short index = address[i] % chunk_size;
+      for (int level = oramSizes.size() - 1; level >= 0; --level) {
+        uids[level][i] = uid;
+        indices[level][i] = index;
+        index = uid % fan_out;
+        uid /= fan_out;
+      }
+    }
+    std::vector<PositionType> pos(address.size(), 0);
+    std::vector<PositionType> nextPos(address.size());
+    // std::vector<PositionType> newPos(address.size());
+    // std::vector<InternalNode> node(address.size());
+    for (int level = 0; level < oramSizes.size() - 1; ++level) {
+      // std::vector<PositionType>& newPos = newPoses[level];
+
+      std::vector<PositionType>& nextNewPos = newPoses[level + 1];
+      std::vector<InternalNode>& node = internalNodes[level];
+      for (size_t i = 0; i < address.size(); ++i) {
+        nextNewPos[i] = UniformRandom(oramSizes[level + 1] - 1);
+      }
+
+      internalOrams[level].BatchReadAndRemove(pos, uids[level], node);
+
+      for (int64_t i = address.size() - 1; i >= 0; --i) {
+        // in case of duplicate uid we need to copy what we've updated to
+        // maintain consistency scan backward since only the first duplicate
+        // uid will be updated
+
+        // we first read the positions of the next level
+        for (short j = 0; j < fan_out; ++j) {
+          bool match = j == indices[level][i];
+          obliMove(match, nextPos[i], node[i].children[j]);
+        }
+        // then duplicate what we already updated
+        if (i != address.size() - 1) {
+          bool copyFlag = uids[level][i] == uids[level][i + 1];
+          obliMove(copyFlag, node[i], node[i + 1]);
+        }
+        // and finally update the node to point to the new children
+        for (short j = 0; j < fan_out; ++j) {
+          bool match = j == indices[level][i];
+
+          obliMove(match, node[i].children[j], nextNewPos[i]);
+        }
+      }
+
+      // defer write back using omp task with lowest priority
+      // internalOrams[level].BatchWriteBack(
+      //     uids[level], newPoses[level], node,
+      //     std::vector<bool>(address.size(), true));
+
+      std::swap(pos, nextPos);
+    }
+
+    leafOram.BatchReadAndRemove(pos, uids.back(), leafNodes);
+    std::vector<T> data(address.size());
+
+    const std::vector<short>& index = indices.back();
+    for (size_t i = 0; i < address.size(); ++i) {
+      if constexpr (chunk_size == 1) {
+        data[i] = leafNodes[i].data[0];
+      } else {
+        short idx = index[i];
+        for (short j = 0; j < chunk_size; ++j) {
+          obliMove(j == idx, data[i], leafNodes[i].data[j]);
+        }
+      }
+    }
+
+    accessor(data);
+    for (size_t i = 0; i < address.size(); ++i) {
+      if constexpr (chunk_size == 1) {
+        leafNodes[i].data[0] = data[i];
+      } else {
+        short idx = index[i];
+        for (short j = 0; j < chunk_size; ++j) {
+          obliMove(j == idx, leafNodes[i].data[j], data[i]);
+        }
+      }
+    }
+  }
+
+  void WriteBack(WriteBackBuffer& writeBackBuffer) {
+    for (int level = 0; level < oramSizes.size() - 1; ++level) {
+      internalOrams[level].BatchWriteBack(
+          writeBackBuffer.uids[level], writeBackBuffer.newPoses[level],
+          writeBackBuffer.internalNodes[level],
+          std::vector<bool>(writeBackBuffer.uids[level].size(), true));
+    }
+    leafOram.BatchWriteBack(
+        writeBackBuffer.uids.back(), writeBackBuffer.newPoses.back(),
+        writeBackBuffer.leafNodes,
+        std::vector<bool>(writeBackBuffer.uids.back().size(), true));
+    _lock.unlock();
+  }
+
+  void WriteBack() { WriteBack(oramWriteBackBuffer); }
+
+  template <class Func>
+  void BatchAccessDeferWriteBack(const std::vector<UidType>& address,
+                                 const Func& accessor) {
+    BatchAccessDeferWriteBack(address, accessor, oramWriteBackBuffer);
+  }
+
   template <class Func>
   void ParBatchAccess(const std::vector<UidType>& address, const Func& accessor,
                       int numThreads = 0) {
     // printf("Access %lu\n", address);
+    Critical section(_lock);
     Assert(hasInited);
     std::vector<std::vector<UidType>> uids(
         oramSizes.size(), std::vector<UidType>(address.size()));
@@ -251,14 +388,14 @@ struct RecursiveORAM {
       auto updateFunc = [&](std::vector<InternalNode>& node) {
         std::vector<PositionType> localNextPos(address.size());
         for (int64_t i = address.size() - 1; i >= 0; --i) {
-          // in case of duplicate uid we need to copy what we've updated to maintain consistency
-          // scan backward since only the first duplicate uid will be updated
+          // in case of duplicate uid we need to copy what we've updated to
+          // maintain consistency scan backward since only the first duplicate
+          // uid will be updated
 
           // we first read the positions of the next level
           for (short j = 0; j < fan_out; ++j) {
             bool match = j == indices[level][i];
             obliMove(match, localNextPos[i], node[i].children[j]);
-          
           }
           // then duplicate what we already updated
           if (i != address.size() - 1) {
@@ -268,7 +405,7 @@ struct RecursiveORAM {
           // and finally update the node to point to the new children
           for (short j = 0; j < fan_out; ++j) {
             bool match = j == indices[level][i];
-            
+
             obliMove(match, node[i].children[j], nextNewPos[i]);
           }
         }
@@ -326,14 +463,29 @@ struct RecursiveORAM {
     Access(address, [&](T& data) { data = in; });
   }
 
-  void ParBatchRead(const std::vector<UidType>& address, std::vector<T>& out, int numThreads = 0) {
+  void ParBatchRead(const std::vector<UidType>& address, std::vector<T>& out,
+                    int numThreads = 0) {
     if constexpr (parallel) {
-      ParBatchAccess(address, [&](const std::vector<T>& data) { out = data; }, numThreads);
+      ParBatchAccess(
+          address, [&](const std::vector<T>& data) { out = data; }, numThreads);
     } else {
       for (size_t i = 0; i < address.size(); ++i) {
         Read(address[i], out[i]);
       }
     }
+  }
+
+  void BatchReadDeferWriteBack(const std::vector<UidType>& address,
+                               std::vector<T>& out,
+                               WriteBackBuffer& writeBackBuffer) {
+    BatchAccessDeferWriteBack(
+        address, [&](const std::vector<T>& data) { out = data; },
+        writeBackBuffer);
+  }
+
+  void BatchReadDeferWriteBack(const std::vector<UidType>& address,
+                               std::vector<T>& out) {
+    BatchReadDeferWriteBack(address, out, oramWriteBackBuffer);
   }
 };
 }  // namespace ODSL

@@ -128,6 +128,44 @@ struct LinearORAM {
     }
   }
 
+  void BatchReadAndRemove(const std::vector<UidType>& uid,
+                          std::vector<T>& out) {
+    for (uint64_t i = 0; i < uid.size(); i++) {
+      Read(0, uid[i], out[i]);
+    }
+    // don't actually remove since we will write back
+  }
+
+  void BatchWriteBack(const std::vector<UidType>& uid, const std::vector<T>& in,
+                      const std::vector<bool>& keepFlag) {
+    for (size_t i = 0; i < uid.size(); ++i) {
+      UidType searchUid = uid[i];
+      if (i != 0) {
+        obliMove(uid[i] == uid[i - 1], searchUid, DUMMY<UidType>());
+        // don't update if same uid
+      }
+      UidBlock_ blockToWrite(in[i], searchUid);
+      obliMove(!keepFlag[i], blockToWrite.uid, DUMMY<UidType>());
+      for (UidBlock_& block : data) {
+        bool match = block.uid == searchUid;
+        obliMove(match, block, blockToWrite);
+      }
+    }
+  }
+
+  template <class Func>
+  void BatchUpdateWithDup(const std::vector<UidType>& uid,
+                          const Func& updateFunc, std::vector<T>& out) {
+    // TODO: Implement hash table index / compaction
+    // printf("Using linear oram\n");
+    BatchReadAndRemove(uid, out);
+
+    std::vector<bool> keepFlag = updateFunc(out);
+
+    BatchWriteBack(uid, out, keepFlag);
+    // deduplicate uids
+  }
+
   // require uid to be sorted, can change uid
   // require oram to be sorted and contain keys 0 to size - 1
   template <class Func>
@@ -177,6 +215,13 @@ struct LinearORAM {
                       int numThreads = 0) {
     std::vector<T> out(uid.size());
     ParBatchUpdate(uid, updateFunc, out, numThreads);
+  }
+
+  template <class Func>
+  void BatchUpdateWithDup(const std::vector<UidType>& uid,
+                          const Func& updateFunc) {
+    std::vector<T> out(uid.size());
+    BatchUpdateWithDup(uid, updateFunc, out);
   }
 };
 };  // namespace ODSL::LinearORAM

@@ -282,6 +282,63 @@ struct ORAM {
     }
   }
 
+  void BatchReadAndRemove(std::vector<PositionType>& pos,
+                          const std::vector<UidType>& uid,
+                          std::vector<T>& out) {
+    if (isLinear) {
+      linearOram->BatchReadAndRemove(uid, out);
+    } else {
+      treeOram->BatchReadAndRemove(pos, uid, out);
+    }
+  }
+
+  void BatchWriteBack(std::vector<UidType>& uid,
+                      const std::vector<PositionType>& newPos,
+                      const std::vector<T>& in,
+                      const std::vector<bool>& writeBackFlags) {
+    if (isLinear) {
+      linearOram->BatchWriteBack(uid, in, writeBackFlags);
+    } else {
+      treeOram->BatchWriteBack(uid, newPos, in, writeBackFlags);
+    }
+  }
+
+  template <class Func>
+  void BatchUpdateWithDup(std::vector<PositionType>& pos,
+                          const std::vector<UidType>& uid,
+                          const std::vector<PositionType>& newPos,
+                          const Func& updateFunc, std::vector<T>& out) {
+    if (isLinear) {
+      linearOram->BatchUpdateWithDup(uid, updateFunc, out);
+    } else {
+      treeOram->BatchUpdateWithDup(pos, uid, newPos, updateFunc, out);
+    }
+  }
+
+  template <class Func>
+  void BatchUpdateWithDup(std::vector<PositionType>& pos,
+                          const std::vector<UidType>& uid,
+                          const std::vector<PositionType>& newPos,
+                          const Func& updateFunc) {
+    if (isLinear) {
+      linearOram->BatchUpdateWithDup(uid, updateFunc);
+    } else {
+      treeOram->BatchUpdateWithDup(pos, uid, newPos, updateFunc);
+    }
+  }
+
+  template <class Func>
+  std::vector<PositionType> BatchUpdateWithDup(std::vector<PositionType>& pos,
+                                               const std::vector<UidType>& uid,
+                                               const Func& updateFunc) {
+    if (isLinear) {
+      linearOram->BatchUpdateWithDup(uid, updateFunc);
+      return std::vector<PositionType>(uid.size(), 0);
+    } else {
+      return treeOram->BatchUpdateWithDup(pos, uid, updateFunc);
+    }
+  }
+
   template <class Func>
   void ParBatchUpdate(std::vector<PositionType>& pos,
                       const std::vector<UidType>& uid,

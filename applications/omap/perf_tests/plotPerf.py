@@ -137,7 +137,7 @@ def create_and_save_plot_find_single_thread(data, file_path):
 
 # Example usage
 # file_path = 'erc20SingleThread/'
-file_path = 'signalFromEmpty/'
+file_path = 'parcuckoo/'
 file_name = 'omapPerf200g.txt'
 parsed_data = parse_text_file(file_path + file_name)
 

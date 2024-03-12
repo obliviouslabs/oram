@@ -1,3 +1,5 @@
+#include "oram/oram.hpp"
+
 #include <gtest/gtest.h>
 
 #include <unordered_map>
@@ -237,6 +239,63 @@ TEST(ORAM, ParBatchUpdate) {
   }
 }
 
+TEST(ORAM, BatchUpdateWithDup) {
+  int memSize = 40;
+  ODSL::ORAM<uint64_t> oram(memSize, 1UL << 62);
+  std::vector<uint64_t> posMap(memSize);
+  std::vector<uint64_t> valMap(memSize);
+  for (uint64_t i = 0; i < memSize; i++) {
+    uint64_t val = UniformRandom();
+    uint64_t pos = oram.Write(i, val);
+    posMap[i] = pos;
+    valMap[i] = val;
+  }
+  for (int r = 0; r < 7; ++r) {
+    for (uint64_t i = 0; i < memSize; i++) {
+      uint64_t val;
+      uint64_t pos = oram.Read(posMap[i], i, val);
+      posMap[i] = pos;
+      ASSERT_EQ(val, valMap[i]);
+      // printf("read %lu %lu\n", i, val);
+    }
+  }
+  printf("test batch update with duplicate\n");
+  for (uint64_t i = 0; i < memSize; i++) {
+    uint64_t peer = UniformRandom(memSize - 1);
+    if (!(UniformRandom() % 10)) {
+      peer = i;  // test self swap
+    }
+    auto swapFunc = [&](std::vector<uint64_t>& pair) -> std::vector<bool> {
+      if (pair[0] != valMap[i]) {
+        printf("Read wrong result for uid %lu, expected %lu, got %lu\n", i,
+               valMap[i], pair[0]);
+      }
+      if (pair[1] != valMap[peer]) {
+        printf("Read wrong result for uid %lu, expected %lu, got %lu\n", peer,
+               valMap[peer], pair[1]);
+      }
+      std::swap(pair[0], pair[1]);
+      return {true, true};
+    };
+    std::vector<uint64_t> posPair = {posMap[i], posMap[peer]};
+    std::vector<uint64_t> uidPair = {i, peer};
+    const auto& newPoses = oram.BatchUpdateWithDup(posPair, uidPair, swapFunc);
+    posMap[i] = newPoses[0];
+    posMap[peer] = newPoses[1];
+    std::swap(valMap[i], valMap[peer]);
+    // printf("write %lu %lu\n", i, val);
+  }
+  for (int r = 0; r < 7; ++r) {
+    for (uint64_t i = 0; i < memSize; i++) {
+      uint64_t val;
+      uint64_t pos = oram.Read(posMap[i], i, val);
+      posMap[i] = pos;
+      ASSERT_EQ(val, valMap[i]);
+      // printf("read %lu %lu\n", i, val);
+    }
+  }
+}
+
 TEST(ORAM, ParBatchUpdateLarge) {
   if (EM::Backend::g_DefaultBackend) {
     delete EM::Backend::g_DefaultBackend;
@@ -278,6 +337,65 @@ TEST(ORAM, ParBatchUpdateLarge) {
     };
     const auto& newPoses =
         oram.ParBatchUpdate(batchPos, batchUid, updateFunc, numThreads);
+    for (uint64_t j = 0; j < batchSize; j++) {
+      posMap[batchUid[j]] = newPoses[j];
+    }
+    for (uint64_t j = 0; j < batchSize; j++) {
+      // valMap[batchUid[j]] = valMap[batchUid[(j + 1) % batchSize]] + 1;
+      valMap[batchUid[j]] = i * batchUid[j];
+    }
+    // printf("write %lu %lu\n", i, val);
+  }
+
+  for (uint64_t i = 0; i < memSize; i++) {
+    uint64_t val;
+    uint64_t pos = oram.Read(posMap[i], i, val);
+    posMap[i] = pos;
+    ASSERT_EQ(val, valMap[i]);
+    // printf("read %lu %lu\n", i, val);
+  }
+}
+
+TEST(ORAM, BatchUpdateWithDupLarge) {
+  if (EM::Backend::g_DefaultBackend) {
+    delete EM::Backend::g_DefaultBackend;
+  }
+  size_t BackendSize = 1e9;
+  EM::Backend::g_DefaultBackend =
+      new EM::Backend::MemServerBackend(BackendSize);
+  int memSize = 1e5;
+  ODSL::CircuitORAM::ORAM<uint64_t> oram(memSize, 1UL << 62);
+  std::vector<uint64_t> posMap(memSize);
+  std::vector<uint64_t> valMap(memSize);
+  for (uint64_t i = 0; i < memSize; i++) {
+    uint64_t val = UniformRandom();
+    uint64_t pos = oram.Write(i, val);
+    posMap[i] = pos;
+    valMap[i] = val;
+  }
+  for (uint64_t i = 0; i < memSize; i++) {
+    uint64_t batchSize = 1000;
+    std::vector<uint64_t> batchUid(batchSize);
+    std::vector<uint64_t> batchPos(batchSize);
+    for (uint64_t j = 0; j < batchSize; j++) {
+      batchUid[j] = UniformRandom(memSize - 1);
+    }
+    std::sort(batchUid.begin(), batchUid.end());
+    for (uint64_t j = 0; j < batchSize; j++) {
+      batchPos[j] = posMap[batchUid[j]];
+    }
+    auto updateFunc = [&](std::vector<uint64_t>& vals) -> std::vector<bool> {
+      for (uint64_t j = 0; j < batchSize; j++) {
+        if (vals[j] != valMap[batchUid[j]]) {
+          printf("Read wrong result for uid %lu, expected %lu, got %lu\n",
+                 batchUid[j], valMap[batchUid[j]], vals[j]);
+        }
+        vals[j] = i * batchUid[j];
+      }
+      return std::vector<bool>(batchSize, true);
+    };
+    const auto& newPoses =
+        oram.BatchUpdateWithDup(batchPos, batchUid, updateFunc);
     for (uint64_t j = 0; j < batchSize; j++) {
       posMap[batchUid[j]] = newPoses[j];
     }
@@ -745,12 +863,10 @@ TEST(RecuriveORAM, testMixed) {
   }
 }
 
-TEST(RecuriveORAM, testBatchAccessUnique) {
+TEST(RecuriveORAM, testBatchAccessDefer) {
   uint64_t size = 123456;
   StdVector<uint64_t> ref(size);
-  int numThreads = 8;
-  ODSL::RecursiveORAM<uint64_t, uint64_t, true> oram(size, 1UL << 62,
-                                                    numThreads);
+  ODSL::RecursiveORAM<uint64_t, uint64_t> oram(size, 1UL << 62);
   for (uint64_t i = 0; i < size; i++) {
     ref[i] = UniformRandom();
   }
@@ -773,7 +889,54 @@ TEST(RecuriveORAM, testBatchAccessUnique) {
           printf("Read wrong result for uid %lu, expected %lu, got %lu\n",
                  addrs[i], ref[addrs[i]], xs[i]);
           abort();
-        } 
+        }
+        // else {
+        //   printf("Read correct result for uid %lu, got %lu\n", addrs[i],
+        //          ref[addrs[i]]);
+        // }
+        ++xs[i];
+      }
+    };
+
+    oram.BatchAccessDeferWriteBack(addrs, incFunc);
+    for (size_t i = 0; i < addrs.size(); ++i) {
+      if (i == 0 || addrs[i] != addrs[i - 1]) {
+        ++ref[addrs[i]];
+      }
+    }
+    oram.WriteBack();
+  }
+}
+
+TEST(RecuriveORAM, testParBatchAccess) {
+  uint64_t size = 123456;
+  StdVector<uint64_t> ref(size);
+  int numThreads = 8;
+  ODSL::RecursiveORAM<uint64_t, uint64_t, true> oram(size, 1UL << 62,
+                                                     numThreads);
+  for (uint64_t i = 0; i < size; i++) {
+    ref[i] = UniformRandom();
+  }
+  StdVector<uint64_t>::Reader reader(ref.begin(), ref.end());
+  oram.InitFromReaderInPlace(reader);
+  for (int round = 0; round < 1e3; ++round) {
+    // uint64_t addr = UniformRandom(size - 1);
+    // int64_t val;
+    // oram.Read(addr, val);
+    // ASSERT_EQ(val, ref[addr]);
+    std::vector<uint64_t> addrs(1000);
+    for (uint64_t& addr : addrs) {
+      addr = UniformRandom(size - 1);
+    }
+    std::sort(addrs.begin(), addrs.end());
+
+    auto incFunc = [&](std::vector<uint64_t>& xs) {
+      for (size_t i = 0; i < addrs.size(); ++i) {
+        if (xs[i] != ref[addrs[i]]) {
+          printf("Read wrong result for uid %lu, expected %lu, got %lu\n",
+                 addrs[i], ref[addrs[i]], xs[i]);
+          abort();
+        }
         // else {
         //   printf("Read correct result for uid %lu, got %lu\n", addrs[i],
         //          ref[addrs[i]]);

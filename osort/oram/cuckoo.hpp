@@ -78,9 +78,9 @@ struct CuckooHashMap {
   using BucketType = CuckooHashMapBucket<K, V, bucketSize>;
   using TableType = std::conditional_t<
       isOblivious, RecursiveORAM<BucketType, PositionType, parallel_batch>,
-      //  StdVector<BucketType>>;
-      EM::CacheFrontVector::Vector<BucketType, sizeof(BucketType), true, true,
-                                   1024>>;
+      StdVector<BucketType>>;
+  // EM::CacheFrontVector::Vector<BucketType, sizeof(BucketType), true, true,
+  //  1024>>;
   TableType table0, table1;
   CuckooHashMapIndexer<K, PositionType> indexer;
   std::vector<CuckooHashMapEntry<K, V>> stash;
@@ -134,7 +134,7 @@ struct CuckooHashMap {
     load = other.load;
     stash = other.stash;
     indexer = other.indexer;
-    if constexpr (false && parallel_init) {
+    if constexpr (parallel_init) {
       // seems to have concurrency bug
 #pragma omp task
       { table0.InitFromVector(other.table0); }
@@ -416,6 +416,70 @@ struct CuckooHashMap {
     return found & !isDummy;
   }
 
+  template <const int table_num>
+  std::vector<uint8_t> findTableBatchDeferWriteBack(
+      const std::vector<K>& keys, std::vector<V>& values,
+      const std::vector<bool>& isDummy) {
+    static_assert(isOblivious);
+    static_assert(table_num == 0 || table_num == 1);
+    std::vector<uint8_t> foundFlag(keys.size());
+    std::vector<PositionType> hashIndices(keys.size());
+
+    for (size_t i = 0; i < keys.size(); ++i) {
+      if constexpr (table_num == 0) {
+        hashIndices[i] = indexer.getHashIdx0(keys[i]);
+      } else {
+        hashIndices[i] = indexer.getHashIdx1(keys[i]);
+      }
+    }
+    std::vector<PositionType> recoveryVec(keys.size());
+    for (PositionType i = 0; i < keys.size(); ++i) {
+      recoveryVec[i] = i;
+    }
+    EM::Algorithm::BitonicSortSepPayload(hashIndices.begin(), hashIndices.end(),
+                                         recoveryVec.begin());
+    std::vector<BucketType> buckets(keys.size());
+
+    if constexpr (table_num == 0) {
+      table0.BatchReadDeferWriteBack(hashIndices, buckets);
+    } else {
+      table1.BatchReadDeferWriteBack(hashIndices, buckets);
+    }
+
+    EM::Algorithm::BitonicSortSepPayload(recoveryVec.begin(), recoveryVec.end(),
+                                         buckets.begin());
+    for (size_t i = 0; i < keys.size(); ++i) {
+      foundFlag[i] = searchBucket(keys[i], values[i], buckets[i]);
+    }
+    return foundFlag;
+  }
+
+  std::vector<uint8_t> findBatchDeferWriteBack(
+      const std::vector<K>& keys, std::vector<V>& values,
+      const std::vector<bool>& isDummy) {
+    std::vector<V> valueTable1(keys.size());
+    std::vector<uint8_t> foundFlagTable =
+        findTableBatchDeferWriteBack<0>(keys, values, isDummy);
+    std::vector<uint8_t> foundFlagTable1 =
+        findTableBatchDeferWriteBack<1>(keys, valueTable1, isDummy);
+    for (size_t i = 0; i < keys.size(); ++i) {
+      foundFlagTable[i] |= foundFlagTable1[i];
+      obliMove(foundFlagTable1[i], values[i], valueTable1[i]);
+      foundFlagTable[i] |= searchStash(keys[i], values[i], stash);
+    }
+    return foundFlagTable;
+  }
+
+  void writeBackTable(int tableNum) {
+    static_assert(isOblivious);
+    Assert(tableNum == 0 || tableNum == 1);
+    if (tableNum == 0) {
+      table0.WriteBack();
+    } else {
+      table1.WriteBack();
+    }
+  }
+
   bool erase(const K& key, bool isDummy = false) {
     if (isDummy) {
       return false;
@@ -453,10 +517,10 @@ struct CuckooHashMap {
     return false;
   }
 
-  std::vector<uint8_t> findBatch(const std::vector<K>& keys,
-                                 std::vector<V>& values,
-                                 const std::vector<bool>& isDummy,
-                                 int numThreads = 0) {
+  std::vector<uint8_t> findParBatch(const std::vector<K>& keys,
+                                    std::vector<V>& values,
+                                    const std::vector<bool>& isDummy,
+                                    int numThreads = 0) {
     static_assert(parallel_batch);
     if (numThreads == 0) {
       numThreads = omp_get_max_threads();
