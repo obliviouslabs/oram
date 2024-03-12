@@ -463,7 +463,7 @@ struct CuckooHashMap {
     std::vector<std::vector<V>> valueTables(2, std::vector<V>(keys.size()));
     std::vector<uint8_t> foundFlagTable(keys.size());
 
-#pragma omp parallel for num_threads(2) schedule(static, 1)
+    // #pragma omp parallel for num_threads(2) schedule(static, 1)
     for (int i = 0; i < 2; ++i) {
       findTableBatchDeferWriteBack(i, keys, valueTables[i], foundFlagTables[i],
                                    isDummy);
