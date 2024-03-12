@@ -297,7 +297,7 @@ struct CuckooHashMap {
         return false;
       }
     }
-    // printf("Warning CuckooHashMap uses stash\n");
+    printf("Warning CuckooHashMap uses stash\n");
     stash.push_back({true, k, v});
     if (stash.size() > 10) {
       throw std::runtime_error("CuckooHashMap insert failed");
@@ -458,10 +458,18 @@ struct CuckooHashMap {
       const std::vector<K>& keys, std::vector<V>& values,
       const std::vector<bool>& isDummy) {
     std::vector<V> valueTable1(keys.size());
-    std::vector<uint8_t> foundFlagTable =
-        findTableBatchDeferWriteBack<0>(keys, values, isDummy);
-    std::vector<uint8_t> foundFlagTable1 =
-        findTableBatchDeferWriteBack<1>(keys, valueTable1, isDummy);
+    std::vector<uint8_t> foundFlagTable, foundFlagTable1;
+    // #pragma omp parallel num_threads(2)
+    //     {
+    // #pragma omp task
+    { foundFlagTable = findTableBatchDeferWriteBack<0>(keys, values, isDummy); }
+    {
+      foundFlagTable1 =
+          findTableBatchDeferWriteBack<1>(keys, valueTable1, isDummy);
+    }
+    // #pragma omp taskwait
+    //     }
+
     for (size_t i = 0; i < keys.size(); ++i) {
       foundFlagTable[i] |= foundFlagTable1[i];
       obliMove(foundFlagTable1[i], values[i], valueTable1[i]);

@@ -77,10 +77,10 @@ void testCuckooHashMapInitFromReader() {
 template <bool isOblivious>
 void testCuckooHashMapFindParBatch() {
   for (int r = 0; r < 10; ++r) {
-    int mapSize = 5000;
-    int keySpace = 1000;
+    int mapSize = 23456;
+    int keySpace = mapSize * 5;
     int batchSize = 1000;
-    int numBatch = 100;
+    int numBatch = 10;
     int numThreads = 4;
     CuckooHashMap<int, int, isOblivious, uint64_t, true, true> map(
         mapSize, 1UL << 62, numThreads);
@@ -99,6 +99,15 @@ void testCuckooHashMapFindParBatch() {
       std::vector<int> vals(batchSize);
       for (int i = 0; i < batchSize; ++i) {
         keys[i] = rand() % keySpace;
+      }
+      if (std_map.size() < mapSize) {
+        for (int i = 0; i < batchSize; ++i) {
+          vals[i] = rand();
+        }
+        for (int i = 0; i < batchSize && std_map.size() < mapSize; ++i) {
+          map.insert(keys[i], vals[i]);
+          std_map[keys[i]] = vals[i];
+        }
       }
       std::vector<uint8_t> findExistFlag = map.findParBatch(
           keys, vals, std::vector<bool>(batchSize, false), numThreads);
@@ -118,15 +127,14 @@ void testCuckooHashMapFindParBatch() {
 template <bool isOblivious>
 void testCuckooHashMapFindBatch() {
   for (int r = 0; r < 10; ++r) {
-    int mapSize = 5000;
-    int keySpace = 1000;
+    int mapSize = 23456;
+    int keySpace = mapSize * 5;
     int batchSize = 1000;
-    int numBatch = 100;
-    int numThreads = 4;
-    CuckooHashMap<int, int, isOblivious, uint64_t, true, true> map(
-        mapSize, 1UL << 62, numThreads);
+    int numBatch = 10;
+    CuckooHashMap<int, int, isOblivious, uint64_t, true> map(mapSize,
+                                                             1UL << 62);
     std::unordered_map<int, int> std_map;
-    for (int r = 0; r < mapSize; ++r) {
+    for (int r = 0; r < mapSize / 2; ++r) {
       int key = rand() % keySpace;
       int value = rand();
       std_map[key] = value;
@@ -140,6 +148,15 @@ void testCuckooHashMapFindBatch() {
       std::vector<int> vals(batchSize);
       for (int i = 0; i < batchSize; ++i) {
         keys[i] = rand() % keySpace;
+      }
+      if (std_map.size() < mapSize) {
+        // for (int i = 0; i < batchSize; ++i) {
+        //   vals[i] = rand();
+        // }
+        for (int i = 0; i < batchSize && std_map.size() < mapSize; ++i) {
+          map.find(keys[i], vals[i]);
+          // std_map[keys[i]] = vals[i];
+        }
       }
       std::vector<uint8_t> findExistFlag = map.findBatchDeferWriteBack(
           keys, vals, std::vector<bool>(batchSize, false));

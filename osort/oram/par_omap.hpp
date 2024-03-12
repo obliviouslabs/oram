@@ -302,14 +302,14 @@ struct ParOMap {
     std::vector<uint32_t> shardIndexVec;
     std::vector<std::vector<V>> valueShard(shardCount,
                                            std::vector<V>(batchSize));
-    std::vector<std::vector<V>> valueShardTable1(shardCount,
-                                                 std::vector<V>(batchSize));
+    // std::vector<std::vector<V>> valueShardTable1(shardCount,
+    //                                              std::vector<V>(batchSize));
     std::vector<std::vector<uint8_t>> foundFlagsShard(
         shardCount, std::vector<uint8_t>(batchSize));
-    std::vector<std::vector<uint8_t>> foundFlagsShardTable1(
-        shardCount, std::vector<uint8_t>(batchSize));
+    // std::vector<std::vector<uint8_t>> foundFlagsShardTable1(
+    //     shardCount, std::vector<uint8_t>(batchSize));
     std::vector<uint8_t> foundFlags(batchSize);
-#pragma omp parallel num_threads(shardCount * 2)
+#pragma omp parallel num_threads(shardCount)
     {
 #pragma omp single
       {
@@ -322,30 +322,39 @@ struct ParOMap {
         const auto& [keyShard, prefixSum] = extractKeyByShard(
             keyVec.begin(), keyVec.end(), shardIndexVec.begin(), i, shardSize);
         uint32_t numReal = prefixSum.back();
-#pragma omp task
-        {
-          for (uint32_t j = 0; j < keyShard.size(); ++j) {
-            foundFlagsShard[i][j] = shards[i].findTable0(
-                keyShard[j], valueShard[i][j], j >= numReal);
-          }
-        }
-        // #pragma omp task  // seems faster if remove one task
-        {
-          for (uint32_t j = 0; j < keyShard.size(); ++j) {
-            foundFlagsShardTable1[i][j] = shards[i].findTable1(
-                keyShard[j], valueShardTable1[i][j], j >= numReal);
-          }
-        }
-#pragma omp taskwait
-        // ocall_measure_time(&end);
-        for (uint32_t j = 0; j < keyShard.size(); ++j) {
-          foundFlagsShard[i][j] |= foundFlagsShardTable1[i][j];
-          obliMove(foundFlagsShardTable1[i][j], valueShard[i][j],
-                   valueShardTable1[i][j]);
-        }
-
+        // #pragma omp task
+        //         {
+        //           for (uint32_t j = 0; j < keyShard.size(); ++j) {
+        //             foundFlagsShard[i][j] = shards[i].findTable0(
+        //                 keyShard[j], valueShard[i][j], j >= numReal);
+        //           }
+        //         }
+        //         // #pragma omp task  // seems faster if remove one task
+        //         {
+        //           for (uint32_t j = 0; j < keyShard.size(); ++j) {
+        //             foundFlagsShardTable1[i][j] = shards[i].findTable1(
+        //                 keyShard[j], valueShardTable1[i][j], j >= numReal);
+        //           }
+        //         }
+        // #pragma omp taskwait
+        //         // ocall_measure_time(&end);
+        //         for (uint32_t j = 0; j < keyShard.size(); ++j) {
+        //           foundFlagsShard[i][j] |= foundFlagsShardTable1[i][j];
+        //           obliMove(foundFlagsShardTable1[i][j], valueShard[i][j],
+        //                    valueShardTable1[i][j]);
+        //         }
+        std::vector<bool> isDummy;
+        const std::vector<uint8_t>& foundFlagsTmp =
+            shards[i].findBatchDeferWriteBack(keyShard, valueShard[i], isDummy);
+        std::copy(foundFlagsTmp.begin(), foundFlagsTmp.end(),
+                  foundFlagsShard[i].begin());
+        shards[i].writeBackTable(0);
+        shards[i].writeBackTable(1);
         EM::Algorithm::OrDistributeSeparateMark(
             valueShard[i].begin(), valueShard[i].end(), prefixSum.begin());
+        for (uint32_t j = 0; j < keyShard.size(); ++j) {
+          foundFlagsShard[i][j] &= j < numReal;
+        }
         EM::Algorithm::OrDistributeSeparateMark(foundFlagsShard[i].begin(),
                                                 foundFlagsShard[i].end(),
                                                 prefixSum.begin());

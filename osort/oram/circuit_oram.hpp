@@ -283,8 +283,7 @@ struct ORAM {
                       const Func& updateFunc, T& out,
                       const UidType& updatedUid) {
     int len = ReadPath(pos, path);
-
-    ReadElementAndRemoveFromPath(path, uid, out);
+    ReadElementAndRemoveFromPath(path.begin(), path.begin() + len, uid, out);
     bool keepFlag = updateFunc(out);
     UidType newUid = DUMMY<UidType>();
     obliMove(keepFlag, newUid, updatedUid);
@@ -583,7 +582,7 @@ struct ORAM {
     uint64_t batchSize = uid.size();
     Assert(batchSize == writeBackFlags.size());
     Assert(batchSize == newPos.size());
-    Assert(batchSize == out.size());
+    Assert(batchSize == in.size());
     std::vector<Block_> localPath(stashSize + Z * depth);
     std::vector<Block_> toWrite(batchSize);
     for (uint64_t i = 0; i < batchSize; ++i) {

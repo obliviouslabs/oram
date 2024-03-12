@@ -227,6 +227,12 @@ struct RecursiveORAM {
     std::vector<std::vector<PositionType>> newPoses;
     std::vector<std::vector<InternalNode>> internalNodes;
     std::vector<LeafNode> leafNodes;
+    void clear() {
+      uids.clear();
+      newPoses.clear();
+      internalNodes.clear();
+      leafNodes.clear();
+    }
   };
 
   WriteBackBuffer oramWriteBackBuffer;
@@ -240,17 +246,18 @@ struct RecursiveORAM {
     Assert(hasInited);
     std::vector<std::vector<UidType>>& uids = writeBackBuffer.uids;
     uids.resize(oramSizes.size(), std::vector<UidType>(address.size()));
-    std::vector<std::vector<short>> indices(oramSizes.size(),
-                                            std::vector<short>(address.size()));
+    std::vector<std::vector<short>> indices(
+        oramSizes.size(), std::vector<short>(address.size(), 0));
     std::vector<std::vector<PositionType>>& newPoses = writeBackBuffer.newPoses;
     newPoses.resize(oramSizes.size(),
                     std::vector<PositionType>(address.size()));
     std::vector<std::vector<InternalNode>>& internalNodes =
         writeBackBuffer.internalNodes;
-    internalNodes.resize(oramSizes.size() - 1,
-                         std::vector<InternalNode>(address.size()));
+    internalNodes.resize(
+        oramSizes.size() - 1,
+        std::vector<InternalNode>(address.size(), InternalNode()));
     std::vector<LeafNode>& leafNodes = writeBackBuffer.leafNodes;
-    leafNodes.resize(address.size());
+    leafNodes.resize(address.size(), LeafNode());
     for (size_t i = 0; i < address.size(); ++i) {
       UidType uid = address[i] / chunk_size;
       short index = address[i] % chunk_size;
