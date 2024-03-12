@@ -7,6 +7,7 @@
 #include "external_memory/algorithm/kway_distri_sort.hpp"
 #include "external_memory/algorithm/waks_on_off.hpp"
 #include "testutils.hpp"
+#include <omp.h>
 
 using namespace EM::Algorithm;
 using namespace EM::NonCachedVector;
@@ -511,6 +512,33 @@ TEST(TestSort, TestBitonicSepPayload) {
       payloads[i] = -keys[i] * 2;
     }
     BitonicSortSepPayload(keys.begin(), keys.end(), payloads.begin());
+    for (size_t i = 0; i < n; ++i) {
+      ASSERT_EQ(keys[i], -payloads[i] / 2);
+      ASSERT_EQ(keys[i] % 13, 0);
+    }
+    for (size_t i = 1; i < n; ++i) {
+      ASSERT_LE(keys[i - 1], keys[i]);
+    }
+  }
+}
+
+TEST(TestSort, TestParBitonicSepPayload) {
+  for (size_t i = 0; i < 1000; ++i) {
+    size_t n = UniformRandom(1, 1000);
+    vector<uint64_t> keys(n);
+    vector<uint64_t> payloads(n);
+    for (size_t i = 0; i < n; ++i) {
+      keys[i] = UniformRandom() % 1000000 * 13;
+      payloads[i] = -keys[i] * 2;
+    }
+    #pragma omp parallel 
+    {
+      #pragma omp single
+      {
+ParBitonicSortSepPayload(keys.begin(), keys.end(), payloads.begin(), 8);
+      }
+    }
+    
     for (size_t i = 0; i < n; ++i) {
       ASSERT_EQ(keys[i], -payloads[i] / 2);
       ASSERT_EQ(keys[i] % 13, 0);

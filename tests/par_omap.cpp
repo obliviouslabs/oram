@@ -227,7 +227,7 @@ TEST(ParOMap, InsertFindErase) {
         keys[i] = UniformRandom() % mapSize;
       }
       std::vector<uint8_t> eraseExistFlag =
-          parOMap.eraseBatch(keys.begin(), keys.end());
+          parOMap.eraseParBatch(keys.begin(), keys.end());
       for (size_t i = 0; i < keys.size(); ++i) {
         if (eraseExistFlag[i] != (kvMap.count(keys[i]) > 0)) {
           std::cout << "key = " << keys[i] << std::endl;
