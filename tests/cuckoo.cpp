@@ -128,13 +128,13 @@ template <bool isOblivious>
 void testCuckooHashMapFindBatch() {
   for (int r = 0; r < 10; ++r) {
     int mapSize = 23456;
-    int keySpace = mapSize * 5;
+    int keySpace = mapSize;
     int batchSize = 1000;
     int numBatch = 10;
     CuckooHashMap<int, int, isOblivious, uint64_t, true> map(mapSize,
                                                              1UL << 62);
     std::unordered_map<int, int> std_map;
-    for (int r = 0; r < mapSize / 2; ++r) {
+    for (int r = 0; r < mapSize * 2 / 3; ++r) {
       int key = rand() % keySpace;
       int value = rand();
       std_map[key] = value;
@@ -158,10 +158,13 @@ void testCuckooHashMapFindBatch() {
           // std_map[keys[i]] = vals[i];
         }
       }
-      std::vector<uint8_t> findExistFlag = map.findBatchDeferWriteBack(
+      std::vector<uint8_t> findExistFlag;
+      findExistFlag = map.findBatchDeferWriteBack(
           keys, vals, std::vector<bool>(batchSize, false));
-      map.writeBackTable(0);
-      map.writeBackTable(1);
+#pragma omp parallel for num_threads(2)
+      for (int i = 0; i < 2; ++i) {
+        map.writeBackTable(i);
+      }
       for (size_t i = 0; i < keys.size(); ++i) {
         auto it = std_map.find(keys[i]);
         if (it != std_map.end()) {

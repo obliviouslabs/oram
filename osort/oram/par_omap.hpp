@@ -290,9 +290,9 @@ struct ParOMap {
   }
 
   template <class KeyIterator, class ValueIterator>
-  std::vector<uint8_t> findParBatch(const KeyIterator keyBegin,
-                                    const KeyIterator keyEnd,
-                                    ValueIterator valueBegin) {
+  std::vector<uint8_t> findParBatchDeferWriteBack(const KeyIterator keyBegin,
+                                                  const KeyIterator keyEnd,
+                                                  ValueIterator valueBegin) {
     uint64_t shardCount = shards.size();
     uint64_t batchSize = keyEnd - keyBegin;
     uint64_t shardSize = maxQueryPerShard(batchSize, shardCount);
@@ -309,7 +309,7 @@ struct ParOMap {
     // std::vector<std::vector<uint8_t>> foundFlagsShardTable1(
     //     shardCount, std::vector<uint8_t>(batchSize));
     std::vector<uint8_t> foundFlags(batchSize);
-#pragma omp parallel num_threads(shardCount)
+#pragma omp parallel num_threads(shardCount * 2)
     {
 #pragma omp single
       {
@@ -322,34 +322,11 @@ struct ParOMap {
         const auto& [keyShard, prefixSum] = extractKeyByShard(
             keyVec.begin(), keyVec.end(), shardIndexVec.begin(), i, shardSize);
         uint32_t numReal = prefixSum.back();
-        // #pragma omp task
-        //         {
-        //           for (uint32_t j = 0; j < keyShard.size(); ++j) {
-        //             foundFlagsShard[i][j] = shards[i].findTable0(
-        //                 keyShard[j], valueShard[i][j], j >= numReal);
-        //           }
-        //         }
-        //         // #pragma omp task  // seems faster if remove one task
-        //         {
-        //           for (uint32_t j = 0; j < keyShard.size(); ++j) {
-        //             foundFlagsShardTable1[i][j] = shards[i].findTable1(
-        //                 keyShard[j], valueShardTable1[i][j], j >= numReal);
-        //           }
-        //         }
-        // #pragma omp taskwait
-        //         // ocall_measure_time(&end);
-        //         for (uint32_t j = 0; j < keyShard.size(); ++j) {
-        //           foundFlagsShard[i][j] |= foundFlagsShardTable1[i][j];
-        //           obliMove(foundFlagsShardTable1[i][j], valueShard[i][j],
-        //                    valueShardTable1[i][j]);
-        //         }
         std::vector<bool> isDummy;
         const std::vector<uint8_t>& foundFlagsTmp =
             shards[i].findBatchDeferWriteBack(keyShard, valueShard[i], isDummy);
         std::copy(foundFlagsTmp.begin(), foundFlagsTmp.end(),
                   foundFlagsShard[i].begin());
-        shards[i].writeBackTable(0);
-        shards[i].writeBackTable(1);
         EM::Algorithm::OrDistributeSeparateMark(
             valueShard[i].begin(), valueShard[i].end(), prefixSum.begin());
         for (uint32_t j = 0; j < keyShard.size(); ++j) {
@@ -384,6 +361,23 @@ struct ParOMap {
       }
     }
     return foundFlags;
+  }
+
+  void ParWriteBack() {
+    uint64_t shardCount = shards.size();
+#pragma omp parallel for num_threads(shardCount * 2)
+    for (uint64_t i = 0; i < shardCount * 2; ++i) {
+      shards[i / 2].writeBackTable(i % 2);
+    }
+  }
+
+  template <class KeyIterator, class ValueIterator>
+  std::vector<uint8_t> findParBatch(const KeyIterator keyBegin,
+                                    const KeyIterator keyEnd,
+                                    ValueIterator valueBegin) {
+    const auto& res = findParBatchDeferWriteBack(keyBegin, keyEnd, valueBegin);
+    ParWriteBack();
+    return res;
   }
 
   template <class KeyIterator>

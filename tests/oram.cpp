@@ -884,12 +884,12 @@ TEST(RecuriveORAM, testBatchAccessDefer) {
   }
   StdVector<uint64_t>::Reader reader(ref.begin(), ref.end());
   oram.InitFromReaderInPlace(reader);
-  for (int round = 0; round < 1e5; ++round) {
+  for (int round = 0; round < 1e4; ++round) {
     // uint64_t addr = UniformRandom(size - 1);
     // int64_t val;
     // oram.Read(addr, val);
     // ASSERT_EQ(val, ref[addr]);
-    std::vector<uint64_t> addrs(2);
+    std::vector<uint64_t> addrs(100);
     for (uint64_t& addr : addrs) {
       addr = UniformRandom(size - 1);
     }
