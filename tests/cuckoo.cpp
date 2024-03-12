@@ -160,7 +160,7 @@ void testCuckooHashMapFindBatch() {
       }
       std::vector<uint8_t> findExistFlag;
       findExistFlag = map.findBatchDeferWriteBack(
-          keys, vals, std::vector<bool>(batchSize, false));
+          keys, vals);
 #pragma omp parallel for num_threads(2)
       for (int i = 0; i < 2; ++i) {
         map.writeBackTable(i);

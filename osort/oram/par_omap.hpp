@@ -318,9 +318,8 @@ struct ParOMap {
         const auto& [keyShard, prefixSum] = extractKeyByShard(
             keyVec.begin(), keyVec.end(), shardIndexVec.begin(), i, shardSize);
         uint32_t numReal = prefixSum.back();
-        std::vector<bool> isDummy;
         const std::vector<uint8_t>& foundFlagsTmp =
-            shards[i].findBatchDeferWriteBack(keyShard, valueShard[i], isDummy);
+            shards[i].findBatchDeferWriteBack(keyShard, valueShard[i]);
         std::copy(foundFlagsTmp.begin(), foundFlagsTmp.end(),
                   foundFlagsShard[i].begin());
         EM::Algorithm::OrDistributeSeparateMark(

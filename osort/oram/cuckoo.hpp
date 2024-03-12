@@ -110,6 +110,10 @@ struct CuckooHashMap {
     table1.SetSize(tableSize, cacheBytes / 2);
   }
 
+  void SetIndexer(const CuckooHashMapIndexer<K, PositionType>& indexer) {
+    this->indexer = indexer;
+  }
+
   void SetSize(PositionType size, uint64_t cacheBytes, int maxThreads) {
     static_assert(parallel_batch, "too many arguments for non-parallel_batch");
     _size = size;
@@ -418,8 +422,7 @@ struct CuckooHashMap {
 
   void findTableBatchDeferWriteBack(int tableNum, const std::vector<K>& keys,
                                     std::vector<V>& values,
-                                    std::vector<uint8_t>& foundFlag,
-                                    const std::vector<bool>& isDummy) {
+                                    std::vector<uint8_t>& foundFlag) {
     static_assert(isOblivious);
     Assert(tableNum == 0 || tableNum == 1);
     // std::vector<uint8_t> foundFlag(keys.size());
@@ -455,8 +458,7 @@ struct CuckooHashMap {
   }
 
   std::vector<uint8_t> findBatchDeferWriteBack(
-      const std::vector<K>& keys, std::vector<V>& values,
-      const std::vector<bool>& isDummy) {
+      const std::vector<K>& keys, std::vector<V>& values) {
     std::vector<std::vector<uint8_t>> foundFlagTables(
         2, std::vector<uint8_t>(keys.size()));
 
@@ -465,24 +467,8 @@ struct CuckooHashMap {
 
     // #pragma omp parallel for num_threads(2) schedule(static, 1)
     for (int i = 0; i < 2; ++i) {
-      findTableBatchDeferWriteBack(i, keys, valueTables[i], foundFlagTables[i],
-                                   isDummy);
+      findTableBatchDeferWriteBack(i, keys, valueTables[i], foundFlagTables[i]);
     }
-    // #pragma omp task
-    //     { findTableBatchDeferWriteBack(0, keys, values, foundFlagTable0,
-    //     isDummy); }
-
-    //     {
-    //       findTableBatchDeferWriteBack(1, keys, valueTable1, foundFlagTable1,
-    //                                    isDummy);
-    //     }
-    // #pragma omp taskwait
-    // for (size_t i = 0; i < keys.size(); ++i) {
-    //   std::cout << "key = " << keys[i]
-    //             << " foundFlagTable0 = " << (int)foundFlagTable0[i]
-    //             << " foundFlagTable1 = " << (int)foundFlagTable1[i]
-    //             << std::endl;
-    // }
 
     for (size_t i = 0; i < keys.size(); ++i) {
       foundFlagTables[0][i] |= foundFlagTables[1][i];
