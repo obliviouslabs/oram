@@ -85,6 +85,11 @@ struct CuckooHashMap {
   CuckooHashMapIndexer<K, PositionType> indexer;
   std::vector<CuckooHashMapEntry<K, V>> stash;
 
+  struct ValResult {
+    V value;
+    bool found;
+  };
+
   CuckooHashMap() {}
 
   CuckooHashMap(PositionType size) { SetSize(size); }
@@ -420,29 +425,29 @@ struct CuckooHashMap {
     return found & !isDummy;
   }
 
-  void findTableBatchDeferWriteBack(int tableNum, const std::vector<K>& keys,
-                                    std::vector<V>& values,
-                                    std::vector<uint8_t>& foundFlag) {
+
+template <class KeyIter, class ValResIter>
+  void findTableBatchDeferWriteBack(int tableNum, const KeyIter keyBegin, const KeyIter keyEnd, ValResIter valResBegin) {
     static_assert(isOblivious);
     Assert(tableNum == 0 || tableNum == 1);
-    // std::vector<uint8_t> foundFlag(keys.size());
-    std::vector<PositionType> hashIndices(keys.size());
+    size_t keySize = std::distance(keyBegin, keyEnd);
+    std::vector<PositionType> hashIndices(keySize);
     if (tableNum == 0) {
-      for (size_t i = 0; i < keys.size(); ++i) {
-        hashIndices[i] = indexer.getHashIdx0(keys[i]);
+      for (size_t i = 0; i < keySize; ++i) {
+        hashIndices[i] = indexer.getHashIdx0(*(keyBegin + i));
       }
     } else {
-      for (size_t i = 0; i < keys.size(); ++i) {
-        hashIndices[i] = indexer.getHashIdx1(keys[i]);
+      for (size_t i = 0; i < keySize; ++i) {
+        hashIndices[i] = indexer.getHashIdx1(*(keyBegin + i));
       }
     }
-    std::vector<PositionType> recoveryVec(keys.size());
-    for (PositionType i = 0; i < keys.size(); ++i) {
+    std::vector<PositionType> recoveryVec(keySize);
+    for (PositionType i = 0; i < keySize; ++i) {
       recoveryVec[i] = i;
     }
     EM::Algorithm::BitonicSortSepPayload(hashIndices.begin(), hashIndices.end(),
                                          recoveryVec.begin());
-    std::vector<BucketType> buckets(keys.size());
+    std::vector<BucketType> buckets(keySize);
 
     if (tableNum == 0) {
       table0.BatchReadDeferWriteBack(hashIndices, buckets);
@@ -452,31 +457,33 @@ struct CuckooHashMap {
 
     EM::Algorithm::BitonicSortSepPayload(recoveryVec.begin(), recoveryVec.end(),
                                          buckets.begin());
-    for (size_t i = 0; i < keys.size(); ++i) {
-      foundFlag[i] = searchBucket(keys[i], values[i], buckets[i]);
+    for (size_t i = 0; i < keySize; ++i) {
+      (valResBegin + i)->found = searchBucket(*(keyBegin + i), (valResBegin + i)->value, buckets[i]);
     }
   }
 
-  std::vector<uint8_t> findBatchDeferWriteBack(
-      const std::vector<K>& keys, std::vector<V>& values) {
-    std::vector<std::vector<uint8_t>> foundFlagTables(
-        2, std::vector<uint8_t>(keys.size()));
+  static void mergeValRes(const ValResult& valRes0, const ValResult& valRes1,
+                          ValResult& valRes) {
+    valRes.found = valRes0.found | valRes1.found;
+    valRes.value = valRes0.value;
+    obliMove(valRes1.found, valRes.value, valRes1.value);
+  }
 
-    std::vector<std::vector<V>> valueTables(2, std::vector<V>(keys.size()));
-    std::vector<uint8_t> foundFlagTable(keys.size());
+  template <class KeyIter, class ValResIter>
+  void findBatchDeferWriteBack(
+      const KeyIter keyBegin, const KeyIter keyEnd, ValResIter valResBegin) {
+    size_t keySize = std::distance(keyBegin, keyEnd);
+    std::vector<std::vector<ValResult>> valResTables(2, std::vector<ValResult>(keySize));
 
     // #pragma omp parallel for num_threads(2) schedule(static, 1)
     for (int i = 0; i < 2; ++i) {
-      findTableBatchDeferWriteBack(i, keys, valueTables[i], foundFlagTables[i]);
+      findTableBatchDeferWriteBack(i, keyBegin, keyEnd, valResTables[i].begin());
     }
 
-    for (size_t i = 0; i < keys.size(); ++i) {
-      foundFlagTables[0][i] |= foundFlagTables[1][i];
-      obliMove(foundFlagTables[1][i], valueTables[0][i], valueTables[1][i]);
-      foundFlagTables[0][i] |= searchStash(keys[i], valueTables[0][i], stash);
+    for (size_t i = 0; i < keySize; ++i) {
+      mergeValRes(valResTables[0][i], valResTables[1][i], *(valResBegin + i));
+      (valResBegin + i)->found |= searchStash(*(keyBegin + i), (valResBegin + i)->value, stash);
     }
-    std::copy(valueTables[0].begin(), valueTables[0].end(), values.begin());
-    return foundFlagTables[0];
   }
 
   void writeBackTable(int tableNum) {

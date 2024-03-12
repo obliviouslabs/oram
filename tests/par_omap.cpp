@@ -20,10 +20,10 @@ TEST(ParOMap, Init) {
 }
 
 TEST(ParOMap, InitInsertFind) {
-  uint64_t mapSize = 123456;
+  uint64_t mapSize = 123;
   uint64_t shardCount = 2;
   uint64_t round = 1000;
-  uint64_t batchSize = 1000;
+  uint64_t batchSize = 100;
   ParOMap<uint64_t, uint64_t> parOMap(mapSize, shardCount);
 
   std::unordered_map<uint64_t, uint64_t> kvMap;

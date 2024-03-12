@@ -131,7 +131,8 @@ void testCuckooHashMapFindBatch() {
     int keySpace = mapSize;
     int batchSize = 1000;
     int numBatch = 10;
-    CuckooHashMap<int, int, isOblivious, uint64_t, true> map(mapSize,
+    using CHMap = CuckooHashMap<int, int, isOblivious, uint64_t, true>;
+    CHMap map(mapSize,
                                                              1UL << 62);
     std::unordered_map<int, int> std_map;
     for (int r = 0; r < mapSize * 2 / 3; ++r) {
@@ -145,7 +146,8 @@ void testCuckooHashMapFindBatch() {
     map.InitFromReaderInPlace(reader);
     for (int r = 0; r < numBatch; ++r) {
       std::vector<int> keys(batchSize);
-      std::vector<int> vals(batchSize);
+      using ValResult = CHMap::ValResult;
+      std::vector<ValResult> vals(batchSize);
       for (int i = 0; i < batchSize; ++i) {
         keys[i] = rand() % keySpace;
       }
@@ -154,13 +156,13 @@ void testCuckooHashMapFindBatch() {
         //   vals[i] = rand();
         // }
         for (int i = 0; i < batchSize && std_map.size() < mapSize; ++i) {
-          map.find(keys[i], vals[i]);
+          map.find(keys[i], vals[i].value);
           // std_map[keys[i]] = vals[i];
         }
       }
       std::vector<uint8_t> findExistFlag;
-      findExistFlag = map.findBatchDeferWriteBack(
-          keys, vals);
+      map.findBatchDeferWriteBack(
+          keys.begin(), keys.end(), vals.begin());
 #pragma omp parallel for num_threads(2)
       for (int i = 0; i < 2; ++i) {
         map.writeBackTable(i);
@@ -168,10 +170,10 @@ void testCuckooHashMapFindBatch() {
       for (size_t i = 0; i < keys.size(); ++i) {
         auto it = std_map.find(keys[i]);
         if (it != std_map.end()) {
-          ASSERT_EQ(findExistFlag[i], true);
-          ASSERT_EQ(vals[i], it->second);
+          ASSERT_EQ(vals[i].found, true);
+          ASSERT_EQ(vals[i].value, it->second);
         } else {
-          ASSERT_EQ(findExistFlag[i], false);
+          ASSERT_EQ(vals[i].found, false);
         }
       }
     }

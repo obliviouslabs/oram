@@ -9,8 +9,15 @@ namespace ODSL {
 template <typename K, typename V, typename PositionType = uint64_t>
 struct ParOMap {
   // std::vector<OMap<K, V, 9, PositionType>> shards;
-  std::vector<CuckooHashMap<K, V, true, PositionType, true>> shards;
+  using BaseMap = CuckooHashMap<K, V, true, PositionType, true>;
+  std::vector<BaseMap> shards;
   uint8_t randSalt[16];
+
+  uint64_t shardHashRange;
+
+  INLINE uint32_t getShardByHash(uint64_t hash) {
+    return hash / shardHashRange;
+  }
 
   static uint64_t maxQueryPerShard(uint64_t batchSize, uint64_t shardCount,
                                    double logFailProb = -40) {
@@ -36,6 +43,7 @@ struct ParOMap {
       shard.SetSize(shardSize, cacheBytes / shardCount);
     }
     read_rand(randSalt, sizeof(randSalt));
+    shardHashRange = (UINT64_MAX - 1) / shardCount + 1;
   }
 
   void Init() {
@@ -146,7 +154,7 @@ struct ParOMap {
           sortElement.kvPair = reader.read();
           uint64_t hash = secure_hash_with_salt(
               (uint8_t*)&sortElement.kvPair.first, sizeof(K), randSalt);
-          sortElement.shardIdx = hash % shardCount;
+          sortElement.shardIdx = getShardByHash(hash);
           for (uint32_t j = 0; j < shardCount; ++j) {
             bool matchFlag = sortElement.shardIdx == j;
             shardCounter[j] += matchFlag;
@@ -217,7 +225,7 @@ struct ParOMap {
     for (uint64_t i = 0; i < batchSize; ++i) {
       uint64_t keyHash =
           secure_hash_with_salt((uint8_t*)&keyBegin[i], sizeof(K), randSalt);
-      shardIndexVec[i] = keyHash % shardCount;
+      shardIndexVec[i] = getShardByHash(keyHash);
       obliMove(isDuplicate[i], shardIndexVec[i], DUMMY<uint32_t>());
     }
     return shardIndexVec;
@@ -289,6 +297,116 @@ struct ParOMap {
     }
   }
 
+  struct KeyInfo {
+    K key;
+    uint64_t hash;
+    uint32_t shardIdx;
+    bool operator<(const KeyInfo& other) const { return hash < other.hash | (hash == other.hash & key < other.key); }
+#ifndef ENCLAVE_MODE
+    friend std::ostream& operator<<(std::ostream& os, const KeyInfo& keyInfo) {
+      os << "key = " << keyInfo.key << " hash = " << keyInfo.hash
+         << " shardIdx = " << keyInfo.shardIdx;
+      return os;
+    }
+#endif
+  };
+
+  template <class KeyIterator, class ValueIterator>
+  std::vector<uint8_t> findParBatchDeferWriteBack(const KeyIterator keyBegin,
+                                                  const KeyIterator keyEnd,
+                                                  ValueIterator valueBegin) {
+    uint64_t shardCount = shards.size();
+    uint64_t batchSize = keyEnd - keyBegin;
+    uint64_t shardSize = maxQueryPerShard(batchSize, shardCount);
+    std::vector<KeyInfo> keyInfoVec(batchSize);
+    for (uint32_t i = 0; i < batchSize; ++i) {
+      keyInfoVec[i].key = *(keyBegin + i);
+      keyInfoVec[i].hash = secure_hash_with_salt(
+          (uint8_t*)&keyInfoVec[i].key, sizeof(K), randSalt);
+      keyInfoVec[i].shardIdx = getShardByHash(keyInfoVec[i].hash);
+    }
+    std::vector<uint32_t> recoveryArr(batchSize);
+    for (uint32_t i = 0; i < batchSize; ++i) {
+      recoveryArr[i] = i;
+    }
+    EM::Algorithm::BitonicSortSepPayload(keyInfoVec.begin(), keyInfoVec.end(), recoveryArr.begin());
+    std::vector<uint32_t> shardLoads(shardCount, 0);
+    std::vector<uint32_t> prefixSumFirstCompaction(batchSize + 1);
+    prefixSumFirstCompaction[0] = 0;
+    prefixSumFirstCompaction[1] = 1;
+    for (uint32_t j = 0; j < shardCount; ++j) {
+        bool matchFlag = keyInfoVec[0].shardIdx == j;
+        shardLoads[j] += matchFlag;
+      }
+    for (uint32_t i = 1; i < batchSize; ++i) {
+      bool isDup = keyInfoVec[i].key == keyInfoVec[i - 1].key;
+      prefixSumFirstCompaction[i + 1] = prefixSumFirstCompaction[i] + !isDup;
+      #pragma omp simd
+      for (uint32_t j = 0; j < shardCount; ++j) {
+        bool matchFlag = (keyInfoVec[i].shardIdx == j) & !isDup;
+        shardLoads[j] += matchFlag;
+      }
+    }
+    std::vector<K> keyVec(shardCount * shardSize);
+    for (uint32_t i = 0; i < batchSize; ++i) {
+      keyVec[i] = keyInfoVec[i].key;
+    }
+    EM::Algorithm::OrCompactSeparateMark(keyVec.begin(), keyVec.begin() + batchSize,
+                                         prefixSumFirstCompaction.begin());
+
+    std::vector<uint32_t> prefixSumSecondCompaction(shardCount * shardSize + 1);
+    std::vector<uint32_t> shardLoadPrefixSum(shardCount);
+    shardLoadPrefixSum[0] = 0;
+    for (uint32_t i = 0; i < shardCount - 1; ++i) {
+      shardLoadPrefixSum[i + 1] = shardLoadPrefixSum[i] + shardLoads[i];
+    }
+    prefixSumSecondCompaction[0] = 0;
+    for (uint32_t i = 0; i < shardCount; ++i) {
+      for (uint32_t j = 0; j < shardSize; ++j) {
+        uint32_t rankInShard = j + 1;
+        obliMove(rankInShard > shardLoads[i], rankInShard, shardLoads[i]);
+        prefixSumSecondCompaction[i * shardSize + j + 1] =
+            shardLoadPrefixSum[i] + rankInShard;
+      }
+    }
+
+    EM::Algorithm::OrDistributeSeparateMark(keyVec.begin(), keyVec.end(),
+                                           prefixSumSecondCompaction.begin());
+    using ValResult = BaseMap::ValResult;
+    std::vector<ValResult> resultVec(shardCount * shardSize);
+
+#pragma omp parallel num_threads(shardCount)
+    {
+#pragma omp for schedule(static)
+      for (uint64_t i = 0; i < shardCount; ++i) {
+            shards[i].findBatchDeferWriteBack(
+                keyVec.begin() + i * shardSize,
+                keyVec.begin() + (i + 1) * shardSize, resultVec.begin() + i * shardSize);
+      }
+    }
+
+
+    EM::Algorithm::OrCompactSeparateMark(
+        resultVec.begin(), resultVec.end(), prefixSumSecondCompaction.begin());
+    
+    EM::Algorithm::OrDistributeSeparateMark(
+        resultVec.begin(), resultVec.begin() + batchSize, prefixSumFirstCompaction.begin());
+
+    for (uint32_t i = 1; i < batchSize; ++i) {
+      bool isDup = keyInfoVec[i].key == keyInfoVec[i - 1].key;
+      obliMove(isDup, resultVec[i], resultVec[i - 1]);
+    }
+
+    EM::Algorithm::BitonicSortSepPayload(recoveryArr.begin(), recoveryArr.end(), resultVec.begin());
+    std::vector<uint8_t> foundFlags(batchSize);
+    for (uint32_t i = 0; i < batchSize; ++i) {
+      foundFlags[i] = resultVec[i].found;
+      *(valueBegin + i) = resultVec[i].value;
+    }
+    return foundFlags;
+  }
+
+/*
   template <class KeyIterator, class ValueIterator>
   std::vector<uint8_t> findParBatchDeferWriteBack(const KeyIterator keyBegin,
                                                   const KeyIterator keyEnd,
@@ -357,6 +475,7 @@ struct ParOMap {
     }
     return foundFlags;
   }
+  */
 
   void ParWriteBack() {
     uint64_t shardCount = shards.size();
