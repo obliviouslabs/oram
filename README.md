@@ -1,5 +1,5 @@
-# Oblivious Sorting
-An implementation of external memory efficient, cpu instruction and memory access trace oblivious sorting algorithms.
+# Oblivious Map
+An implementation of external memory efficient, cpu instruction and memory access trace parallel oblivious maps.
 
 # Prerequisites
 Install cmake, ninja and intel sgx sdk, or use the cppbuilder docker image.
