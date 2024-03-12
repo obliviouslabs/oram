@@ -244,6 +244,7 @@ struct RecursiveORAM {
     // printf("Access %lu\n", address);
     _lock.lock();
     Assert(hasInited);
+    writeBackBuffer.clear();
     std::vector<std::vector<UidType>>& uids = writeBackBuffer.uids;
     uids.resize(oramSizes.size(), std::vector<UidType>(address.size()));
     std::vector<std::vector<short>> indices(
@@ -253,11 +254,10 @@ struct RecursiveORAM {
                     std::vector<PositionType>(address.size()));
     std::vector<std::vector<InternalNode>>& internalNodes =
         writeBackBuffer.internalNodes;
-    internalNodes.resize(
-        oramSizes.size() - 1,
-        std::vector<InternalNode>(address.size(), InternalNode()));
+    internalNodes.resize(oramSizes.size() - 1,
+                         std::vector<InternalNode>(address.size()));
     std::vector<LeafNode>& leafNodes = writeBackBuffer.leafNodes;
-    leafNodes.resize(address.size(), LeafNode());
+    leafNodes.resize(address.size());
     for (size_t i = 0; i < address.size(); ++i) {
       UidType uid = address[i] / chunk_size;
       short index = address[i] % chunk_size;

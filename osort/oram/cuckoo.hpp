@@ -416,19 +416,20 @@ struct CuckooHashMap {
     return found & !isDummy;
   }
 
-  template <const int table_num>
-  std::vector<uint8_t> findTableBatchDeferWriteBack(
-      const std::vector<K>& keys, std::vector<V>& values,
-      const std::vector<bool>& isDummy) {
+  void findTableBatchDeferWriteBack(int tableNum, const std::vector<K>& keys,
+                                    std::vector<V>& values,
+                                    std::vector<uint8_t>& foundFlag,
+                                    const std::vector<bool>& isDummy) {
     static_assert(isOblivious);
-    static_assert(table_num == 0 || table_num == 1);
-    std::vector<uint8_t> foundFlag(keys.size());
+    Assert(tableNum == 0 || tableNum == 1);
+    // std::vector<uint8_t> foundFlag(keys.size());
     std::vector<PositionType> hashIndices(keys.size());
-
-    for (size_t i = 0; i < keys.size(); ++i) {
-      if constexpr (table_num == 0) {
+    if (tableNum == 0) {
+      for (size_t i = 0; i < keys.size(); ++i) {
         hashIndices[i] = indexer.getHashIdx0(keys[i]);
-      } else {
+      }
+    } else {
+      for (size_t i = 0; i < keys.size(); ++i) {
         hashIndices[i] = indexer.getHashIdx1(keys[i]);
       }
     }
@@ -440,7 +441,7 @@ struct CuckooHashMap {
                                          recoveryVec.begin());
     std::vector<BucketType> buckets(keys.size());
 
-    if constexpr (table_num == 0) {
+    if (tableNum == 0) {
       table0.BatchReadDeferWriteBack(hashIndices, buckets);
     } else {
       table1.BatchReadDeferWriteBack(hashIndices, buckets);
@@ -451,31 +452,45 @@ struct CuckooHashMap {
     for (size_t i = 0; i < keys.size(); ++i) {
       foundFlag[i] = searchBucket(keys[i], values[i], buckets[i]);
     }
-    return foundFlag;
   }
 
   std::vector<uint8_t> findBatchDeferWriteBack(
       const std::vector<K>& keys, std::vector<V>& values,
       const std::vector<bool>& isDummy) {
-    std::vector<V> valueTable1(keys.size());
-    std::vector<uint8_t> foundFlagTable, foundFlagTable1;
-    // #pragma omp parallel num_threads(2)
-    //     {
-    // #pragma omp task
-    { foundFlagTable = findTableBatchDeferWriteBack<0>(keys, values, isDummy); }
-    {
-      foundFlagTable1 =
-          findTableBatchDeferWriteBack<1>(keys, valueTable1, isDummy);
+    std::vector<std::vector<uint8_t>> foundFlagTables(
+        2, std::vector<uint8_t>(keys.size()));
+
+    std::vector<std::vector<V>> valueTables(2, std::vector<V>(keys.size()));
+    std::vector<uint8_t> foundFlagTable(keys.size());
+
+    // #pragma omp parallel for num_threads(2) schedule(static, 1)
+    for (int i = 0; i < 2; ++i) {
+      findTableBatchDeferWriteBack(i, keys, valueTables[i], foundFlagTables[i],
+                                   isDummy);
     }
-    // #pragma omp taskwait
+    // #pragma omp task
+    //     { findTableBatchDeferWriteBack(0, keys, values, foundFlagTable0,
+    //     isDummy); }
+
+    //     {
+    //       findTableBatchDeferWriteBack(1, keys, valueTable1, foundFlagTable1,
+    //                                    isDummy);
     //     }
+    // #pragma omp taskwait
+    // for (size_t i = 0; i < keys.size(); ++i) {
+    //   std::cout << "key = " << keys[i]
+    //             << " foundFlagTable0 = " << (int)foundFlagTable0[i]
+    //             << " foundFlagTable1 = " << (int)foundFlagTable1[i]
+    //             << std::endl;
+    // }
 
     for (size_t i = 0; i < keys.size(); ++i) {
-      foundFlagTable[i] |= foundFlagTable1[i];
-      obliMove(foundFlagTable1[i], values[i], valueTable1[i]);
-      foundFlagTable[i] |= searchStash(keys[i], values[i], stash);
+      foundFlagTables[0][i] |= foundFlagTables[1][i];
+      obliMove(foundFlagTables[1][i], valueTables[0][i], valueTables[1][i]);
+      foundFlagTables[0][i] |= searchStash(keys[i], valueTables[0][i], stash);
     }
-    return foundFlagTable;
+    std::copy(valueTables[0].begin(), valueTables[0].end(), values.begin());
+    return foundFlagTables[0];
   }
 
   void writeBackTable(int tableNum) {
