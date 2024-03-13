@@ -308,41 +308,38 @@ struct ORAM {
     return newPos;
   }
 
-  std::vector<PositionType> BatchUpdate(
-      const std::vector<PositionType>& pos, const std::vector<UidType>& uid,
-      std::function<std::vector<bool>(std::vector<T>&)> updateFunc) {
-    std::vector<PositionType> newPos(pos.size());
-    for (int i = 0; i < pos.size(); ++i) {
+  std::vector<PositionType> BatchUpdate(uint64_t batchSize,
+      const PositionType* pos, const UidType* uid,
+      std::function<std::vector<bool>(uint64_t, T*)> updateFunc) {
+    std::vector<PositionType> newPos(batchSize);
+    for (int i = 0; i < batchSize; ++i) {
       newPos[i] = UniformRandom(size() - 1);
     }
-    BatchUpdate(pos, uid, newPos, updateFunc);
+    BatchUpdate(batchSize, pos, uid, &newPos[0], updateFunc);
     return newPos;
   }
 
-  void BatchUpdate(
-      const std::vector<PositionType>& pos, const std::vector<UidType>& uid,
-      const std::vector<PositionType>& newPos,
-      std::function<std::vector<bool>(std::vector<T>&)> updateFunc) {
-    std::vector<T> out(pos.size());
-    BatchUpdate(pos, uid, newPos, updateFunc, out);
+  void BatchUpdate(uint64_t batchSize,
+      const PositionType* pos, const UidType* uid,
+      const PositionType* newPos,
+      std::function<std::vector<bool>(uint64_t, T*)> updateFunc) {
+    std::vector<T> out(batchSize);
+    BatchUpdate(batchSize, pos, uid, newPos, updateFunc, &out[0]);
   }
 
-  void BatchUpdate(const std::vector<PositionType>& pos,
-                   const std::vector<UidType>& uid,
-                   const std::vector<PositionType>& newPos,
-                   std::function<std::vector<bool>(std::vector<T>&)> updateFunc,
-                   std::vector<T>& out) {
-    uint64_t batchSize = pos.size();
-    Assert(batchSize == uid.size());
-    Assert(batchSize == newPos.size());
-    Assert(batchSize == out.size());
+  void BatchUpdate(uint64_t batchSize, const PositionType* pos,
+                   const UidType* uid,
+                   const PositionType* newPos,
+                   std::function<std::vector<bool>(uint64_t, T*)> updateFunc,
+                   T* out) {
+
     for (uint64_t i = 0; i < batchSize; ++i) {
       int len = ReadPath(pos[i], path);
       ReadElementAndRemoveFromPath(path, uid[i], out[i]);
       EvictPath(path, pos[i], len);
       WriteBackPath(path, pos[i]);
     }
-    const std::vector<bool>& writeBackFlags = updateFunc(out);
+    const std::vector<bool>& writeBackFlags = updateFunc(batchSize, out);
     for (uint64_t i = 0; i < batchSize; ++i) {
       UidType u = DUMMY<UidType>();
       obliMove(writeBackFlags[i], u, uid[i]);
@@ -481,20 +478,20 @@ struct ORAM {
     return newPos;
   }
 
-  const std::vector<PositionType> duplicateNewPoses(
-      const std::vector<PositionType>& newPos,
-      const std::vector<UidType>& uid) {
-    std::vector<PositionType> dupNewPos(newPos);
-    for (int i = 1; i < uid.size(); ++i) {
+  const std::vector<PositionType> duplicateNewPoses(uint64_t batchSize,
+      const PositionType* newPos,
+      const UidType* uid) {
+    std::vector<PositionType> dupNewPos(newPos, newPos + batchSize);
+    for (int i = 1; i < batchSize; ++i) {
       obliMove(uid[i] == uid[i - 1], dupNewPos[i], dupNewPos[i - 1]);
     }
     return dupNewPos;
   }
 
   // requires uid to be sorted
-  void deDuplicatePoses(std::vector<PositionType>& pos,
-                        const std::vector<UidType>& uid) {
-    for (int i = 1; i < pos.size(); ++i) {
+  void deDuplicatePoses(uint64_t batchSize, PositionType* pos,
+                        const UidType* uid) {
+    for (int i = 1; i < batchSize; ++i) {
       PositionType randPos = UniformRandom(size() - 1);
       obliMove(uid[i] == uid[i - 1], pos[i], randPos);
     }
@@ -541,29 +538,22 @@ struct ORAM {
     memcpy(stash->blocks, &newStash[0], stashSize * sizeof(Block_));
   }
 
-  // void ParBatchReadAndRemove(int k, std::vector<PositionType>& pos,
-  //                            const std::vector<UidType>& uid,
-  //                            std::vector<T>& out) {}
-
-  void duplicateVal(std::vector<T>& out, const std::vector<UidType>& uid) {
-    for (int i = 1; i < out.size(); ++i) {
+  void duplicateVal(uint64_t batchSize, T* out, const UidType* uid) {
+    for (int i = 1; i < batchSize; ++i) {
       obliMove(uid[i] == uid[i - 1], out[i], out[i - 1]);
     }
   }
 
   // requries uid to be sorted
-  void BatchReadAndRemove(std::vector<PositionType>& pos,
-                          const std::vector<UidType>& uid,
-                          std::vector<T>& out) {
-    uint64_t batchSize = pos.size();
-    Assert(batchSize == uid.size());
-    Assert(batchSize == out.size());
-    deDuplicatePoses(pos, uid);
+  void BatchReadAndRemove(uint64_t batchSize, PositionType* pos,
+                          const UidType* uid,
+                          T* out) {
+    deDuplicatePoses(batchSize, pos, uid);
 
     // reads elements in the subtree
     std::vector<Block_> localPath(stashSize + Z * depth);
     memcpy(&localPath[0], stash->blocks, stashSize * sizeof(Block_));
-    for (int i = 0; i < pos.size(); ++i) {
+    for (int i = 0; i < batchSize; ++i) {
       int actualLevel =
           tree.ReadPath(pos[i], (Bucket_*)&(localPath[stashSize]));
       ReadElementAndRemoveFromPath(
@@ -572,17 +562,14 @@ struct ORAM {
       tree.WritePath(pos[i], (Bucket_*)&(localPath[stashSize]));
     }
     memcpy(stash->blocks, &localPath[0], stashSize * sizeof(Block_));
-    duplicateVal(out, uid);
+    duplicateVal(batchSize, out, uid);
   }
 
-  void BatchWriteBack(const std::vector<UidType>& uid,
-                      const std::vector<PositionType>& newPos,
-                      const std::vector<T>& in,
+  void BatchWriteBack(uint64_t batchSize, const UidType* uid,
+                      const PositionType* newPos,
+                      const T* in,
                       const std::vector<bool>& writeBackFlags) {
-    uint64_t batchSize = uid.size();
-    Assert(batchSize == writeBackFlags.size());
-    Assert(batchSize == newPos.size());
-    Assert(batchSize == in.size());
+
     std::vector<Block_> localPath(stashSize + Z * depth);
     std::vector<Block_> toWrite(batchSize);
     for (uint64_t i = 0; i < batchSize; ++i) {
@@ -619,33 +606,31 @@ struct ORAM {
   }
 
   template <class Func>
-  void BatchUpdateWithDup(std::vector<PositionType>& pos,
-                          const std::vector<UidType>& uid,
-                          const std::vector<PositionType>& newPos,
-                          const Func& updateFunc, std::vector<T>& out) {
-    BatchReadAndRemove(pos, uid, out);
-    const std::vector<bool>& writeBackFlags = updateFunc(out);
-    BatchWriteBack(uid, newPos, out, writeBackFlags);
+  void BatchUpdateWithDup(uint64_t batchSize, PositionType* pos,
+                          const UidType* uid,
+                          
+                          const PositionType* newPos,
+                          const Func& updateFunc, T* out) {
+    BatchReadAndRemove(batchSize, pos, uid, out);
+    const std::vector<bool>& writeBackFlags = updateFunc(batchSize, out);
+    BatchWriteBack(batchSize, uid, newPos, out, writeBackFlags);
   }
 
   template <class Func>
-  void ParBatchUpdate(std::vector<PositionType>& pos,
-                      const std::vector<UidType>& uid,
-                      const std::vector<PositionType>& newPos,
-                      const Func& updateFunc, std::vector<T>& out,
+  void ParBatchUpdate(uint64_t batchSize, PositionType* pos,
+                      const UidType* uid,
+                      const PositionType* newPos,
+                      const Func& updateFunc, T* out,
                       int numThreads = 0) {
     if (numThreads > maxSubtree || numThreads == 0) {
       numThreads = maxSubtree;
     }
-    uint64_t batchSize = pos.size();
-    Assert(batchSize == uid.size());
-    Assert(batchSize == newPos.size());
-    Assert(batchSize == out.size());
+
     // std::cout << "Received batch requests" << std::endl;
     // for (uint64_t i = 0; i < batchSize; ++i) {
     //   std::cout << "pos = " << pos[i] << ", uid = " << uid[i] << std::endl;
     // }
-    deDuplicatePoses(pos, uid);
+    deDuplicatePoses(batchSize, &pos[0], &uid[0]);
     // std::cout << "\nDe-duplicated batch requests" << std::endl;
     // for (uint64_t i = 0; i < batchSize; ++i) {
     //   std::cout << "pos = " << pos[i] << ", uid = " << uid[i] << std::endl;
@@ -702,10 +687,10 @@ struct ORAM {
       std::vector<PositionType> subPos;
       std::vector<UidType> subUid;
       std::vector<size_t> outputIdx;
-      subPos.reserve(uid.size());
-      subUid.reserve(uid.size());
-      outputIdx.reserve(uid.size());
-      for (int i = 0; i < uid.size(); ++i) {
+      subPos.reserve(batchSize);
+      subUid.reserve(batchSize);
+      outputIdx.reserve(batchSize);
+      for (int i = 0; i < batchSize; ++i) {
         // it's fine to reveal pos of each request
         if ((pos[i] ^ subtreeIdx) & (1UL << k) - 1) {
           continue;  // not in the subtree
@@ -772,9 +757,9 @@ struct ORAM {
       // }
       // std::cout << std::endl;
     }
-    duplicateVal(out, uid);
+    duplicateVal(batchSize, out, uid);
 
-    const std::vector<bool>& writeBackFlags = updateFunc(out);
+    const std::vector<bool>& writeBackFlags = updateFunc(batchSize, out);
     std::vector<Block_> toWrite(batchSize);
     for (uint64_t i = 0; i < batchSize; ++i) {
       toWrite[i].uid = DUMMY<UidType>();
@@ -841,40 +826,40 @@ struct ORAM {
   }
 
   template <class Func>
-  void BatchUpdateWithDup(std::vector<PositionType>& pos,
-                          const std::vector<UidType>& uid,
-                          const std::vector<PositionType>& newPos,
+  void BatchUpdateWithDup(uint64_t batchSize, PositionType* pos,
+                          const UidType* uid,
+                          const PositionType* newPos,
                           const Func& updateFunc) {
-    std::vector<T> out(pos.size());
-    BatchUpdateWithDup(pos, uid, newPos, updateFunc, out);
+    std::vector<T> out(batchSize);
+    BatchUpdateWithDup(batchSize, pos, uid, newPos, updateFunc, &out[0]);
   }
 
   template <class Func>
-  std::vector<PositionType> BatchUpdateWithDup(std::vector<PositionType>& pos,
-                                               const std::vector<UidType>& uid,
-                                               const Func& updateFunc) {
-    const std::vector<PositionType>& newPoses = GetRandNewPoses(uid.size());
-    BatchUpdateWithDup(pos, uid, newPoses, updateFunc);
-    return duplicateNewPoses(newPoses, uid);
-  }
-
-  template <class Func>
-  void ParBatchUpdate(std::vector<PositionType>& pos,
-                      const std::vector<UidType>& uid,
-                      const std::vector<PositionType>& newPos,
+  void ParBatchUpdate(uint64_t batchSize, PositionType* pos,
+                      const UidType* uid,
+                      const PositionType* newPos,
                       const Func& updateFunc, int numThreads = 0) {
-    std::vector<T> out(pos.size());
-    ParBatchUpdate(pos, uid, newPos, updateFunc, out, numThreads);
+    std::vector<T> out(batchSize);
+    ParBatchUpdate(batchSize, pos, uid, newPos, updateFunc, &out[0], numThreads);
   }
 
   template <class Func>
-  std::vector<PositionType> ParBatchUpdate(std::vector<PositionType>& pos,
-                                           const std::vector<UidType>& uid,
+  std::vector<PositionType> ParBatchUpdate(uint64_t batchSize, PositionType* pos,
+                                           const UidType* uid,
                                            const Func& updateFunc,
                                            int numThreads = 0) {
-    const std::vector<PositionType>& newPoses = GetRandNewPoses(uid.size());
-    ParBatchUpdate(pos, uid, newPoses, updateFunc, numThreads);
-    return duplicateNewPoses(newPoses, uid);
+    const std::vector<PositionType>& newPoses = GetRandNewPoses(batchSize);
+    ParBatchUpdate(batchSize, pos, uid, &newPoses[0], updateFunc, numThreads);
+    return duplicateNewPoses(batchSize, &newPoses[0], uid);
+  }
+
+  template <class Func>
+  std::vector<PositionType> BatchUpdateWithDup(uint64_t batchSize, PositionType* pos,
+                                           const UidType* uid,
+                                           const Func& updateFunc) {
+    const std::vector<PositionType>& newPoses = GetRandNewPoses(batchSize);
+    BatchUpdateWithDup(batchSize, pos, uid, &newPoses[0], updateFunc);
+    return duplicateNewPoses(batchSize, &newPoses[0], uid);
   }
 };
 

@@ -281,7 +281,7 @@ struct RecursiveORAM {
         nextNewPos[i] = UniformRandom(oramSizes[level + 1] - 1);
       }
 
-      internalOrams[level].BatchReadAndRemove(pos, uids[level], node);
+      internalOrams[level].BatchReadAndRemove(address.size(), &pos[0], &uids[level][0], &node[0]);
 
       for (int64_t i = address.size() - 1; i >= 0; --i) {
         // in case of duplicate uid we need to copy what we've updated to
@@ -314,7 +314,7 @@ struct RecursiveORAM {
       std::swap(pos, nextPos);
     }
 
-    leafOram.BatchReadAndRemove(pos, uids.back(), leafNodes);
+    leafOram.BatchReadAndRemove(address.size(), &pos[0], &uids.back()[0], &leafNodes[0]);
     std::vector<T> data(address.size());
 
     const std::vector<short>& index = indices.back();
@@ -343,15 +343,16 @@ struct RecursiveORAM {
   }
 
   void WriteBack(WriteBackBuffer& writeBackBuffer) {
+    uint64_t batchSize = writeBackBuffer.uids[0].size();
     for (int level = 0; level < oramSizes.size() - 1; ++level) {
-      internalOrams[level].BatchWriteBack(
-          writeBackBuffer.uids[level], writeBackBuffer.newPoses[level],
-          writeBackBuffer.internalNodes[level],
+      internalOrams[level].BatchWriteBack(batchSize,
+          &writeBackBuffer.uids[level][0], &writeBackBuffer.newPoses[level][0],
+          &writeBackBuffer.internalNodes[level][0],
           std::vector<bool>(writeBackBuffer.uids[level].size(), true));
     }
     leafOram.BatchWriteBack(
-        writeBackBuffer.uids.back(), writeBackBuffer.newPoses.back(),
-        writeBackBuffer.leafNodes,
+        batchSize, &writeBackBuffer.uids.back()[0], &writeBackBuffer.newPoses.back()[0],
+        &writeBackBuffer.leafNodes[0],
         std::vector<bool>(writeBackBuffer.uids.back().size(), true));
     _lock.unlock();
   }
@@ -392,9 +393,9 @@ struct RecursiveORAM {
       for (size_t i = 0; i < address.size(); ++i) {
         nextNewPos[i] = UniformRandom(oramSizes[level + 1] - 1);
       }
-      auto updateFunc = [&](std::vector<InternalNode>& node) {
-        std::vector<PositionType> localNextPos(address.size());
-        for (int64_t i = address.size() - 1; i >= 0; --i) {
+      auto updateFunc = [&](uint64_t batchSize, InternalNode* node) {
+        std::vector<PositionType> localNextPos(batchSize);
+        for (int64_t i = batchSize - 1; i >= 0; --i) {
           // in case of duplicate uid we need to copy what we've updated to
           // maintain consistency scan backward since only the first duplicate
           // uid will be updated
@@ -405,7 +406,7 @@ struct RecursiveORAM {
             obliMove(match, localNextPos[i], node[i].children[j]);
           }
           // then duplicate what we already updated
-          if (i != address.size() - 1) {
+          if (i != batchSize - 1) {
             bool copyFlag = uids[level][i] == uids[level][i + 1];
             obliMove(copyFlag, node[i], node[i + 1]);
           }
@@ -417,22 +418,22 @@ struct RecursiveORAM {
           }
         }
         nextPos = localNextPos;
-        return std::vector<bool>(address.size(), true);
+        return std::vector<bool>(batchSize, true);
       };
       // printf("level %d: pos %lu, uid %lu, newPos %lu\n", level, pos,
       //        uids[level], newPos);
       // printf("level %d\n", level);
-      internalOrams[level].ParBatchUpdate(pos, uids[level], newPos, updateFunc,
+      internalOrams[level].ParBatchUpdate(address.size(), &pos[0], &uids[level][0], &newPos[0], updateFunc,
                                           numThreads);
       // printf("complete level %d\n", level);
       pos = nextPos;
       newPos = nextNewPos;
     }
-    auto updateFunc = [&](std::vector<LeafNode>& node) {
-      std::vector<T> data(address.size());
+    auto updateFunc = [&](const uint64_t batchSize, LeafNode* node) {
+      std::vector<T> data(batchSize);
 
       const std::vector<short>& index = indices.back();
-      for (size_t i = 0; i < address.size(); ++i) {
+      for (size_t i = 0; i < batchSize; ++i) {
         if constexpr (chunk_size == 1) {
           data[i] = node[i].data[0];
         } else {
@@ -444,7 +445,7 @@ struct RecursiveORAM {
       }
 
       accessor(data);
-      for (size_t i = 0; i < address.size(); ++i) {
+      for (size_t i = 0; i < batchSize; ++i) {
         if constexpr (chunk_size == 1) {
           node[i].data[0] = data[i];
         } else {
@@ -455,11 +456,11 @@ struct RecursiveORAM {
         }
       }
 
-      return std::vector<bool>(address.size(), true);
+      return std::vector<bool>(batchSize, true);
     };
     // printf("level %ld: pos %lu, uid %lu, newPos %lu\n", oramSizes.size() - 1,
     //        pos, uids.back(), newPos);
-    leafOram.ParBatchUpdate(pos, uids.back(), newPos, updateFunc, numThreads);
+    leafOram.ParBatchUpdate(address.size(), &pos[0], &uids.back()[0], &newPos[0], updateFunc, numThreads);
   }
 
   void Read(UidType address, T& out) {

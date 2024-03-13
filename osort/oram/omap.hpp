@@ -1072,7 +1072,7 @@ struct OMap {
         // update leaf to write back, and the new node if split
 
         auto batchUpdateFunc =
-            [&](std::vector<BPlusLeaf_>& leaves) -> std::vector<bool> {
+            [&](uint64_t batchSize, BPlusLeaf_* leaves) -> std::vector<bool> {
           BPlusLeaf_& child = leaves[0];
           BPlusLeaf_& neighbor = leaves[1];
           foundFlag = eraseEntryFromLeaf(child, key);
@@ -1089,15 +1089,16 @@ struct OMap {
         obliMove(isDummy, childNeighbor.data,
                  UniformRandom(leafOram.size() - 1));
         obliMove(isDummy, childNeighbor.uid, DUMMY<UidType>());
-
-        const auto& newPositions = leafOram.BatchUpdate(
-            {childInfo.data, childNeighbor.data},
-            {childInfo.uid, childNeighbor.uid}, batchUpdateFunc);
+        PositionType posPair[2] = {childInfo.data, childNeighbor.data};
+        UidType uidPair[2] = {childInfo.uid, childNeighbor.uid};
+        const auto& newPositions = leafOram.BatchUpdate(2,
+            posPair,
+            uidPair, batchUpdateFunc);
         newPos = newPositions[0];
         newPosNeighbor = newPositions[1];
       } else {
         auto batchUpdateFunc =
-            [&](std::vector<BPlusNode_>& children) -> std::vector<bool> {
+            [&](uint64_t batchSize, BPlusNode_* children) -> std::vector<bool> {
           BPlusNode_& child = children[0];
           updateFunc(child);
           BPlusNode_& neighbor = children[1];
@@ -1114,10 +1115,10 @@ struct OMap {
         obliMove(isDummy, childNeighbor.data,
                  UniformRandom(oramIt->size() - 1));
         obliMove(isDummy, childNeighbor.uid, DUMMY<UidType>());
-
+        PositionType posPair[2] = {childInfo.data, childNeighbor.data};
+        UidType uidPair[2] = {childInfo.uid, childNeighbor.uid};
         const auto& newPositions = oramIt->BatchUpdate(
-            {childInfo.data, childNeighbor.data},
-            {childInfo.uid, childNeighbor.uid}, batchUpdateFunc);
+            2, posPair, uidPair, batchUpdateFunc);
         newPos = newPositions[0];
         newPosNeighbor = newPositions[1];
       }

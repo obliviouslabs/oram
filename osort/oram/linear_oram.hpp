@@ -99,25 +99,23 @@ struct LinearORAM {
     return pos;
   }
 
-  std::vector<PositionType> BatchUpdate(
-      const std::vector<UidType>& uid,
-      std::function<std::vector<bool>(std::vector<T>&)> updateFunc) {
-    std::vector<T> out(uid.size());
-    BatchUpdate(uid, updateFunc, out);
-    return std::vector<PositionType>(uid.size(), 0);
+  std::vector<PositionType> BatchUpdate(uint64_t batchSize,
+      const UidType* uid,
+      std::function<std::vector<bool>(uint64_t, T*)> updateFunc) {
+    std::vector<T> out(batchSize);
+    BatchUpdate(batchSize, uid, updateFunc, &out[0]);
+    return std::vector<PositionType>(batchSize, 0);
   }
 
-  void BatchUpdate(const std::vector<UidType>& uid,
-                   std::function<std::vector<bool>(std::vector<T>&)> updateFunc,
-                   std::vector<T>& out) {
-    uint64_t batchSize = uid.size();
-    Assert(batchSize == out.size());
+  void BatchUpdate(uint64_t batchSize, const UidType* uid,
+                   std::function<std::vector<bool>(uint64_t, T*)> updateFunc,
+                   T* out) {
 
     for (uint64_t i = 0; i < batchSize; i++) {
       Read(0, uid[i], out[i]);
     }
 
-    const std::vector<bool>& writeBackFlags = updateFunc(out);
+    const std::vector<bool>& writeBackFlags = updateFunc(batchSize, out);
 
     for (uint64_t i = 0; i < batchSize; i++) {
       for (UidBlock_& block : data) {
@@ -128,17 +126,17 @@ struct LinearORAM {
     }
   }
 
-  void BatchReadAndRemove(const std::vector<UidType>& uid,
-                          std::vector<T>& out) {
-    for (uint64_t i = 0; i < uid.size(); i++) {
+  void BatchReadAndRemove(uint64_t batchSize, const UidType* uid,
+                          T* out) {
+    for (uint64_t i = 0; i < batchSize; i++) {
       Read(0, uid[i], out[i]);
     }
     // don't actually remove since we will write back
   }
 
-  void BatchWriteBack(const std::vector<UidType>& uid, const std::vector<T>& in,
+  void BatchWriteBack(uint64_t batchSize, const UidType* uid, const T* in,
                       const std::vector<bool>& keepFlag) {
-    for (size_t i = 0; i < uid.size(); ++i) {
+    for (size_t i = 0; i < batchSize; ++i) {
       UidType searchUid = uid[i];
       if (i != 0) {
         obliMove(uid[i] == uid[i - 1], searchUid, DUMMY<UidType>());
@@ -154,46 +152,46 @@ struct LinearORAM {
   }
 
   template <class Func>
-  void BatchUpdateWithDup(const std::vector<UidType>& uid,
-                          const Func& updateFunc, std::vector<T>& out) {
+  void BatchUpdateWithDup(uint64_t batchSize, const UidType* uid,
+                          const Func& updateFunc, T* out) {
     // TODO: Implement hash table index / compaction
     // printf("Using linear oram\n");
-    BatchReadAndRemove(uid, out);
+    BatchReadAndRemove(batchSize, uid, out);
 
-    std::vector<bool> keepFlag = updateFunc(out);
+    std::vector<bool> keepFlag = updateFunc(batchSize, out);
 
-    BatchWriteBack(uid, out, keepFlag);
+    BatchWriteBack(batchSize, uid, out, keepFlag);
     // deduplicate uids
   }
 
   // require uid to be sorted, can change uid
   // require oram to be sorted and contain keys 0 to size - 1
   template <class Func>
-  void ParBatchUpdate(std::vector<UidType>& uid, const Func& updateFunc,
-                      std::vector<T>& out, int numThreads = 0) {
+  void ParBatchUpdate(uint64_t batchSize, UidType* uid, const Func& updateFunc,
+                      T* out, int numThreads = 0) {
     // TODO: Implement hash table index / compaction
     if (numThreads == 0) {
       numThreads = omp_get_max_threads();
     }
-    if (true || size() < 2 * GetLogBaseTwo(uid.size())) {
+    if (true || size() < 2 * GetLogBaseTwo(batchSize)) {
       // printf("Using linear oram\n");
 #pragma omp parallel for num_threads(numThreads)
-      for (uint64_t i = 0; i < uid.size(); i++) {
+      for (uint64_t i = 0; i < batchSize; i++) {
         Read(0, uid[i], out[i]);
       }
 
-      std::vector<bool> keepFlag = updateFunc(out);
-      // printf("Update done %lu, numthreads = %d\n", uid.size(), numThreads);
+      std::vector<bool> keepFlag = updateFunc(batchSize, out);
+      // printf("Update done %lu, numthreads = %d\n", batchSize, numThreads);
       // deduplicate uids
-      for (size_t i = uid.size() - 1; i > 0; --i) {
+      for (size_t i = batchSize - 1; i > 0; --i) {
         obliMove(uid[i] == uid[i - 1], uid[i], DUMMY<UidType>());
       }
-      int chunkSize = divRoundUp(uid.size(), numThreads);
+      int chunkSize = divRoundUp(batchSize, numThreads);
 
 // avoid write contention and false sharing
 #pragma omp parallel for num_threads(numThreads) schedule(static, chunkSize)
       for (UidBlock_& block : data) {
-        for (uint64_t i = 0; i < uid.size(); i++) {
+        for (uint64_t i = 0; i < batchSize; i++) {
           bool match = block.uid == uid[i];
           obliMove(match, block.data, out[i]);
           obliMove(match & !keepFlag[i], block.uid, DUMMY<UidType>());
@@ -202,26 +200,26 @@ struct LinearORAM {
       // printf("Write done\n");
       return;
     }
-    // std::vector<uint32_t> queryPrefixSum(uid.size() + 1, 0);
+    // std::vector<uint32_t> queryPrefixSum(batchSize + 1, 0);
     // queryPrefixSum[0] = 0;
-    // for (uint64_t i = 0; i < uid.size(); i++) {
+    // for (uint64_t i = 0; i < batchSize; i++) {
     //   queryPrefixSum[i + 1] = queryPrefixSum[i] + (uid[i] !=
     //   DUMMY<UidType>());
     // }
   }
 
   template <class Func>
-  void ParBatchUpdate(std::vector<UidType>& uid, const Func& updateFunc,
+  void ParBatchUpdate(uint64_t batchSize, UidType* uid, const Func& updateFunc,
                       int numThreads = 0) {
-    std::vector<T> out(uid.size());
-    ParBatchUpdate(uid, updateFunc, out, numThreads);
+    std::vector<T> out(batchSize);
+    ParBatchUpdate(batchSize, uid, updateFunc, &out[0], numThreads);
   }
 
   template <class Func>
-  void BatchUpdateWithDup(const std::vector<UidType>& uid,
+  void BatchUpdateWithDup(uint64_t batchSize, const UidType* uid,
                           const Func& updateFunc) {
-    std::vector<T> out(uid.size());
-    BatchUpdateWithDup(uid, updateFunc, out);
+    std::vector<T> out(batchSize);
+    BatchUpdateWithDup(batchSize, uid, updateFunc, &out[0]);
   }
 };
 };  // namespace ODSL::LinearORAM
