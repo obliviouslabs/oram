@@ -1052,7 +1052,7 @@ void ecall_omap_perf() {
     // testOmpSpeedup();
     testParOMapPerfDiffCond();
     // testParOMapPerf(5e6, 32);
-    // testParOMapPerfDeferWriteBack(5e6, 16);
+    // testParOMapPerfDeferWriteBack(5e6, 32);
     // testCuckooOMapPerf();
     // testCuckooOMapPerfDiffCond();
     // testParCuckooOMapPerf(8);

@@ -387,7 +387,7 @@ void ParBitonicSortSepPayload(KeyIterator keyBegin, KeyIterator keyEnd,
                               PayloadIterator payloadBegin, int numThreads,
                               bool dire) {
   size_t size = keyEnd - keyBegin;
-  size_t maxThread = size * (sizeof(*keyBegin) + sizeof(*payloadBegin)) >> 18;
+  size_t maxThread = size * (sizeof(*keyBegin) + sizeof(*payloadBegin)) >> 17;
   numThreads = std::min((uint64_t)numThreads, maxThread);
   int logNumThreads = GetLogBaseTwo(numThreads);
   numThreads = 1UL << logNumThreads;
@@ -398,7 +398,7 @@ void ParBitonicSortSepPayload(KeyIterator keyBegin, KeyIterator keyEnd,
     for (int i = 1; i < numThreads; ++i) {
       threadSize[i] += threadSize[i - 1];
     }
-    #pragma omp parallel for num_threads(numThreads)
+    #pragma omp parallel for num_threads(numThreads) schedule(static, 1)
     for (int i = 0; i < numThreads; ++i) {
       size_t leftOffset = i == 0 ? 0 : threadSize[i - 1];
       size_t rightOffset = threadSize[i];
