@@ -20,12 +20,12 @@ struct CuckooHashMapIndexer {
   }
 
   PositionType getHashIdx0(const K& key) const {
-    uint64_t h0 = secure_hash_with_salt((uint8_t*)&key, sizeof(K), salts[0]);
+    uint64_t h0 = secure_hash_with_salt(key, salts[0]);
     return h0 % _size;
   }
 
   PositionType getHashIdx1(const K& key) const {
-    uint64_t h1 = secure_hash_with_salt((uint8_t*)&key, sizeof(K), salts[1]);
+    uint64_t h1 = secure_hash_with_salt(key, salts[1]);
     return h1 % _size;
   }
 };
