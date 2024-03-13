@@ -420,51 +420,5 @@ uint8_t RandGen::rand1() {
 void read_rand(uint8_t *output, size_t size) { sgx_read_rand(output, size); }
 
 // Inside SGX enclave
-#include <cstring>
-
-#include "sgx_tcrypto.h"
-#include "sgx_trts.h"
-
-uint64_t secure_hash_with_salt(const uint8_t *data, size_t data_size,
-                               const uint8_t (&salt)[16]) {
-  sgx_sha_state_handle_t sha_handle;
-  sgx_sha256_hash_t hash;
-  uint64_t result = 0;
-
-  sgx_status_t status = sgx_sha256_init(&sha_handle);
-  if (status != SGX_SUCCESS) {
-    // Handle error
-    return 0;
-  }
-
-  // Hash the salt
-  status = sgx_sha256_update(salt, sizeof(salt), sha_handle);
-  if (status != SGX_SUCCESS) {
-    // Handle error
-    sgx_sha256_close(sha_handle);
-    return 0;
-  }
-
-  // Hash the data
-  status = sgx_sha256_update(data, data_size, sha_handle);
-  if (status != SGX_SUCCESS) {
-    // Handle error
-    sgx_sha256_close(sha_handle);
-    return 0;
-  }
-
-  // Finalize the hash
-  status = sgx_sha256_get_hash(sha_handle, &hash);
-  sgx_sha256_close(sha_handle);
-  if (status != SGX_SUCCESS) {
-    // Handle error
-    return 0;
-  }
-
-  // Use the first 8 bytes of the hash as the result
-  memcpy(&result, hash, sizeof(result));
-
-  return result;
-}
 
 #endif

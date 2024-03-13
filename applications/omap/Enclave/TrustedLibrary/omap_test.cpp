@@ -113,6 +113,36 @@ void testOmpSpeedup() {
   printf("speedup for floating point benchmark (cpu intensive task) = %f\n",
          (double)timediffOneThread / timediffMultipleThread);
 
+  printf("\nHash benchmark\n");
+  ocall_measure_time(&start);
+  struct Key {
+    uint8_t key[20];
+  };
+  Key k;
+  uint8_t salt[16];
+  for (int i = 0; i < maxThread; ++i) {
+    for (int i = 0; i < 1e5; ++i) {
+      uint64_t hash = secure_hash_with_salt(k, salt);
+    }
+  }
+  ocall_measure_time(&end);
+  timediffOneThread = end - start;
+  printf("one thread %f s\n", (double)timediffOneThread * 1e-9);
+
+  ocall_measure_time(&start);
+#pragma omp parallel for schedule(static)
+  for (int i = 0; i < maxThread; ++i) {
+    for (int i = 0; i < 1e5; ++i) {
+      uint64_t hash = secure_hash_with_salt(k, salt);
+    }
+  }
+  ocall_measure_time(&end);
+  timediffMultipleThread = end - start;
+  printf("%d thread %f s\n", omp_get_max_threads(),
+         (double)timediffMultipleThread * 1e-9);
+  printf("speedup for hash benchmark (cpu intensive task) = %f\n",
+         (double)timediffOneThread / timediffMultipleThread);
+
   printf("\nSgx PRNG benchmark\n");
   ocall_measure_time(&start);
   uint64_t sumRand = 0;
@@ -884,11 +914,11 @@ void testParOMapPerfDeferWriteBack(size_t mapSize = 5e6,
   omap.Init();
   ocall_measure_time(&end);
   uint64_t initTimediff = end - start;
-  for (uint32_t batchSize : {100, 200, 500, 1000, 2000, 5000, 10000}) {
+  for (uint32_t batchSize : {100, 200, 500, 1000, 2000, 5000, 10000, 20000, 50000, 100000}) {
     printf("mapSize = %u, threadCount = %d, batchSize = %u\n", mapSize,
            threadCount, batchSize);
     printf("oram init time %f s\n", initTimediff * 1e-9);
-    int round = 5e5;
+    int round = 1e6;
     uint64_t queryTimediff = 0;
 
     ocall_measure_time(&start);
@@ -1020,9 +1050,9 @@ void ecall_omap_perf() {
       new EM::Backend::MemServerBackend(BackendSize);
   try {
     // testOmpSpeedup();
-    // testParOMapPerfDiffCond();
+    testParOMapPerfDiffCond();
     // testParOMapPerf(5e6, 32);
-    testParOMapPerfDeferWriteBack(5e6, 16);
+    // testParOMapPerfDeferWriteBack(5e6, 16);
     // testCuckooOMapPerf();
     // testCuckooOMapPerfDiffCond();
     // testParCuckooOMapPerf(8);

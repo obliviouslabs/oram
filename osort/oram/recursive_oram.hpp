@@ -305,10 +305,10 @@ struct RecursiveORAM {
         uid /= fan_out;
       }
     }
+    
     std::vector<PositionType> pos(address.size(), 0);
     std::vector<PositionType> nextPos(address.size());
-    // std::vector<PositionType> newPos(address.size());
-    // std::vector<InternalNode> node(address.size());
+
     for (int level = 0; level < oramSizes.size() - 1; ++level) {
       PositionType* nextNewPos = writeBackBuffer.GetNewPoses(level + 1);
       InternalNode* node = writeBackBuffer.GetInternalNodes(level);
@@ -341,11 +341,6 @@ struct RecursiveORAM {
           obliMove(match, node[i].children[j], nextNewPos[i]);
         }
       }
-
-      // defer write back using omp task with lowest priority
-      // internalOrams[level].BatchWriteBack(
-      //     uids[level], newPoses[level], node,
-      //     std::vector<bool>(address.size(), true));
 
       std::swap(pos, nextPos);
     }
