@@ -223,15 +223,62 @@ struct RecursiveORAM {
   }
 
   struct WriteBackBuffer {
-    std::vector<std::vector<UidType>> uids;
-    std::vector<std::vector<PositionType>> newPoses;
-    std::vector<std::vector<InternalNode>> internalNodes;
-    std::vector<LeafNode> leafNodes;
-    void clear() {
-      uids.clear();
-      newPoses.clear();
-      internalNodes.clear();
-      leafNodes.clear();
+    UidType* uids;
+    PositionType* newPoses;
+    InternalNode* internalNodes;
+    LeafNode* leafNodes;
+    uint8_t* buffer = NULL;
+    size_t bufferSize = 0;
+    int numLevel;
+    uint64_t batchSize;
+    void Init(int numLevel, uint64_t batchSize) {
+      uint64_t allBatchSize = batchSize * numLevel;
+      uint64_t offset = 0;
+      uint64_t uidOffset = offset;
+      offset += sizeof(UidType) * allBatchSize;
+      offset = (offset + 7) / 8 * 8; // align to 8 bytes
+      uint64_t newPosOffset = offset;
+      offset += sizeof(PositionType) * allBatchSize;
+      offset = (offset + 7) / 8 * 8; // align to 8 bytes
+      uint64_t internalNodeOffset = offset;
+      offset += sizeof(InternalNode) * batchSize * (numLevel - 1);
+      offset = (offset + 7) / 8 * 8; // align to 8 bytes
+      uint64_t leafNodeOffset = offset;
+      offset += sizeof(LeafNode) * batchSize;
+      if (bufferSize < offset) {
+        if (buffer != NULL) {
+          free(buffer);
+        }
+        buffer = (uint8_t*)malloc(offset);
+        bufferSize = offset;
+      }
+      uids = (UidType*)(buffer + uidOffset);
+      newPoses = (PositionType*)(buffer + newPosOffset);
+      internalNodes = (InternalNode*)(buffer + internalNodeOffset);
+      leafNodes = (LeafNode*)(buffer + leafNodeOffset);
+      this->numLevel = numLevel;
+      this->batchSize = batchSize;
+      memset(newPoses, 0, sizeof(PositionType) * batchSize); // first level of new pos is always 0
+    }
+
+    INLINE UidType* GetUids(int level) {
+      return uids + level * batchSize;
+    }
+
+    INLINE PositionType* GetNewPoses(int level) {
+      return newPoses + level * batchSize;
+    }
+
+    INLINE InternalNode* GetInternalNodes(int level) {
+      return internalNodes + level * batchSize;
+    }
+
+    INLINE LeafNode* GetLeafNodes() { return leafNodes; }
+
+    ~WriteBackBuffer() {
+      if (buffer != NULL) {
+        free(buffer);
+      }
     }
   };
 
@@ -244,26 +291,16 @@ struct RecursiveORAM {
     // printf("Access %lu\n", address);
     _lock.lock();
     Assert(hasInited);
-    writeBackBuffer.clear();
-    std::vector<std::vector<UidType>>& uids = writeBackBuffer.uids;
-    uids.resize(oramSizes.size(), std::vector<UidType>(address.size()));
-    std::vector<std::vector<short>> indices(
-        oramSizes.size(), std::vector<short>(address.size(), 0));
-    std::vector<std::vector<PositionType>>& newPoses = writeBackBuffer.newPoses;
-    newPoses.resize(oramSizes.size(),
-                    std::vector<PositionType>(address.size()));
-    std::vector<std::vector<InternalNode>>& internalNodes =
-        writeBackBuffer.internalNodes;
-    internalNodes.resize(oramSizes.size() - 1,
-                         std::vector<InternalNode>(address.size()));
-    std::vector<LeafNode>& leafNodes = writeBackBuffer.leafNodes;
-    leafNodes.resize(address.size());
+    int numLevel = oramSizes.size();
+    size_t batchSize = address.size();
+    writeBackBuffer.Init(numLevel, batchSize);
+    std::vector<short> indices(numLevel * batchSize);
     for (size_t i = 0; i < address.size(); ++i) {
       UidType uid = address[i] / chunk_size;
       short index = address[i] % chunk_size;
       for (int level = oramSizes.size() - 1; level >= 0; --level) {
-        uids[level][i] = uid;
-        indices[level][i] = index;
+        writeBackBuffer.GetUids(level)[i] = uid;
+        indices[level * batchSize + i] = index;
         index = uid % fan_out;
         uid /= fan_out;
       }
@@ -273,16 +310,15 @@ struct RecursiveORAM {
     // std::vector<PositionType> newPos(address.size());
     // std::vector<InternalNode> node(address.size());
     for (int level = 0; level < oramSizes.size() - 1; ++level) {
-      // std::vector<PositionType>& newPos = newPoses[level];
-
-      std::vector<PositionType>& nextNewPos = newPoses[level + 1];
-      std::vector<InternalNode>& node = internalNodes[level];
+      PositionType* nextNewPos = writeBackBuffer.GetNewPoses(level + 1);
+      InternalNode* node = writeBackBuffer.GetInternalNodes(level);
+      UidType* uids = writeBackBuffer.GetUids(level);
       for (size_t i = 0; i < address.size(); ++i) {
         nextNewPos[i] = UniformRandom(oramSizes[level + 1] - 1);
       }
 
-      internalOrams[level].BatchReadAndRemove(address.size(), &pos[0], &uids[level][0], &node[0]);
-
+      internalOrams[level].BatchReadAndRemove(address.size(), &pos[0], uids, node);
+      uint64_t indexOffset = level * batchSize;
       for (int64_t i = address.size() - 1; i >= 0; --i) {
         // in case of duplicate uid we need to copy what we've updated to
         // maintain consistency scan backward since only the first duplicate
@@ -290,17 +326,17 @@ struct RecursiveORAM {
 
         // we first read the positions of the next level
         for (short j = 0; j < fan_out; ++j) {
-          bool match = j == indices[level][i];
+          bool match = j == indices[indexOffset + i];
           obliMove(match, nextPos[i], node[i].children[j]);
         }
         // then duplicate what we already updated
         if (i != address.size() - 1) {
-          bool copyFlag = uids[level][i] == uids[level][i + 1];
+          bool copyFlag = uids[i] == uids[i + 1];
           obliMove(copyFlag, node[i], node[i + 1]);
         }
         // and finally update the node to point to the new children
         for (short j = 0; j < fan_out; ++j) {
-          bool match = j == indices[level][i];
+          bool match = j == indices[indexOffset + i];
 
           obliMove(match, node[i].children[j], nextNewPos[i]);
         }
@@ -314,15 +350,15 @@ struct RecursiveORAM {
       std::swap(pos, nextPos);
     }
 
-    leafOram.BatchReadAndRemove(address.size(), &pos[0], &uids.back()[0], &leafNodes[0]);
+    leafOram.BatchReadAndRemove(address.size(), &pos[0], writeBackBuffer.GetUids(numLevel - 1), writeBackBuffer.GetLeafNodes());
     std::vector<T> data(address.size());
-
-    const std::vector<short>& index = indices.back();
+    LeafNode* leafNodes = writeBackBuffer.GetLeafNodes();
+    uint64_t indexOffset = (numLevel - 1) * batchSize;
     for (size_t i = 0; i < address.size(); ++i) {
       if constexpr (chunk_size == 1) {
         data[i] = leafNodes[i].data[0];
       } else {
-        short idx = index[i];
+        short idx = indices[indexOffset + i];
         for (short j = 0; j < chunk_size; ++j) {
           obliMove(j == idx, data[i], leafNodes[i].data[j]);
         }
@@ -334,7 +370,7 @@ struct RecursiveORAM {
       if constexpr (chunk_size == 1) {
         leafNodes[i].data[0] = data[i];
       } else {
-        short idx = index[i];
+        short idx = indices[indexOffset + i];
         for (short j = 0; j < chunk_size; ++j) {
           obliMove(j == idx, leafNodes[i].data[j], data[i]);
         }
@@ -343,17 +379,18 @@ struct RecursiveORAM {
   }
 
   void WriteBack(WriteBackBuffer& writeBackBuffer) {
-    uint64_t batchSize = writeBackBuffer.uids[0].size();
-    for (int level = 0; level < oramSizes.size() - 1; ++level) {
+    uint64_t batchSize = writeBackBuffer.batchSize;
+    int numLevel = writeBackBuffer.numLevel;
+    for (int level = 0; level < numLevel - 1; ++level) {
       internalOrams[level].BatchWriteBack(batchSize,
-          &writeBackBuffer.uids[level][0], &writeBackBuffer.newPoses[level][0],
-          &writeBackBuffer.internalNodes[level][0],
-          std::vector<bool>(writeBackBuffer.uids[level].size(), true));
+          writeBackBuffer.GetUids(level), writeBackBuffer.GetNewPoses(level),
+          writeBackBuffer.GetInternalNodes(level),
+          std::vector<bool>(batchSize, true));
     }
     leafOram.BatchWriteBack(
-        batchSize, &writeBackBuffer.uids.back()[0], &writeBackBuffer.newPoses.back()[0],
-        &writeBackBuffer.leafNodes[0],
-        std::vector<bool>(writeBackBuffer.uids.back().size(), true));
+        batchSize, writeBackBuffer.GetUids(numLevel - 1), writeBackBuffer.GetNewPoses(numLevel - 1),
+        writeBackBuffer.GetLeafNodes(),
+        std::vector<bool>(batchSize, true));
     _lock.unlock();
   }
 
