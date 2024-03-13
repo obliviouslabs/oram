@@ -5,7 +5,7 @@ namespace ODSL {
 template <typename K, typename PositionType = uint64_t>
 struct CuckooHashMapIndexer {
   static constexpr int saltLength = 16;
-  uint8_t salts[2][saltLength];
+  uint8_t salts[saltLength];
   PositionType _size;
 
   CuckooHashMapIndexer() {}
@@ -14,19 +14,32 @@ struct CuckooHashMapIndexer {
 
   void SetSize(PositionType size) {
     _size = size;
-    for (int i = 0; i < 2; ++i) {
-      read_rand(salts[i], saltLength);
-    }
+    read_rand(salts, saltLength);
+  }
+
+  struct HashIndices {
+    uint64_t h0;
+    uint64_t h1;
+  };
+
+  void getHashIndices(const K& key, PositionType& pos0, PositionType& pos1) const {
+    
+    HashIndices hashIndices;
+    secure_hash_with_salt(key, salts, (uint8_t*)&hashIndices, sizeof(hashIndices));
+    pos0 = hashIndices.h0 % _size;
+    pos1 = hashIndices.h1 % _size;
   }
 
   PositionType getHashIdx0(const K& key) const {
-    uint64_t h0 = secure_hash_with_salt(key, salts[0]);
-    return h0 % _size;
+    PositionType pos0, pos1;
+    getHashIndices(key, pos0, pos1);
+    return pos0;
   }
 
   PositionType getHashIdx1(const K& key) const {
-    uint64_t h1 = secure_hash_with_salt(key, salts[1]);
-    return h1 % _size;
+    PositionType pos0, pos1;
+    getHashIndices(key, pos0, pos1);
+    return pos1;
   }
 };
 
@@ -379,7 +392,8 @@ struct CuckooHashMap {
       return found & !isDummy;
     } else {
       bool found = false;
-      PositionType idx0 = indexer.getHashIdx0(key);
+      PositionType idx0, idx1;
+      indexer.getHashIndices(key, idx0, idx1);
 
       obliMove(isDummy, idx0, (PositionType)UniformRandom(tableSize - 1));
 
@@ -387,7 +401,6 @@ struct CuckooHashMap {
       readHelper(idx0, table0, bucket);
       found = searchBucket(key, value, bucket);
 
-      PositionType idx1 = indexer.getHashIdx1(key);
       obliMove(isDummy, idx1, (PositionType)UniformRandom(tableSize - 1));
       readHelper(idx1, table1, bucket);
       found |= searchBucket(key, value, bucket);
@@ -427,20 +440,12 @@ struct CuckooHashMap {
 
 
 template <class KeyIter, class ValResIter>
-  void findTableBatchDeferWriteBack(int tableNum, const KeyIter keyBegin, const KeyIter keyEnd, ValResIter valResBegin) {
+  void findTableBatchDeferWriteBack(int tableNum, const KeyIter keyBegin, const KeyIter keyEnd, ValResIter valResBegin, std::vector<PositionType>& hashIndices) {
     static_assert(isOblivious);
+    
     Assert(tableNum == 0 || tableNum == 1);
+    Assert(hashIndices.size() == keySize);
     size_t keySize = std::distance(keyBegin, keyEnd);
-    std::vector<PositionType> hashIndices(keySize);
-    if (tableNum == 0) {
-      for (size_t i = 0; i < keySize; ++i) {
-        hashIndices[i] = indexer.getHashIdx0(*(keyBegin + i));
-      }
-    } else {
-      for (size_t i = 0; i < keySize; ++i) {
-        hashIndices[i] = indexer.getHashIdx1(*(keyBegin + i));
-      }
-    }
     std::vector<PositionType> recoveryVec(keySize);
     for (PositionType i = 0; i < keySize; ++i) {
       recoveryVec[i] = i;
@@ -474,10 +479,15 @@ template <class KeyIter, class ValResIter>
       const KeyIter keyBegin, const KeyIter keyEnd, ValResIter valResBegin) {
     size_t keySize = std::distance(keyBegin, keyEnd);
     std::vector<std::vector<ValResult>> valResTables(2, std::vector<ValResult>(keySize));
+    std::vector<std::vector<PositionType>> hashIndices(2, std::vector<PositionType>(keySize));
 
+    for (size_t i = 0; i < keySize; ++i) {
+      indexer.getHashIndices(*(keyBegin + i), hashIndices[0][i], hashIndices[1][i]);
+    }
+    
     #pragma omp parallel for num_threads(2) schedule(static, 1)
     for (int i = 0; i < 2; ++i) {
-      findTableBatchDeferWriteBack(i, keyBegin, keyEnd, valResTables[i].begin());
+      findTableBatchDeferWriteBack(i, keyBegin, keyEnd, valResTables[i].begin(), hashIndices[i]);
     }
 
     for (size_t i = 0; i < keySize; ++i) {

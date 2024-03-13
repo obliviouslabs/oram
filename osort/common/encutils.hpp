@@ -100,7 +100,7 @@ uint64_t secure_hash_with_salt(const T& data,
 
 template <typename T>
 void secure_hash_with_salt(const T& data,
-                               const uint8_t (&salt)[16], void* res, uint8_t resSize) {
+                               const uint8_t (&salt)[16], uint8_t* res, uint32_t resSize) {
   const size_t data_size = sizeof(T);
   EVP_MD_CTX *mdctx = EVP_MD_CTX_new();
   uint64_t result = 0;
@@ -126,7 +126,7 @@ void secure_hash_with_salt(const T& data,
   }
 
   // Hash the data
-  if (1 != EVP_DigestUpdate(mdctx, data, data_size)) {
+  if (1 != EVP_DigestUpdate(mdctx, &data, data_size)) {
     // Handle error
     EVP_MD_CTX_free(mdctx);
     return;
@@ -140,7 +140,7 @@ void secure_hash_with_salt(const T& data,
   }
 
   // Use the first 8 bytes of the hash as the result
-  memcpy(&res, hash, resSize);
+  memcpy(res, hash, resSize);
 
   EVP_MD_CTX_free(mdctx);
 }
