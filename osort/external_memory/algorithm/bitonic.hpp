@@ -340,77 +340,78 @@ void ParBitonicMergeSepPayload(KeyIterator keyBegin, KeyIterator keyEnd,
   }
 }
 
+INLINE static bool parity(int x) {
+  x ^= x >> 16;
+  x ^= x >> 8;
+  x ^= x >> 4;
+  x ^= x >> 2;
+  x ^= x >> 1;
+  return x & 1;
+}
+
+template <class Iterator>
+void GetThreadSize(Iterator begin, Iterator end, uint64_t size) {
+  int numThreads = end - begin;
+  if (numThreads == 0) {
+    return;
+  }
+  if (numThreads == 1) {
+    *begin = size;
+    return;
+  }
+  size_t halfSize = size / 2;
+  Iterator mid = begin + numThreads / 2;
+  GetThreadSize(begin, mid, halfSize);
+  GetThreadSize(mid, end, size - halfSize);
+}
+
+template <class KeyIterator, class PayloadIterator>
+void ParBitonicSortSepPayloadRecursiveMerge(KeyIterator keyBegin, KeyIterator keyEnd,
+                              PayloadIterator payloadBegin, int numThreads,
+                              bool dire) {
+  uint64_t size = keyEnd - keyBegin;
+  if (numThreads > 1 && size > 1) {
+    size_t halfSize = size / 2;
+    KeyIterator mid = keyBegin + halfSize;
+    PayloadIterator midPayload = payloadBegin + halfSize;
+    int leftThreads = numThreads / 2;
+    int rightThreads = numThreads - leftThreads;
+    ParBitonicSortSepPayloadRecursiveMerge(keyBegin, mid, payloadBegin, leftThreads, !dire);
+    ParBitonicSortSepPayloadRecursiveMerge(mid, keyEnd, midPayload, rightThreads, dire);
+    BitonicMergeSepPayload(keyBegin, keyEnd, payloadBegin, dire);
+  }
+}
+
 template <class KeyIterator, class PayloadIterator>
 void ParBitonicSortSepPayload(KeyIterator keyBegin, KeyIterator keyEnd,
                               PayloadIterator payloadBegin, int numThreads,
                               bool dire) {
+  size_t size = keyEnd - keyBegin;
+  size_t maxThread = size * (sizeof(*keyBegin) + sizeof(*payloadBegin)) >> 18;
+  numThreads = std::min((uint64_t)numThreads, maxThread);
+  int logNumThreads = GetLogBaseTwo(numThreads);
+  numThreads = 1UL << logNumThreads;
   if (numThreads > 1) {
-    size_t size = keyEnd - keyBegin;
-    if (size > 1) {
-      size_t halfSize = size / 2;
-      KeyIterator keyMid = keyBegin + halfSize;
-      PayloadIterator payloadMid = payloadBegin + halfSize;
-      int leftThreads = numThreads / 2;
-      int rightThreads = numThreads - leftThreads;
-#pragma omp task
-      {
-        ParBitonicSortSepPayload(keyBegin, keyMid, payloadBegin, leftThreads,
-                                 !dire);
-      }
-#pragma omp task
-      {
-        ParBitonicSortSepPayload(keyMid, keyEnd, payloadMid, rightThreads,
-                                 dire);
-      }
-#pragma omp taskwait
-      ParBitonicMergeSepPayload(keyBegin, keyEnd, payloadBegin, numThreads,
-                                dire);
+    std::vector<uint64_t> threadSize(numThreads);
+    GetThreadSize(threadSize.begin(), threadSize.end(), size);
+    // prefix sum
+    for (int i = 1; i < numThreads; ++i) {
+      threadSize[i] += threadSize[i - 1];
     }
+    #pragma omp parallel for num_threads(numThreads)
+    for (int i = 0; i < numThreads; ++i) {
+      size_t leftOffset = i == 0 ? 0 : threadSize[i - 1];
+      size_t rightOffset = threadSize[i];
+      KeyIterator threadKeyBegin = keyBegin + leftOffset;
+      KeyIterator threadKeyEnd = keyBegin + rightOffset;
+      PayloadIterator threadPayloadBegin = payloadBegin + leftOffset;
+      BitonicSortSepPayload(threadKeyBegin, threadKeyEnd, threadPayloadBegin, dire != parity(i) ^ (logNumThreads & 1));
+    }
+    ParBitonicSortSepPayloadRecursiveMerge(keyBegin, keyEnd, payloadBegin, numThreads, dire);
   } else {
     BitonicSortSepPayload(keyBegin, keyEnd, payloadBegin, dire);
   }
 }
-
-// template <class KeyIterator, class PayloadIterator>
-// void ParForBitonicSortSepPayload(KeyIterator keyBegin, KeyIterator keyEnd,
-//                               PayloadIterator payloadBegin, int numThreads,
-//                               bool dire) {
-//   size_t size = keyEnd - keyBegin;
-//   numThreads = std::min(numThreads, size / 1000);
-//   if (numThreads > 1) {
-//     size_t keyRangeSize = divRoundUp(size, numThreads);
-//     #pragma omp parallel for
-//     for (int i = 0; i < numThreads; ++i) {
-//       size_t leftOffset = std::min(i * keyRangeSize, size);
-//       size_t rightOffset = std::min(leftOffset + keyRangeSize, size);
-//       KeyIterator threadKeyBegin = keyBegin + leftOffset;
-//       KeyIterator threadKeyEnd = keyBegin + rightOffset;
-//       PayloadIterator threadPayloadBegin = payloadBegin + leftOffset;
-//       ParForBitonicSortSepPayload(threadKeyBegin, threadKeyEnd, threadPayloadBegin, dire == (i & 1));
-//     }
-// //       size_t halfSize = size / 2;
-// //       KeyIterator keyMid = keyBegin + halfSize;
-// //       PayloadIterator payloadMid = payloadBegin + halfSize;
-// //       int leftThreads = numThreads / 2;
-// //       int rightThreads = numThreads - leftThreads;
-// // #pragma omp task
-// //       {
-// //         ParBitonicSortSepPayload(keyBegin, keyMid, payloadBegin, leftThreads,
-// //                                  !dire);
-// //       }
-// // #pragma omp task
-// //       {
-// //         ParBitonicSortSepPayload(keyMid, keyEnd, payloadMid, rightThreads,
-// //                                  dire);
-// //       }
-// // #pragma omp taskwait
-//       ParBitonicMergeSepPayload(keyBegin, keyEnd, payloadBegin, numThreads,
-//                                 dire);
-    
-//   } else {
-//     BitonicSortSepPayload(keyBegin, keyEnd, payloadBegin, dire);
-//   }
-// }
 
 template <class KeyIterator, class PayloadIterator>
 void ParBitonicSortSepPayload(KeyIterator keyBegin, KeyIterator keyEnd,
@@ -427,8 +428,6 @@ void ParBitonicMergePow2CustomSwap(KeyIterator keyBegin, KeyIterator keyEnd,
     size_t halfSize = size / 2;
     KeyIterator midIt = keyBegin + halfSize;
     uint64_t midIdx = beginIdx + halfSize;
-    // int chunkSize = divRoundUp(halfSize, numThreads);
-    // #pragma omp for schedule(static, chunkSize)
     for (size_t i = 0; i < halfSize; ++i) {
       KeyIterator leftKeyIt = keyBegin + i;
       KeyIterator rightKeyIt = midIt + i;

@@ -531,13 +531,37 @@ TEST(TestSort, TestParBitonicSepPayload) {
       keys[i] = UniformRandom() % 1000000 * 13;
       payloads[i] = -keys[i] * 2;
     }
-    #pragma omp parallel 
-    {
-      #pragma omp single
-      {
+    // #pragma omp parallel 
+    // {
+    //   #pragma omp single
+    //   {
 ParBitonicSortSepPayload(keys.begin(), keys.end(), payloads.begin(), 8);
-      }
+    //   }
+    // }
+    
+    for (size_t i = 0; i < n; ++i) {
+      ASSERT_EQ(keys[i], -payloads[i] / 2);
+      ASSERT_EQ(keys[i] % 13, 0);
     }
+    for (size_t i = 1; i < n; ++i) {
+      ASSERT_LE(keys[i - 1], keys[i]);
+    }
+  }
+}
+
+TEST(TestSort, TestParBitonicSepPayloadPerf) {
+  for (size_t i = 0; i < 400; ++i) {
+    size_t n = i * 1000 + 1;
+    vector<uint64_t> keys(n);
+    vector<uint64_t> payloads(n);
+    for (size_t i = 0; i < n; ++i) {
+      keys[i] = UniformRandom() % 1000000 * 13;
+      payloads[i] = -keys[i] * 2;
+    }
+ 
+  ParBitonicSortSepPayload(keys.begin(), keys.end(), payloads.begin(), 8);
+      
+    
     
     for (size_t i = 0; i < n; ++i) {
       ASSERT_EQ(keys[i], -payloads[i] / 2);
