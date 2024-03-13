@@ -375,15 +375,12 @@ struct ParOMap {
     using ValResult = BaseMap::ValResult;
     std::vector<ValResult> resultVec(shardCount * shardSize);
 
-#pragma omp parallel num_threads(shardCount)
-    {
-#pragma omp for schedule(static)
-      for (uint64_t i = 0; i < shardCount; ++i) {
+#pragma omp parallel for schedule(static)
+      for (uint32_t i = 0; i < shardCount; ++i) {
             shards[i].findBatchDeferWriteBack(
                 keyVec.begin() + i * shardSize,
                 keyVec.begin() + (i + 1) * shardSize, resultVec.begin() + i * shardSize);
       }
-    }
 
 
     EM::Algorithm::OrCompactSeparateMark(

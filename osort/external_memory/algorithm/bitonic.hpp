@@ -371,6 +371,47 @@ void ParBitonicSortSepPayload(KeyIterator keyBegin, KeyIterator keyEnd,
   }
 }
 
+// template <class KeyIterator, class PayloadIterator>
+// void ParForBitonicSortSepPayload(KeyIterator keyBegin, KeyIterator keyEnd,
+//                               PayloadIterator payloadBegin, int numThreads,
+//                               bool dire) {
+//   size_t size = keyEnd - keyBegin;
+//   numThreads = std::min(numThreads, size / 1000);
+//   if (numThreads > 1) {
+//     size_t keyRangeSize = divRoundUp(size, numThreads);
+//     #pragma omp parallel for
+//     for (int i = 0; i < numThreads; ++i) {
+//       size_t leftOffset = std::min(i * keyRangeSize, size);
+//       size_t rightOffset = std::min(leftOffset + keyRangeSize, size);
+//       KeyIterator threadKeyBegin = keyBegin + leftOffset;
+//       KeyIterator threadKeyEnd = keyBegin + rightOffset;
+//       PayloadIterator threadPayloadBegin = payloadBegin + leftOffset;
+//       ParForBitonicSortSepPayload(threadKeyBegin, threadKeyEnd, threadPayloadBegin, dire == (i & 1));
+//     }
+// //       size_t halfSize = size / 2;
+// //       KeyIterator keyMid = keyBegin + halfSize;
+// //       PayloadIterator payloadMid = payloadBegin + halfSize;
+// //       int leftThreads = numThreads / 2;
+// //       int rightThreads = numThreads - leftThreads;
+// // #pragma omp task
+// //       {
+// //         ParBitonicSortSepPayload(keyBegin, keyMid, payloadBegin, leftThreads,
+// //                                  !dire);
+// //       }
+// // #pragma omp task
+// //       {
+// //         ParBitonicSortSepPayload(keyMid, keyEnd, payloadMid, rightThreads,
+// //                                  dire);
+// //       }
+// // #pragma omp taskwait
+//       ParBitonicMergeSepPayload(keyBegin, keyEnd, payloadBegin, numThreads,
+//                                 dire);
+    
+//   } else {
+//     BitonicSortSepPayload(keyBegin, keyEnd, payloadBegin, dire);
+//   }
+// }
+
 template <class KeyIterator, class PayloadIterator>
 void ParBitonicSortSepPayload(KeyIterator keyBegin, KeyIterator keyEnd,
                               PayloadIterator payloadBegin, int numThreads) {

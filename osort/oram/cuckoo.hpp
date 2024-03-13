@@ -475,7 +475,7 @@ template <class KeyIter, class ValResIter>
     size_t keySize = std::distance(keyBegin, keyEnd);
     std::vector<std::vector<ValResult>> valResTables(2, std::vector<ValResult>(keySize));
 
-    // #pragma omp parallel for num_threads(2) schedule(static, 1)
+    #pragma omp parallel for num_threads(2) schedule(static, 1)
     for (int i = 0; i < 2; ++i) {
       findTableBatchDeferWriteBack(i, keyBegin, keyEnd, valResTables[i].begin());
     }
