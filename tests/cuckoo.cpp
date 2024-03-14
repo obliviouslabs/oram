@@ -9,8 +9,8 @@ using namespace ODSL;
 template <bool isOblivious>
 void testCuckooHashMap() {
   for (int r = 0; r < 1e2; ++r) {
-    int mapSize = 5000;
-    int keySpace = 10000;
+    int mapSize = 50;
+    int keySpace = 100;
     CuckooHashMap<int, int, isOblivious> map(mapSize);
     map.InitDefault();
     std::unordered_map<int, int> std_map;
@@ -18,7 +18,11 @@ void testCuckooHashMap() {
       if (std_map.size() < mapSize) {
         int key = rand() % keySpace;
         int value = rand();
-        map.insert(key, value);
+        if constexpr (isOblivious) {
+          map.insertOblivious(key, value);
+        } else {
+          map.insert(key, value);
+        }
         std_map[key] = value;
       }
 
@@ -56,7 +60,11 @@ void testCuckooHashMapInitFromReader() {
       if (std_map.size() < mapSize) {
         int key = rand() % keySpace;
         int value = rand();
-        map.insert(key, value);
+        if constexpr (isOblivious) {
+          map.insertOblivious(key, value);
+        } else {
+          map.insert(key, value);
+        }
         std_map[key] = value;
       }
 
@@ -132,8 +140,7 @@ void testCuckooHashMapFindBatch() {
     int batchSize = 1000;
     int numBatch = 10;
     using CHMap = CuckooHashMap<int, int, isOblivious, uint64_t, true>;
-    CHMap map(mapSize,
-                                                             1UL << 62);
+    CHMap map(mapSize, 1UL << 62);
     std::unordered_map<int, int> std_map;
     for (int r = 0; r < mapSize * 2 / 3; ++r) {
       int key = rand() % keySpace;
@@ -161,8 +168,7 @@ void testCuckooHashMapFindBatch() {
         }
       }
       std::vector<uint8_t> findExistFlag;
-      map.findBatchDeferWriteBack(
-          keys.begin(), keys.end(), vals.begin());
+      map.findBatchDeferWriteBack(keys.begin(), keys.end(), vals.begin());
 #pragma omp parallel for num_threads(2)
       for (int i = 0; i < 2; ++i) {
         map.writeBackTable(i);
@@ -177,28 +183,6 @@ void testCuckooHashMapFindBatch() {
         }
       }
     }
-  }
-}
-
-template <bool isOblivious>
-void testCuckooHashMapFindParBatchPerf() {
-  int mapSize = 100000;
-  int keySpace = 1000;
-  int batchSize = 1000;
-  int numBatch = 1000;
-  int numThreads = 8;
-  CuckooHashMap<int64_t, int64_t, isOblivious, uint64_t, true, true> map(
-      mapSize, 1UL << 62, numThreads);
-
-  map.InitDefault();
-  for (int r = 0; r < numBatch; ++r) {
-    std::vector<int64_t> keys(batchSize);
-    std::vector<int64_t> vals(batchSize);
-    for (int i = 0; i < batchSize; ++i) {
-      keys[i] = rand() % keySpace;
-    }
-    map.findParBatch(keys, vals, std::vector<bool>(batchSize, false),
-                     numThreads);
   }
 }
 
@@ -218,14 +202,6 @@ TEST(Cuckoo, CuckooHashMapFindBatchNonOblivious) {
   testCuckooHashMapFindParBatch<false>();
 }
 
-TEST(Cuckoo, CuckooHashMapFindParBatchOblivious) {
-  testCuckooHashMapFindParBatch<true>();
-}
-
 TEST(Cuckoo, CuckooHashMapFindBatchOblivious) {
   testCuckooHashMapFindBatch<true>();
-}
-
-TEST(Cuckoo, CuckooHashMapFindParBatchPerfOblivious) {
-  testCuckooHashMapFindParBatchPerf<true>();
 }

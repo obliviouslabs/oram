@@ -22,10 +22,11 @@ struct CuckooHashMapIndexer {
     uint64_t h1;
   };
 
-  void getHashIndices(const K& key, PositionType& pos0, PositionType& pos1) const {
-    
+  void getHashIndices(const K& key, PositionType& pos0,
+                      PositionType& pos1) const {
     HashIndices hashIndices;
-    secure_hash_with_salt(key, salts, (uint8_t*)&hashIndices, sizeof(hashIndices));
+    secure_hash_with_salt(key, salts, (uint8_t*)&hashIndices,
+                          sizeof(hashIndices));
     pos0 = hashIndices.h0 % _size;
     pos1 = hashIndices.h1 % _size;
   }
@@ -85,6 +86,7 @@ struct CuckooHashMap {
   static constexpr int saltLength = 16;
   static constexpr double loadFactor = 0.7;
   static constexpr short bucketSize = 2;
+  static constexpr int stash_max_size = 10;
   PositionType _size;
   PositionType load;
   PositionType tableSize;
@@ -96,7 +98,8 @@ struct CuckooHashMap {
   //  1024>>;
   TableType table0, table1;
   CuckooHashMapIndexer<K, PositionType> indexer;
-  std::vector<CuckooHashMapEntry<K, V>> stash;
+  using KVEntry = CuckooHashMapEntry<K, V>;
+  std::vector<KVEntry> stash;
 
   struct ValResult {
     V value;
@@ -122,7 +125,7 @@ struct CuckooHashMap {
   void SetSize(PositionType size, uint64_t cacheBytes) {
     _size = size;
     load = 0;
-    tableSize = size / (2 * loadFactor * bucketSize);
+    tableSize = size / (2 * loadFactor * bucketSize) + 1;
     indexer.SetSize(tableSize);
     table0.SetSize(tableSize, cacheBytes / 2);
     table1.SetSize(tableSize, cacheBytes / 2);
@@ -234,26 +237,96 @@ struct CuckooHashMap {
     }
   }
 
-  static bool replaceIfExist(BucketType& bucket, const K& key, const V& value) {
+  static bool replaceIfExist(BucketType& bucket, const KVEntry& entryToInsert) {
     for (int i = 0; i < bucketSize; ++i) {
       auto& entry = bucket.entries[i];
-      if (entry.valid && entry.key == key) {
-        entry = {true, key, value};
+      if (entry.valid && entry.key == entryToInsert.key) {
+        entry = entryToInsert;
         return true;
       }
     }
     return false;
   }
 
-  static bool insertIfEmpty(BucketType& bucket, const K& key, const V& value) {
-    for (int i = 0; i < bucketSize; ++i) {
-      auto& entry = bucket.entries[i];
-      if (!entry.valid) {
-        entry = {true, key, value};
+  static bool replaceIfExist(std::vector<KVEntry>& stash,
+                             const KVEntry& entryToInsert) {
+    for (KVEntry& entry : stash) {
+      if (entry.valid && entry.key == entryToInsert.key) {
+        entry = entryToInsert;
         return true;
       }
     }
     return false;
+  }
+
+  static bool insertIfEmpty(BucketType& bucket, const KVEntry& entryToInsert) {
+    for (int i = 0; i < bucketSize; ++i) {
+      auto& entry = bucket.entries[i];
+      if (!entry.valid) {
+        entry = entryToInsert;
+        return true;
+      }
+    }
+    return false;
+  }
+
+  static bool insertToStash(const KVEntry& entryToInsert,
+                            std::vector<KVEntry>& stash) {
+    if (stash.size() < stash_max_size) {
+      stash.push_back(entryToInsert);
+      return true;
+    }
+    return false;
+  }
+
+  static bool insertToStashOblivious(const KVEntry& entryToInsert,
+                                     std::vector<KVEntry>& stash) {
+    if (stash.size() < stash_max_size) {
+      stash.resize(stash_max_size);
+    }
+    bool inserted = !entryToInsert.valid;
+    for (KVEntry& entry : stash) {
+      bool emptyFlag = !entry.valid;
+      obliMove(emptyFlag & !inserted, entry, entryToInsert);
+      inserted |= emptyFlag;
+    }
+    return inserted;
+  }
+
+  static bool replaceIfExistOblivious(BucketType& bucket,
+                                      const KVEntry& entryToInsert) {
+    bool updated = !entryToInsert.valid;
+    for (int i = 0; i < bucketSize; ++i) {
+      auto& entry = bucket.entries[i];
+      bool matchFlag = entry.valid & entry.key == entryToInsert.key & !updated;
+      obliMove(matchFlag, entry, entryToInsert);
+      updated |= matchFlag;
+    }
+    return updated;
+  }
+
+  static bool replaceIfExistOblivious(std::vector<KVEntry>& stash,
+                                      const KVEntry& entryToInsert) {
+    bool updated = !entryToInsert.valid;
+    for (KVEntry& entry : stash) {
+      bool matchFlag = entry.valid & entry.key == entryToInsert.key & !updated;
+      obliMove(matchFlag, entry, entryToInsert);
+      updated |= matchFlag;
+    }
+    return updated;
+  }
+
+  static bool insertIfEmptyOblivious(BucketType& bucket,
+                                     const KVEntry& entryToInsert) {
+    bool updated = !entryToInsert.valid;
+    for (int i = 0; i < bucketSize; ++i) {
+      auto& entry = bucket.entries[i];
+      bool isEmpty = !entry.valid;
+      bool insertFlag = isEmpty & !updated;
+      obliMove(insertFlag, entry, entryToInsert);
+      updated |= insertFlag;
+    }
+    return updated;
   }
 
   bool insert(const K& key, const V& value, bool isDummy = false) {
@@ -264,67 +337,121 @@ struct CuckooHashMap {
 
     bool inserted = false;
     bool exist = false;
-    K k = key;
-    V v = value;
+    KVEntry entryToInsert = {true, key, value};
     auto table0UpdateFunc = [&](BucketType& bucket0) {
-      if (replaceIfExist(bucket0, k, v)) {
+      if (replaceIfExist(bucket0, entryToInsert)) {
         inserted = true;
         exist = true;
         return;
       }
       PositionType idx1 = indexer.getHashIdx1(key);
       auto table1UpdateFunc = [&](BucketType& bucket1) {
-        if (replaceIfExist(bucket1, k, v)) {
+        if (replaceIfExist(bucket1, entryToInsert)) {
           inserted = true;
           exist = true;
           return;
         }
-        if (insertIfEmpty(bucket0, k, v)) {
+        if (replaceIfExist(stash, entryToInsert)) {
+          exist = true;
+          inserted = true;
+        }
+        if (insertIfEmpty(bucket0, entryToInsert)) {
           inserted = true;
           return;
         }
-        if (insertIfEmpty(bucket1, k, v)) {
+        if (insertIfEmpty(bucket1, entryToInsert)) {
           inserted = true;
           return;
         }
-        std::swap(k, bucket0.entries[0].key);
-        std::swap(v, bucket0.entries[0].value);
+        std::swap(entryToInsert, bucket0.entries[0]);
       };
       updateHelper(idx1, table1, table1UpdateFunc);
     };
     updateHelper(idx0, table0, table0UpdateFunc);
+
     load += !exist;
     if (inserted) {
       return exist;
     }
     int offset;
     auto swapUpdateFunc = [&](BucketType& bucket) {
-      if (insertIfEmpty(bucket, k, v)) {
+      if (insertIfEmpty(bucket, entryToInsert)) {
         inserted = true;
         return;
       }
-      std::swap(k, bucket.entries[offset].key);
-      std::swap(v, bucket.entries[offset].value);
+      std::swap(entryToInsert, bucket.entries[offset]);
     };
     for (int r = 0; r < 15; ++r) {
       offset = (r + 1) % bucketSize;  // double check if it works
-      PositionType idx1 = indexer.getHashIdx1(k);
+      PositionType idx1 = indexer.getHashIdx1(entryToInsert.key);
       updateHelper(idx1, table1, swapUpdateFunc);
       if (inserted) {
         return false;
       }
-      PositionType idx0 = indexer.getHashIdx0(k);
+      PositionType idx0 = indexer.getHashIdx0(entryToInsert.key);
       updateHelper(idx0, table0, swapUpdateFunc);
       if (inserted) {
         return false;
       }
     }
     printf("Warning CuckooHashMap uses stash\n");
-    stash.push_back({true, k, v});
-    if (stash.size() > 10) {
+    if (!insertToStash(entryToInsert, stash)) {
       throw std::runtime_error("CuckooHashMap insert failed");
     }
     return false;
+  }
+
+  // hide the number of swaps in cuckoo hash table and whether the insertion is
+  // dummy
+  bool insertOblivious(const K& key, const V& value, bool isDummy = false) {
+    PositionType idx0, idx1;
+    indexer.getHashIndices(key, idx0, idx1);
+    obliMove(isDummy, idx0, (PositionType)UniformRandom(tableSize - 1));
+    obliMove(isDummy, idx1, (PositionType)UniformRandom(tableSize - 1));
+    bool exist = false;
+    KVEntry entryToInsert = {!isDummy, key, value};
+    auto table0UpdateFunc = [&](BucketType& bucket0) {
+      bool replaceSucceed = replaceIfExistOblivious(bucket0, entryToInsert);
+      exist |= replaceSucceed;
+      entryToInsert.valid &= !replaceSucceed;
+      auto table1UpdateFunc = [&](BucketType& bucket1) {
+        bool replaceSucceed = replaceIfExistOblivious(bucket1, entryToInsert);
+        exist |= replaceSucceed;
+        entryToInsert.valid &= !replaceSucceed;
+        replaceSucceed = replaceIfExistOblivious(stash, entryToInsert);
+        exist |= replaceSucceed;
+        entryToInsert.valid &= !replaceSucceed;
+        bool insertSucceed = insertIfEmptyOblivious(bucket0, entryToInsert);
+        entryToInsert.valid &= !insertSucceed;
+        insertSucceed = insertIfEmptyOblivious(bucket1, entryToInsert);
+        entryToInsert.valid &= !insertSucceed;
+        obliSwap(entryToInsert.valid, bucket0.entries[0], entryToInsert);
+        // obliMove(!entryToInsert.valid, entryToInsert.key,
+        //          bucket0.entries[0].key);
+      };
+      updateHelper(idx1, table1, table1UpdateFunc);
+    };
+    updateHelper(idx0, table0, table0UpdateFunc);
+    
+    load += !exist;
+    int offset;
+    auto swapUpdateFunc = [&](BucketType& bucket) {
+      bool insertSucceed = insertIfEmptyOblivious(bucket, entryToInsert);
+      entryToInsert.valid &= !insertSucceed;
+      obliSwap(entryToInsert.valid, entryToInsert, bucket.entries[offset]);
+    };
+    for (int r = 0; r < 10; ++r) {
+      offset = (r + 1) % bucketSize;  // double check if it works
+      PositionType idx1 = indexer.getHashIdx1(entryToInsert.key);
+      updateHelper(idx1, table1, swapUpdateFunc);  // modifies entryToInsert
+
+      PositionType idx0 = indexer.getHashIdx0(entryToInsert.key);
+      updateHelper(idx0, table0, swapUpdateFunc);
+    }
+    if (!insertToStashOblivious(entryToInsert, stash)) {
+      throw std::runtime_error("CuckooHashMap insert failed");
+    }
+    return exist;
   }
 
   static bool searchBucket(const K& key, V& value, BucketType& bucket) {
@@ -350,18 +477,18 @@ struct CuckooHashMap {
   }
 
   static bool searchStash(const K& key, V& value,
-                          const std::vector<CuckooHashMapEntry<K, V>>& stash) {
+                          const std::vector<KVEntry>& stash) {
     if constexpr (isOblivious) {
       bool found = false;
       for (const auto& entry : stash) {
-        bool match = entry.key == key;
+        bool match = entry.valid & entry.key == key;
         obliMove(match, value, entry.value);
         found |= match;
       }
       return found;
     } else {
       for (const auto& entry : stash) {
-        if (entry.key == key) {
+        if (entry.valid && entry.key == key) {
           value = entry.value;
           return true;
         }
@@ -438,14 +565,17 @@ struct CuckooHashMap {
     return found & !isDummy;
   }
 
-
-template <class KeyIter, class ValResIter>
-  void findTableBatchDeferWriteBack(int tableNum, const KeyIter keyBegin, const KeyIter keyEnd, ValResIter valResBegin, std::vector<PositionType>& hashIndices) {
+  template <class KeyIter, class ValResIter>
+  void findTableBatchDeferWriteBack(int tableNum, const KeyIter keyBegin,
+                                    const KeyIter keyEnd,
+                                    ValResIter valResBegin,
+                                    std::vector<PositionType>& hashIndices) {
     static_assert(isOblivious);
-    
+
     Assert(tableNum == 0 || tableNum == 1);
-    Assert(hashIndices.size() == keySize);
+
     size_t keySize = std::distance(keyBegin, keyEnd);
+    Assert(hashIndices.size() == keySize);
     std::vector<PositionType> recoveryVec(keySize);
     for (PositionType i = 0; i < keySize; ++i) {
       recoveryVec[i] = i;
@@ -463,7 +593,8 @@ template <class KeyIter, class ValResIter>
     EM::Algorithm::BitonicSortSepPayload(recoveryVec.begin(), recoveryVec.end(),
                                          buckets.begin());
     for (size_t i = 0; i < keySize; ++i) {
-      (valResBegin + i)->found = searchBucket(*(keyBegin + i), (valResBegin + i)->value, buckets[i]);
+      (valResBegin + i)->found =
+          searchBucket(*(keyBegin + i), (valResBegin + i)->value, buckets[i]);
     }
   }
 
@@ -475,24 +606,29 @@ template <class KeyIter, class ValResIter>
   }
 
   template <class KeyIter, class ValResIter>
-  void findBatchDeferWriteBack(
-      const KeyIter keyBegin, const KeyIter keyEnd, ValResIter valResBegin) {
+  void findBatchDeferWriteBack(const KeyIter keyBegin, const KeyIter keyEnd,
+                               ValResIter valResBegin) {
     size_t keySize = std::distance(keyBegin, keyEnd);
-    std::vector<std::vector<ValResult>> valResTables(2, std::vector<ValResult>(keySize));
-    std::vector<std::vector<PositionType>> hashIndices(2, std::vector<PositionType>(keySize));
+    std::vector<std::vector<ValResult>> valResTables(
+        2, std::vector<ValResult>(keySize));
+    std::vector<std::vector<PositionType>> hashIndices(
+        2, std::vector<PositionType>(keySize));
 
     for (size_t i = 0; i < keySize; ++i) {
-      indexer.getHashIndices(*(keyBegin + i), hashIndices[0][i], hashIndices[1][i]);
+      indexer.getHashIndices(*(keyBegin + i), hashIndices[0][i],
+                             hashIndices[1][i]);
     }
-    
-    #pragma omp parallel for num_threads(2) schedule(static, 1)
+
+#pragma omp parallel for num_threads(2) schedule(static, 1)
     for (int i = 0; i < 2; ++i) {
-      findTableBatchDeferWriteBack(i, keyBegin, keyEnd, valResTables[i].begin(), hashIndices[i]);
+      findTableBatchDeferWriteBack(i, keyBegin, keyEnd, valResTables[i].begin(),
+                                   hashIndices[i]);
     }
 
     for (size_t i = 0; i < keySize; ++i) {
       mergeValRes(valResTables[0][i], valResTables[1][i], *(valResBegin + i));
-      (valResBegin + i)->found |= searchStash(*(keyBegin + i), (valResBegin + i)->value, stash);
+      (valResBegin + i)->found |=
+          searchStash(*(keyBegin + i), (valResBegin + i)->value, stash);
     }
   }
 
