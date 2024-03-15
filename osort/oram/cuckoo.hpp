@@ -158,7 +158,7 @@ struct CuckooHashMap {
       throw std::runtime_error("CuckooHashMap InitFromNonOblivious failed");
     }
     load = other.load;
-    stash = other.stash;
+    // stash = other.stash;
     indexer = other.indexer;
     // change dummies to invalid
     EM::VirtualVector::VirtualReader<BucketType> reader0(other.tableSize, [&](PositionType i) {
@@ -188,6 +188,14 @@ struct CuckooHashMap {
       table0.InitFromReaderInPlace(reader0);
       table1.InitFromReaderInPlace(reader1);
     }
+    for (const auto& entry : other.stash) {
+      if (entry.valid) {
+        // valid is public but dummy is not
+        // since we deleted all dummies, it's likely that we don't need to put these entries in the stash
+        insertOblivious(entry.key, entry.value, entry.dummy);
+      }
+    }
+
   }
 
   template <typename Reader>

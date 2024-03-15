@@ -173,7 +173,7 @@ struct ParOMap {
     totalBucketNeeded = divRoundUp(totalBucketNeeded, shardCount) * shardCount;
     bktRealSize = divRoundUp(
         initSize, totalBucketNeeded);  // split initial elements evenly
-    std::cout << "bktRealSize = " << bktRealSize << std::endl;
+    // std::cout << "bktRealSize = " << bktRealSize << std::endl;
     if (totalBucketNeeded * bktSize < maxBatchSize) {
       maxBatchSize = totalBucketNeeded * bktSize;  // don't waste space
     }
@@ -208,7 +208,7 @@ struct ParOMap {
       for (int level = 0, stride = parBatchCount; level < butterflyLevel;
            ++level) {
         uint64_t way = factors[level];
-        std::cout << "level = " << level << " way = " << way << std::endl;
+        // std::cout << "level = " << level << " way = " << way << std::endl;
         uint64_t parCount = bucketPerBatch / way;
 #pragma omp parallel for schedule(static)
         for (uint64_t parIdx = 0; parIdx < parCount; ++parIdx) {
