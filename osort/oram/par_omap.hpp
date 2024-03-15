@@ -159,6 +159,10 @@ struct ParOMap {
     using NonObliviousCuckooHashMap = CuckooHashMap<K, V, false, PositionType>;
     std::vector<NonObliviousCuckooHashMap> nonOMaps(shardCount, NonObliviousCuckooHashMap(shardSize, 0));
     using Element = EM::Algorithm::TaggedT<KVPair>;
+<<<<<<< HEAD
+=======
+    std::cout << "maxInitSizePerShard = " << maxInitSizePerShard << std::endl;
+>>>>>>> ce189eca942f0b9276c065ff91010c4cb3a11083
     const size_t bktSize = std::min(8192UL, GetNextPowerOfTwo(maxInitSizePerShard));
     size_t bktRealSize = numRealPerBucket(bktSize, shardCount, -60);
     uint64_t minBatchSize = bktSize * shardCount;
