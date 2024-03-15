@@ -155,11 +155,12 @@ struct ParOMap {
     uint64_t shardCount = shards.size();
     // std::vector<uint64_t> shardCounter(shardCount);
     uint64_t initSize = reader.size();
+    uint64_t maxInitSizePerShard = maxQueryPerShard(initSize, shardCount, -60);
     using NonObliviousCuckooHashMap = CuckooHashMap<K, V, false, PositionType>;
     std::vector<NonObliviousCuckooHashMap> nonOMaps(shardCount, NonObliviousCuckooHashMap(shardSize, 0));
     using Element = EM::Algorithm::TaggedT<KVPair>;
-
-    const size_t bktSize = 8192;
+    std::cout << "maxInitSizePerShard = " << maxInitSizePerShard << std::endl;
+    const size_t bktSize = std::min(8192UL, GetNextPowerOfTwo(maxInitSizePerShard));
     size_t bktRealSize = numRealPerBucket(bktSize, shardCount, -60);
     uint64_t minBatchSize = bktSize * shardCount;
     uint64_t maxBatchSize = cacheBytes / (sizeof(Element) + 8) / 2;
@@ -170,16 +171,22 @@ struct ParOMap {
 
     uint64_t totalBucketNeeded = divRoundUp(initSize, bktRealSize);
     // make sure it's a multiple of shardCount
-    totalBucketNeeded = divRoundUp(totalBucketNeeded, shardCount) * shardCount;
+    uint64_t bktPerShard = divRoundUp(totalBucketNeeded, shardCount);
+    if (bktPerShard * bktSize > shardSize) {
+      printf("Warning: enlarge omap for initialization\n");
+      shardSize = bktPerShard * bktSize; // we need large oram to hold these many elements
+    }
+    totalBucketNeeded = bktPerShard * shardCount;
     bktRealSize = divRoundUp(
         initSize, totalBucketNeeded);  // split initial elements evenly
-    // std::cout << "bktRealSize = " << bktRealSize << std::endl;
     if (totalBucketNeeded * bktSize < maxBatchSize) {
       maxBatchSize = totalBucketNeeded * bktSize;  // don't waste space
     }
     uint64_t parBatchCount = maxBatchSize / minBatchSize;
     uint64_t bucketPerBatch = parBatchCount * shardCount;
     uint64_t batchSize = bucketPerBatch * bktSize;
+    uint64_t perBatchShardSize = parBatchCount * bktSize;
+    
 
     // for performing mergesplits
     Element* batch = new Element[batchSize];
@@ -241,11 +248,11 @@ struct ParOMap {
       Assert(realCount == initSize);
 #endif
 
-      uint64_t shardInitSize = parBatchCount * bktSize;
+      
   #pragma omp parallel for schedule(static)
       for (uint32_t i = 0; i < shardCount; ++i) {
-        for (uint64_t j = 0; j < shardInitSize; ++j) {
-          const Element& elem = batch[i * shardInitSize + j];
+        for (uint64_t j = 0; j < perBatchShardSize; ++j) {
+          const Element& elem = batch[i * perBatchShardSize + j];
           const KVPair& kvPair = elem.v;
           // insert dummies like normal elements
           nonOMaps[i].template insert<true>(kvPair.key, kvPair.value, elem.isDummy());
