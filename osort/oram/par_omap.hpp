@@ -11,6 +11,7 @@ struct ParOMap {
   // std::vector<OMap<K, V, 9, PositionType>> shards;
   using BaseMap = CuckooHashMap<K, V, true, PositionType, true>;
   std::vector<BaseMap> shards;
+  uint64_t shardSize = 0;
   uint8_t randSalt[16];
 
   uint64_t shardHashRange;
@@ -39,16 +40,23 @@ struct ParOMap {
     return bucketSize - EM::Algorithm::lowerBound(1UL, bucketSize - 1, satisfy);
   }
 
+  ParOMap() {}
+
   ParOMap(uint64_t mapSize, uint64_t shardCount,
-          size_t cacheBytes = ((uint64_t)ENCLAVE_SIZE << 20) * 3UL / 4UL)
-      : shards(shardCount) {
+          size_t cacheBytes = ((uint64_t)ENCLAVE_SIZE << 20) * 3UL / 4UL) {
+      SetSize(mapSize, shardCount, cacheBytes);
+  }
+
+  void SetSize(uint64_t mapSize, uint64_t shardCount,
+          size_t cacheBytes = ((uint64_t)ENCLAVE_SIZE << 20) * 3UL / 4UL) {
     if (shardCount == 0) {
       throw std::runtime_error("shardCount should be positive");
     }
     if (shardCount > 128) {
       throw std::runtime_error("shardCount should be no more than 128");
     }
-    uint64_t shardSize = maxQueryPerShard(mapSize, shardCount, -60);
+    shards.resize(shardCount);
+    shardSize = maxQueryPerShard(mapSize, shardCount, -60);
     for (auto& shard : shards) {
       shard.SetSize(shardSize, cacheBytes / shardCount);
     }
@@ -230,10 +238,11 @@ struct ParOMap {
     uint64_t shardCount = shards.size();
     // std::vector<uint64_t> shardCounter(shardCount);
     uint64_t initSize = reader.size();
-
+    using NonObliviousCuckooHashMap = CuckooHashMap<K, V, false, PositionType>;
+    std::vector<NonObliviousCuckooHashMap> nonOMaps(shardCount, NonObliviousCuckooHashMap(shardSize, 0));
     using Element = EM::Algorithm::TaggedT<KVPair>;
 
-    const size_t bktSize = 16384;
+    const size_t bktSize = 8192;
     size_t bktRealSize = numRealPerBucket(bktSize, shardCount, -60);
     uint64_t minBatchSize = bktSize * shardCount;
     uint64_t maxBatchSize = cacheBytes / (sizeof(Element) + 8) / 2;
@@ -302,32 +311,37 @@ struct ParOMap {
         stride *= way;
       }
 #ifndef NDEBUG
+      uint64_t realCount = 0;
       for (uint64_t i = 0; i < batchSize; ++i) {
         if (!batch[i].isDummy()) {
           uint64_t hash = secure_hash_with_salt((uint8_t*)&batch[i].v.key,
                                                 sizeof(K), randSalt);
           uint64_t shardIdx = getShardByHash(hash);
           Assert(shardIdx == i / (bktSize * parBatchCount));
+          ++realCount;
         }
       }
+      Assert(realCount == initSize);
 #endif
+
+      uint64_t shardInitSize = parBatchCount * bktSize;
+  #pragma omp parallel for schedule(static)
+      for (uint32_t i = 0; i < shardCount; ++i) {
+        for (uint64_t j = 0; j < shardInitSize; ++j) {
+          const Element& elem = batch[i * shardInitSize + j];
+          const KVPair& kvPair = elem.v;
+          // insert dummies like normal elements
+          nonOMaps[i].template insert<true>(kvPair.key, kvPair.value, elem.isDummy());
+        }
+      }
     }
     delete[] tempElements;
     delete[] tempMarks;
-    uint64_t shardInitSize = parBatchCount * bktSize;
-#pragma omp parallel for schedule(static)
-    for (uint32_t i = 0; i < shardCount; ++i) {
-      EM::VirtualVector::VirtualReader<std::pair<K, V>> shardKvReader(
-          shardInitSize, [&](uint64_t j) {
-            const Element& elem = batch[i * shardInitSize + j];
-            const KVPair& kvPair = elem.v;
-            K key = kvPair.key;
-            obliMove(elem.isDummy(), key, K());
-            return std::make_pair(key, kvPair.value);
-          });
-      shards[i].InitFromReaderInPlace(shardKvReader);
-    }
     delete[] batch;
+    #pragma omp parallel for schedule(static)
+    for (uint32_t i = 0; i < shardCount; ++i) {
+      shards[i].InitFromNonOblivious(nonOMaps[i]);
+    }
   }
 
   template <class KeyIterator, class ShardIdxIterator>

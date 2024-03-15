@@ -47,6 +47,7 @@ struct CuckooHashMapIndexer {
 template <typename K, typename V>
 struct CuckooHashMapEntry {
   bool valid = false;
+  bool dummy = false;
   K key;
   V value;
 #ifndef ENCLAVE_MODE
@@ -159,16 +160,33 @@ struct CuckooHashMap {
     load = other.load;
     stash = other.stash;
     indexer = other.indexer;
+    // change dummies to invalid
+    EM::VirtualVector::VirtualReader<BucketType> reader0(other.tableSize, [&](PositionType i) {
+      BucketType bucket = other.table0[i];
+      for (int j = 0; j < bucketSize; ++j) {
+        bucket.entries[j].valid &= !bucket.entries[j].dummy;
+        bucket.entries[j].dummy = false;
+      }
+      return bucket;
+    });
+    EM::VirtualVector::VirtualReader<BucketType> reader1(other.tableSize, [&](PositionType i) {
+      BucketType bucket = other.table1[i];
+      for (int j = 0; j < bucketSize; ++j) {
+        bucket.entries[j].valid &= !bucket.entries[j].dummy;
+        bucket.entries[j].dummy = false;
+      }
+      return bucket;
+    });
     if constexpr (parallel_init) {
       // seems to have concurrency bug
 #pragma omp task
-      { table0.InitFromVector(other.table0); }
+      { table0.InitFromReaderInPlace(reader0); }
 
-      { table1.InitFromVector(other.table1); }
+      { table1.InitFromReaderInPlace(reader1); }
 #pragma omp taskwait
     } else {
-      table0.InitFromVector(other.table0);
-      table1.InitFromVector(other.table1);
+      table0.InitFromReaderInPlace(reader0);
+      table1.InitFromReaderInPlace(reader1);
     }
   }
 
@@ -237,23 +255,39 @@ struct CuckooHashMap {
     }
   }
 
+  template <const bool hideDummy = false>
   static bool replaceIfExist(BucketType& bucket, const KVEntry& entryToInsert) {
     for (int i = 0; i < bucketSize; ++i) {
       auto& entry = bucket.entries[i];
-      if (entry.valid && entry.key == entryToInsert.key) {
-        entry = entryToInsert;
-        return true;
+      if constexpr (hideDummy) {
+        if (entry.valid && ((entry.key == entryToInsert.key) & (entryToInsert.dummy == entry.dummy))) {
+          entry = entryToInsert;
+          return true;
+        }
+      } else {
+        if (entry.valid && entry.key == entryToInsert.key) {
+          entry = entryToInsert;
+          return true;
+        }
       }
     }
     return false;
   }
 
+  template <const bool hideDummy = false>
   static bool replaceIfExist(std::vector<KVEntry>& stash,
                              const KVEntry& entryToInsert) {
     for (KVEntry& entry : stash) {
-      if (entry.valid && entry.key == entryToInsert.key) {
-        entry = entryToInsert;
-        return true;
+      if constexpr (hideDummy) {
+        if (entry.valid && ((entry.key == entryToInsert.key) & (entryToInsert.dummy == entry.dummy))) {
+          entry = entryToInsert;
+          return true;
+        }
+      } else {
+        if (entry.valid && entry.key == entryToInsert.key) {
+          entry = entryToInsert;
+          return true;
+        }
       }
     }
     return false;
@@ -329,29 +363,40 @@ struct CuckooHashMap {
     return updated;
   }
 
+  template <bool hideDummy = false>
   bool insert(const K& key, const V& value, bool isDummy = false) {
-    if (isDummy) {
-      return false;
+    static_assert(!(isOblivious && hideDummy), "hideDummy is only useful for non oblivious");
+    if constexpr (!hideDummy) {
+      if (isDummy) {
+        return false;
+      }
+    } 
+
+    KVEntry entryToInsert = {true, isDummy, key, value};
+    if constexpr (hideDummy) {
+      K randKey;
+      read_rand((uint8_t*)&randKey, sizeof(K));
+      obliMove(isDummy, entryToInsert.key, randKey);
     }
-    PositionType idx0 = indexer.getHashIdx0(key);
+    PositionType idx0 = indexer.getHashIdx0(entryToInsert.key);
 
     bool inserted = false;
     bool exist = false;
-    KVEntry entryToInsert = {true, key, value};
+    
     auto table0UpdateFunc = [&](BucketType& bucket0) {
-      if (replaceIfExist(bucket0, entryToInsert)) {
+      if (replaceIfExist<hideDummy>(bucket0, entryToInsert)) {
         inserted = true;
         exist = true;
         return;
       }
-      PositionType idx1 = indexer.getHashIdx1(key);
+      PositionType idx1 = indexer.getHashIdx1(entryToInsert.key);
       auto table1UpdateFunc = [&](BucketType& bucket1) {
-        if (replaceIfExist(bucket1, entryToInsert)) {
+        if (replaceIfExist<hideDummy>(bucket1, entryToInsert)) {
           inserted = true;
           exist = true;
           return;
         }
-        if (replaceIfExist(stash, entryToInsert)) {
+        if (replaceIfExist<hideDummy>(stash, entryToInsert)) {
           exist = true;
           inserted = true;
         }
@@ -409,7 +454,7 @@ struct CuckooHashMap {
     obliMove(isDummy, idx0, (PositionType)UniformRandom(tableSize - 1));
     obliMove(isDummy, idx1, (PositionType)UniformRandom(tableSize - 1));
     bool exist = false;
-    KVEntry entryToInsert = {!isDummy, key, value};
+    KVEntry entryToInsert = {!isDummy, false, key, value};
     auto table0UpdateFunc = [&](BucketType& bucket0) {
       bool replaceSucceed = replaceIfExistOblivious(bucket0, entryToInsert);
       exist |= replaceSucceed;

@@ -82,6 +82,48 @@ void testCuckooHashMapInitFromReader() {
   }
 }
 
+void testCuckooHashMapInitFromNonObliviousWithDummy() {
+  for (int r = 0; r < 1e1; ++r) {
+    int mapSize = 5000;
+    int keySpace = 10000;
+    CuckooHashMap<int, int, true> map(mapSize);
+    CuckooHashMap<int, int, false> nonOMap(mapSize);
+    std::unordered_map<int, int> std_map;
+    for (int r = 0; r < mapSize; ++r) {
+      int key = rand() % keySpace;
+      int value = rand();
+      std_map[key] = value;
+    }
+    for (auto it = std_map.begin(); it != std_map.end(); ++it) {
+      if (rand() % 5 == 0 && nonOMap.load < mapSize) {
+        nonOMap.insert<true>(it->first, it->second, true);
+      }
+      nonOMap.insert<true>(it->first, it->second);
+    }
+    map.InitFromNonOblivious(nonOMap);
+    // printf("init done\n");
+    for (int r = 0; r < 2 * keySpace; ++r) {
+      if (std_map.size() < mapSize) {
+        int key = rand() % keySpace;
+        int value = rand();
+        map.insertOblivious(key, value);
+        std_map[key] = value;
+      }
+
+      int key = rand() % keySpace;
+      int value;
+      bool foundFlag = map.find(key, value);
+      auto it = std_map.find(key);
+      if (it != std_map.end()) {
+        ASSERT_TRUE(foundFlag);
+        ASSERT_EQ(value, it->second);
+      } else {
+        ASSERT_FALSE(foundFlag);
+      }
+    }
+  }
+}
+
 template <bool isOblivious>
 void testCuckooHashMapFindParBatch() {
   for (int r = 0; r < 10; ++r) {
@@ -204,4 +246,8 @@ TEST(Cuckoo, CuckooHashMapFindBatchNonOblivious) {
 
 TEST(Cuckoo, CuckooHashMapFindBatchOblivious) {
   testCuckooHashMapFindBatch<true>();
+}
+
+TEST(Cuckoo, CuckooHashMapInitWithDummy) {
+  testCuckooHashMapInitFromNonObliviousWithDummy();
 }
