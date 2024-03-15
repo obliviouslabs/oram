@@ -453,8 +453,7 @@ struct ParOMap {
     for (uint32_t i = 0; i < batchSize; ++i) {
       recoveryArr[i] = i;
     }
-    EM::Algorithm::BitonicSortSepPayload(keyInfoVec.begin(), keyInfoVec.end(),
-                                         recoveryArr.begin());
+    EM::Algorithm::ParBitonicSortSepPayload(keyInfoVec.begin(), keyInfoVec.end(), recoveryArr.begin(), shards.size() * 2);
     std::vector<uint32_t> shardLoads(shardCount, 0);
     std::vector<uint32_t> prefixSumFirstCompaction(batchSize + 1);
     prefixSumFirstCompaction[0] = 0;
@@ -520,8 +519,7 @@ struct ParOMap {
       obliMove(isDup, resultVec[i], resultVec[i - 1]);
     }
 
-    EM::Algorithm::BitonicSortSepPayload(recoveryArr.begin(), recoveryArr.end(),
-                                         resultVec.begin());
+    EM::Algorithm::ParBitonicSortSepPayload(recoveryArr.begin(), recoveryArr.end(), resultVec.begin(), shards.size() * 2);
     std::vector<uint8_t> foundFlags(batchSize);
     for (uint32_t i = 0; i < batchSize; ++i) {
       foundFlags[i] = resultVec[i].found;
