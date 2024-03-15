@@ -20,12 +20,17 @@ TEST(ParOMap, Init) {
 }
 
 TEST(ParOMap, InitInsertFind) {
-  uint64_t mapSize = 123456;
-  uint64_t shardCount = 16;
+  uint64_t mapSize = 4234567;
+  uint64_t shardCount = 32;
   uint64_t round = 1000;
   uint64_t batchSize = 100;
-  ParOMap<uint64_t, uint64_t> parOMap(mapSize * 1.5, shardCount);
-
+  ParOMap<uint64_t, uint64_t> parOMap(mapSize, shardCount);
+  if (EM::Backend::g_DefaultBackend) {
+    delete EM::Backend::g_DefaultBackend;
+  }
+  size_t BackendSize = 1e9;
+  EM::Backend::g_DefaultBackend =
+      new EM::Backend::MemServerBackend(BackendSize);
   std::unordered_map<uint64_t, uint64_t> kvMap;
   for (uint64_t i = 0; i < mapSize; ++i) {
     if (UniformRandomBit()) {
@@ -39,7 +44,7 @@ TEST(ParOMap, InitInsertFind) {
         ++kvIt;
         return pr;
       });
-  parOMap.InitFromReader(reader);
+  parOMap.InitFromReader(reader, 32UL << 20);
   std::cout << "omp max threads: " << omp_get_max_threads() << std::endl;
   for (uint64_t r = 0; r < round; ++r) {
     std::vector<uint64_t> keys(batchSize);
