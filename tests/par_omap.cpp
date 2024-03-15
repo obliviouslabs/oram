@@ -1,5 +1,5 @@
 #include "oram/par_omap.hpp"
-
+#include <unordered_set>
 #include "testutils.hpp"
 
 using namespace ODSL;
@@ -45,8 +45,12 @@ TEST(ParOMap, InitInsertFind) {
     std::vector<uint64_t> keys(batchSize);
     std::vector<uint64_t> vals(batchSize);
     if (r % 10 == 0) {  // perform fewer inserts than finds
+      std::unordered_set<uint64_t> keySet;
       for (uint64_t i = 0; i < batchSize; ++i) {
-        keys[i] = UniformRandom() % mapSize;
+        do {
+          keys[i] = UniformRandom() % mapSize;
+        } while (keySet.count(keys[i]) > 0);
+        keySet.insert(keys[i]);
         vals[i] = UniformRandom();
       }
       std::vector<uint8_t> insertExistFlag =
@@ -113,8 +117,12 @@ TEST(ParOMap, InsertAndFind) {
     std::vector<uint64_t> keys(batchSize);
     std::vector<uint64_t> vals(batchSize);
     if (r % 10 == 0) {  // perform fewer inserts than finds
+      std::unordered_set<uint64_t> keySet;
       for (uint64_t i = 0; i < batchSize; ++i) {
-        keys[i] = UniformRandom() % mapSize;
+        do {
+          keys[i] = UniformRandom() % mapSize;
+        } while (keySet.count(keys[i]) > 0);
+        keySet.insert(keys[i]);
         vals[i] = UniformRandom();
       }
       std::vector<uint8_t> insertExistFlag =
@@ -160,8 +168,12 @@ TEST(ParOMap, InsertAndDuplicateFind) {
     std::vector<uint64_t> keys(batchSize);
     std::vector<uint64_t> vals(batchSize);
     if (r % 10 == 0) {  // perform fewer inserts than finds
+      std::unordered_set<uint64_t> keySet;
       for (uint64_t i = 0; i < batchSize; ++i) {
-        keys[i] = UniformRandom() % mapSize;
+        do {
+          keys[i] = UniformRandom() % mapSize;
+        } while (keySet.count(keys[i]) > 0);
+        keySet.insert(keys[i]);
         vals[i] = UniformRandom();
       }
       std::vector<uint8_t> insertExistFlag =
@@ -196,7 +208,7 @@ TEST(ParOMap, InsertAndDuplicateFind) {
 }
 
 TEST(ParOMap, InsertFindErase) {
-  uint64_t mapSize = 123456;
+  uint64_t mapSize = 12345;
   uint64_t shardCount = 8;
   uint64_t round = 1000;
   uint64_t batchSize = 1000;
@@ -208,8 +220,12 @@ TEST(ParOMap, InsertFindErase) {
     std::vector<uint64_t> keys(batchSize);
     std::vector<uint64_t> vals(batchSize);
     if (UniformRandom32() % 10 == 0) {  // perform fewer inserts than finds
+      std::unordered_set<uint64_t> keySet;
       for (uint64_t i = 0; i < batchSize; ++i) {
-        keys[i] = UniformRandom() % mapSize;
+        do {
+          keys[i] = UniformRandom() % mapSize;
+        } while (keySet.count(keys[i]) > 0);
+        keySet.insert(keys[i]);
         vals[i] = UniformRandom();
       }
       std::vector<uint8_t> insertExistFlag =
@@ -224,7 +240,9 @@ TEST(ParOMap, InsertFindErase) {
     }
     if (UniformRandom32() % 10 == 0) {
       for (uint64_t i = 0; i < batchSize; ++i) {
+
         keys[i] = UniformRandom() % mapSize;
+
       }
       std::vector<uint8_t> eraseExistFlag =
           parOMap.eraseParBatch(keys.begin(), keys.end());
@@ -233,6 +251,8 @@ TEST(ParOMap, InsertFindErase) {
           std::cout << "key = " << keys[i] << std::endl;
         }
         ASSERT_EQ(eraseExistFlag[i], kvMap.count(keys[i]) > 0);
+      }
+      for (size_t i = 0; i < keys.size(); ++i) {
         kvMap.erase(keys[i]);
       }
     }

@@ -715,13 +715,39 @@ struct CuckooHashMap {
       return true;
     }
     for (auto it = stash.begin(); it != stash.end(); ++it) {
-      if (it->key == key) {
+      if (it->key == key && it->valid) {
         --load;
         stash.erase(it);
         return true;
       }
     }
     return false;
+  }
+
+  bool eraseOblivious(const K& key, bool isDummy = false) {
+    if (isDummy) {
+      return false;
+    }
+    bool erased = false;
+    auto updateFunc = [&](BucketType& bucket) {
+      for (int i = 0; i < bucketSize; ++i) {
+        auto& entry = bucket.entries[i];
+        bool matchFlag = entry.valid & (entry.key == key);
+        entry.valid &= !matchFlag | erased;
+        erased |= matchFlag;
+      }
+    };
+    PositionType idx0, idx1;
+    indexer.getHashIndices(key, idx0, idx1);
+    updateHelper(idx0, table0, updateFunc);
+    updateHelper(idx1, table1, updateFunc);
+    for (auto& entry : stash) {
+      bool matchFlag = entry.valid & (entry.key == key);
+      entry.valid &= !matchFlag | erased;
+      erased |= matchFlag;
+    }
+    load -= erased;
+    return erased;
   }
 
   std::vector<uint8_t> findParBatch(const std::vector<K>& keys,
