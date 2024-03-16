@@ -30,7 +30,7 @@ def parse_text_file(file_path):
 # Function to create a plot based on the parsed data and save it as a JPG image
 def create_and_save_plot_find(data, map_size, file_path):
     plt.figure()
-    plt.title(f'Throughput for Map Size {map_size} (ERC20 Balance)')
+    plt.title(f'Actual Throughput for Map Size {map_size} (ERC20 Balance)')
     plt.xlabel('Number of Threads')
     plt.ylabel('Throughput (Query / Second)')
     sorted_legend_labels = sorted(set(data['batch_size']), key=lambda x: x)
