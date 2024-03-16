@@ -59,7 +59,7 @@ struct ParOMap {
     shardHashRange = (UINT64_MAX - 1) / shardCount + 1;
   }
 
-  void Init(size_t cacheBytes = ((uint64_t)ENCLAVE_SIZE << 20) * 3UL / 4UL) {
+  void Init(size_t cacheBytes = DEFAULT_HEAP_SIZE) {
 #pragma omp parallel for
     for (auto& shard : shards) {
       shard.SetSize(shardSize, cacheBytes / shards.size());
@@ -97,9 +97,7 @@ struct ParOMap {
   };
 
   template <class Reader>
-  void InitFromReader(Reader& reader,
-                      uint64_t cacheBytes = ((uint64_t)ENCLAVE_SIZE << 20) * 3 /
-                                            4) {
+  void InitFromReader(Reader& reader, uint64_t cacheBytes = DEFAULT_HEAP_SIZE) {
     uint64_t shardCount = shards.size();
     // std::vector<uint64_t> shardCounter(shardCount);
     uint64_t initSize = reader.size();

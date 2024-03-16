@@ -59,8 +59,7 @@ struct RecursiveORAM {
     SetSize(size, cacheBytes);
   }
 
-  void SetSize(PositionType size,
-               size_t cacheBytes = ((uint64_t)ENCLAVE_SIZE << 20) * 3UL / 4UL) {
+  void SetSize(PositionType size, size_t cacheBytes = DEFAULT_HEAP_SIZE) {
     _size = size;
     PositionType leafOramSize = divRoundUp(size, chunk_size);
     int numLevel = 0;

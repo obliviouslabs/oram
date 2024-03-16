@@ -91,9 +91,9 @@ struct CuckooHashMap {
   PositionType load;
   PositionType tableSize;
   using BucketType = CuckooHashMapBucket<K, V, bucketSize>;
-  using TableType = std::conditional_t<
-      isOblivious, RecursiveORAM<BucketType, PositionType>,
-      StdVector<BucketType>>;
+  using TableType =
+      std::conditional_t<isOblivious, RecursiveORAM<BucketType, PositionType>,
+                         StdVector<BucketType>>;
   // EM::CacheFrontVector::Vector<BucketType, sizeof(BucketType), true, true,
   //  1024>>;
   TableType table0, table1;
@@ -118,9 +118,7 @@ struct CuckooHashMap {
     SetSize(size, cacheBytes, maxThreads);
   }
 
-  void SetSize(PositionType size) {
-    SetSize(size, ((uint64_t)ENCLAVE_SIZE << 20) * 3UL / 4UL);
-  }
+  void SetSize(PositionType size) { SetSize(size, DEFAULT_HEAP_SIZE); }
 
   void SetSize(PositionType size, uint64_t cacheBytes) {
     _size = size;
@@ -146,22 +144,24 @@ struct CuckooHashMap {
     // stash = other.stash;
     indexer = other.indexer;
     // change dummies to invalid
-    EM::VirtualVector::VirtualReader<BucketType> reader0(other.tableSize, [&](PositionType i) {
-      BucketType bucket = other.table0[i];
-      for (int j = 0; j < bucketSize; ++j) {
-        bucket.entries[j].valid &= !bucket.entries[j].dummy;
-        bucket.entries[j].dummy = false;
-      }
-      return bucket;
-    });
-    EM::VirtualVector::VirtualReader<BucketType> reader1(other.tableSize, [&](PositionType i) {
-      BucketType bucket = other.table1[i];
-      for (int j = 0; j < bucketSize; ++j) {
-        bucket.entries[j].valid &= !bucket.entries[j].dummy;
-        bucket.entries[j].dummy = false;
-      }
-      return bucket;
-    });
+    EM::VirtualVector::VirtualReader<BucketType> reader0(
+        other.tableSize, [&](PositionType i) {
+          BucketType bucket = other.table0[i];
+          for (int j = 0; j < bucketSize; ++j) {
+            bucket.entries[j].valid &= !bucket.entries[j].dummy;
+            bucket.entries[j].dummy = false;
+          }
+          return bucket;
+        });
+    EM::VirtualVector::VirtualReader<BucketType> reader1(
+        other.tableSize, [&](PositionType i) {
+          BucketType bucket = other.table1[i];
+          for (int j = 0; j < bucketSize; ++j) {
+            bucket.entries[j].valid &= !bucket.entries[j].dummy;
+            bucket.entries[j].dummy = false;
+          }
+          return bucket;
+        });
     if constexpr (parallel_init) {
       // seems to have concurrency bug
 #pragma omp task
@@ -176,11 +176,11 @@ struct CuckooHashMap {
     for (const auto& entry : other.stash) {
       if (entry.valid) {
         // valid is public but dummy is not
-        // since we deleted all dummies, it's likely that we don't need to put these entries in the stash
+        // since we deleted all dummies, it's likely that we don't need to put
+        // these entries in the stash
         insertOblivious(entry.key, entry.value, entry.dummy);
       }
     }
-
   }
 
   template <typename Reader>
@@ -237,7 +237,8 @@ struct CuckooHashMap {
     for (int i = 0; i < bucketSize; ++i) {
       auto& entry = bucket.entries[i];
       if constexpr (hideDummy) {
-        if (entry.valid && ((entry.key == entryToInsert.key) & (entryToInsert.dummy == entry.dummy))) {
+        if (entry.valid && ((entry.key == entryToInsert.key) &
+                            (entryToInsert.dummy == entry.dummy))) {
           entry = entryToInsert;
           return true;
         }
@@ -256,7 +257,8 @@ struct CuckooHashMap {
                              const KVEntry& entryToInsert) {
     for (KVEntry& entry : stash) {
       if constexpr (hideDummy) {
-        if (entry.valid && ((entry.key == entryToInsert.key) & (entryToInsert.dummy == entry.dummy))) {
+        if (entry.valid && ((entry.key == entryToInsert.key) &
+                            (entryToInsert.dummy == entry.dummy))) {
           entry = entryToInsert;
           return true;
         }
@@ -342,12 +344,13 @@ struct CuckooHashMap {
 
   template <bool hideDummy = false>
   bool insert(const K& key, const V& value, bool isDummy = false) {
-    static_assert(!(isOblivious && hideDummy), "hideDummy is only useful for non oblivious");
+    static_assert(!(isOblivious && hideDummy),
+                  "hideDummy is only useful for non oblivious");
     if constexpr (!hideDummy) {
       if (isDummy) {
         return false;
       }
-    } 
+    }
 
     KVEntry entryToInsert = {true, isDummy, key, value};
     if constexpr (hideDummy) {
@@ -359,7 +362,7 @@ struct CuckooHashMap {
 
     bool inserted = false;
     bool exist = false;
-    
+
     auto table0UpdateFunc = [&](BucketType& bucket0) {
       if (replaceIfExist<hideDummy>(bucket0, entryToInsert)) {
         inserted = true;
@@ -454,7 +457,7 @@ struct CuckooHashMap {
       updateHelper(idx1, table1, table1UpdateFunc);
     };
     updateHelper(idx0, table0, table0UpdateFunc);
-    
+
     load += !exist;
     int offset;
     auto swapUpdateFunc = [&](BucketType& bucket) {

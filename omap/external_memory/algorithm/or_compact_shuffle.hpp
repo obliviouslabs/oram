@@ -2,8 +2,12 @@
 #include "element.hpp"
 #include "external_memory/extemvector.hpp"
 #include "external_memory/stdvector.hpp"
-/// This file contains the implementation of the OrCompact and OrShuffle.
-
+/**
+ * @brief This file implements OrCompact and OrShuffle in
+ * https://eprint.iacr.org/2022/1333.
+ * It also implements a reversed procedure of OrCompact, which we call
+ * OrDistribute.
+ */
 namespace EM::Algorithm {
 template <class Iterator, class MarkIterator>
 void OrOffCompactSeparateMark(Iterator begin, Iterator end,
@@ -125,16 +129,6 @@ void OrCompact(Iterator begin, Iterator end, const Check& isMarked) {
   OrCompactSeparateMark(begin, end, markPrefix.begin());
 }
 
-template <class Iterator, typename T>
-void initIteratorVal(Iterator& it, const T& val) {
-  if constexpr (std::is_same<Iterator,
-                             typename std::vector<T>::iterator>::value) {
-    *it = val;
-  } else {
-    it.derefWriteOnly() = val;
-  }
-}
-
 template <class Iterator, class MarkIterator>
 void OrShuffle(Iterator begin, Iterator end, MarkIterator markBegin) {
   size_t n = end - begin;
@@ -151,13 +145,13 @@ void OrShuffle(Iterator begin, Iterator end, MarkIterator markBegin) {
 
   auto it = markBegin;
   size_t currsum = 0;
-  initIteratorVal(it, currsum);
+  *it = currsum;
   ++it;
   for (size_t N = n; N > 0; --N) {
     bool chooseFlag = UniformRandom(0, N - 1) < k;
     CMOV(chooseFlag, k, k - 1);
     CMOV(chooseFlag, currsum, currsum + 1);  // prefix sum
-    initIteratorVal(it, currsum);
+    *it = currsum;
     ++it;
   }
   OrCompactSeparateMark(begin, end, markBegin);
@@ -193,24 +187,4 @@ void OrShuffle(Vec& vec) {
   OrShuffle(vec.begin(), vec.end());
 }
 
-// implements https://dl.acm.org/doi/pdf/10.1145/1989493.1989555
-template <class Iterator, class Check>
-void GoodrichCompact(Iterator begin, Iterator end, const Check& isMarked) {
-  size_t n = end - begin;
-  std::vector<uint64_t> dist(n);
-  uint64_t numMarked = 0;
-  for (size_t i = 0; i < n; ++i) {
-    dist[i] = i - numMarked;
-    CMOV(isMarked(*(begin + i)), numMarked, numMarked + 1);
-  }
-  uint64_t level = GetLogBaseTwo(GetNextPowerOfTwo(n));
-  for (uint64_t i = 0; i < level; ++i) {
-    for (uint64_t j = (1UL << i); j < n; ++j) {
-      bool jMarked = isMarked(*(begin + j));
-      bool swapFlag = jMarked & (!!(dist[j] & ((2UL << i) - 1)));
-      obliSwap(swapFlag, *(begin + j), *(begin + j - (1UL << i)));
-      CMOV(swapFlag, dist[j - (1UL << i)], (dist[j] >> (i + 1) << (i + 1)));
-    }
-  }
-}
 }  // namespace EM::Algorithm

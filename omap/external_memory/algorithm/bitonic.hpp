@@ -9,24 +9,6 @@
 namespace EM::Algorithm {
 
 template <class Iterator, typename Compare>
-void SlowBitonicSort(Iterator begin, Iterator end, Compare cmp) {
-  uint64_t n = end - begin;
-  Assert(GetNextPowerOfTwo(n) == n, n);
-  for (uint64_t k = 2; k <= n; k *= 2) {
-    for (uint64_t j = k / 2; j > 0; j /= 2) {
-      for (uint64_t i = 0; i < n; ++i) {
-        uint64_t l = i ^ j;
-        if (l > i) {
-          bool llti = cmp(*(begin + l), *(begin + i));
-          bool swapFlag = (((i & k) == 0) * llti) + (((i & k) != 0) * (!llti));
-          obliSwap(swapFlag, *(begin + i), *(begin + l));
-        }
-      }
-    }
-  }
-}
-
-template <class Iterator, typename Compare>
 void BitonicMergePow2(Iterator begin, Iterator end, Compare cmp, bool dire) {
   size_t size = end - begin;
   if (size > 1) {
@@ -89,49 +71,6 @@ template <typename Vec>
 void BitonicSort(Vec& v) {
   auto cmp = [](const auto& a, const auto& b) { return a < b; };
   BitonicSort(v, cmp);
-}
-
-template <class Iterator>
-void BitonicShuffle(Iterator begin, Iterator end) {
-  using T = typename std::iterator_traits<Iterator>::value_type;
-  auto cmpTag = [](const TaggedT<T>& a, const TaggedT<T>& b) {
-    return a.tag < b.tag;
-  };
-  if constexpr (std::is_same<Iterator,
-                             typename StdVector<T>::Iterator>::value) {
-    std::vector<TaggedT<T>> taggedData(end - begin);
-    size_t idx = 0;
-    for (auto it = begin; it != end; ++it, ++idx) {
-      taggedData[idx].v = *it;
-      taggedData[idx].tag = UniformRandom();
-    }
-    BitonicSort(taggedData.begin(), taggedData.end(), cmpTag);
-    auto taggedIt = taggedData.begin();
-    for (auto it = begin; it != end; ++it, ++taggedIt) {
-      *it = taggedIt->v;
-    }
-  } else {
-    constexpr size_t CachePageSize =
-        4096 / sizeof(TaggedT<T>) * sizeof(TaggedT<T>);
-    constexpr size_t CacheSize = DEFAULT_HEAP_SIZE / CachePageSize - 1;
-    EM::ExtVector::Vector<TaggedT<T>, CachePageSize, true, true, CacheSize>
-        taggedData(end - begin);
-    size_t idx = 0;
-    for (auto it = begin; it != end; ++it, ++idx) {
-      const auto& it_const = it;
-      taggedData.AtForLateInit(idx) = {UniformRandom(), *it_const};
-    }
-    BitonicSort(taggedData.begin(), taggedData.end(), cmpTag);
-    auto taggedIt = taggedData.begin();
-    for (auto it = begin; it != end; ++it, ++taggedIt) {
-      *it = taggedIt.derefNoWriteBack().v;
-    }
-  }
-}
-
-template <typename Vec>
-void BitonicShuffle(Vec& v) {
-  BitonicShuffle(v.begin(), v.end());
 }
 
 template <class KeyIterator, class PayloadIterator>

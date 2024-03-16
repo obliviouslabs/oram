@@ -24,8 +24,7 @@ void aes_init() {
 }
 
 void handleErrors(void) {
-  printf("AES Error\n");
-  abort();
+  throw std::runtime_error("OpenSSL error");
 }
 
 void aes_256_gcm_encrypt(uint64_t plaintextSize, uint8_t *plaintext,

@@ -1,8 +1,8 @@
 #pragma once
 #include "common/defs.hpp"
 #include "common/dummy.hpp"
-#include "common/encrypted.hpp"
 #include "common/mov_intrinsics.hpp"
+#include "common/utils.hpp"
 
 /// This file defines some macros and data structures for sorting and shuffling
 /// algorithms.
@@ -61,17 +61,17 @@ struct TaggedT {
 }  // namespace EM::Algorithm
 
 /// @brief Example of a sort element
-struct SortElement {
+struct TestElement {
   uint64_t key;  // key for comparison
   char payload[ELEMENT_SIZE -
                sizeof(key)];  // a payload that is typically longer
-  static consteval inline SortElement DUMMY() {
-    return SortElement{static_cast<uint64_t>(-1)};
+  static consteval inline TestElement DUMMY() {
+    return TestElement{static_cast<uint64_t>(-1)};
   }
-  bool operator==(const SortElement& other) const { return key == other.key; }
-  bool operator<(const SortElement& other) const { return key < other.key; }
+  bool operator==(const TestElement& other) const { return key == other.key; }
+  bool operator<(const TestElement& other) const { return key < other.key; }
 #ifndef ENCLAVE_MODE
-  friend std::ostream& operator<<(std::ostream& o, const SortElement& x) {
+  friend std::ostream& operator<<(std::ostream& o, const TestElement& x) {
     o << x.key;
     return o;
   }

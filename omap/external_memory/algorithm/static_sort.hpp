@@ -1,17 +1,15 @@
 #pragma once
 #include "element.hpp"
 
-/// This file contains a static sort class that uses a compile time generated.
+/// This file contains a static sort class that uses a compile time generated,
+/// adapted from:
+/// https://stackoverflow.com/questions/19790522/very-fast-sorting-of-fixed-length-arrays-using-comparator-networks
 
-// https://stackoverflow.com/questions/19790522/very-fast-sorting-of-fixed-length-arrays-using-comparator-networks
-/// @brief A Functor class to create a sort for fixed sized arrays/containers
-/// with a compile time generated Bose-Nelson sorting network.
-/// @tparam NumElements  The number of elements in the array or container to
-/// sort
-/// @tparam T            The element type.
-/// @tparam Compare      A comparator functor class that returns true if lhs <
-/// rhs.
 namespace EM::Algorithm {
+
+/// This class is a functor that sorts a fixed size array or container using a
+/// compile time generated Bose-Nelson sorting network, which is slightly faster
+/// than bitonic sort for small arrays.
 template <unsigned NumElements, class Compare = void>
 class StaticSort {
   template <class A, class C>

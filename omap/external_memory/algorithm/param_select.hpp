@@ -4,7 +4,8 @@
 
 #include "element.hpp"
 
-/// This file contains the parameter solver for flex-way algorithms.
+/// This file contains some utility functions to help calculate parameters given
+/// a desired success probability.
 
 namespace EM::Algorithm {
 

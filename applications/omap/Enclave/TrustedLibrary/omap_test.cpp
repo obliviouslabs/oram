@@ -12,6 +12,8 @@
 #include "sgx_thread.h"
 #include "sgx_trts.h"
 
+#define MB << 20
+
 using namespace ODSL;
 EM::Backend::MemServerBackend* EM::Backend::g_DefaultBackend = nullptr;
 
@@ -253,12 +255,12 @@ void testOmpSpeedup() {
   ocall_measure_time(&start);
 
   for (int i = 0; i < maxThread; ++i) {
-    CircuitORAM::ORAM<SortElement> oram;
+    CircuitORAM::ORAM<TestElement> oram;
     uint64_t size = 65536;
     oram.SetSize(size);
     uint64_t out;
     for (int r = 0; r < 1e5; ++r) {
-      oram.Update(UniformRandom() % size, 0, [](SortElement& val) {
+      oram.Update(UniformRandom() % size, 0, [](TestElement& val) {
         val.key++;
         return true;
       });
@@ -272,12 +274,12 @@ void testOmpSpeedup() {
   ocall_measure_time(&start);
 #pragma omp parallel for schedule(static)
   for (int i = 0; i < maxThread; ++i) {
-    CircuitORAM::ORAM<SortElement> oram;
+    CircuitORAM::ORAM<TestElement> oram;
     uint64_t size = 65536;
     oram.SetSize(size);
     uint64_t out;
     for (int r = 0; r < 1e5; ++r) {
-      oram.Update(UniformRandom() % size, 0, [](SortElement& val) {
+      oram.Update(UniformRandom() % size, 0, [](TestElement& val) {
         val.key++;
         return true;
       });
@@ -295,14 +297,14 @@ void testOmpSpeedup() {
   ocall_measure_time(&start);
 
   for (int i = 0; i < maxThread; ++i) {
-    std::vector<CircuitORAM::ORAM<SortElement>> orams(8);
+    std::vector<CircuitORAM::ORAM<TestElement>> orams(8);
     uint64_t size = 8192;
     for (int i = 0; i < 8; ++i) {
       orams[i].SetSize(size);
     }
     uint64_t out;
     for (int r = 0; r < 1e5; ++r) {
-      orams[r % 8].Update(UniformRandom() % size, 0, [](SortElement& val) {
+      orams[r % 8].Update(UniformRandom() % size, 0, [](TestElement& val) {
         val.key++;
         return true;
       });
@@ -316,14 +318,14 @@ void testOmpSpeedup() {
   ocall_measure_time(&start);
 #pragma omp parallel for schedule(static)
   for (int i = 0; i < maxThread; ++i) {
-    std::vector<CircuitORAM::ORAM<SortElement>> orams(8);
+    std::vector<CircuitORAM::ORAM<TestElement>> orams(8);
     uint64_t size = 8192;
     for (int i = 0; i < 8; ++i) {
       orams[i].SetSize(size);
     }
     uint64_t out;
     for (int r = 0; r < 1e5; ++r) {
-      orams[r % 8].Update(UniformRandom() % size, 0, [](SortElement& val) {
+      orams[r % 8].Update(UniformRandom() % size, 0, [](TestElement& val) {
         val.key++;
         return true;
       });
@@ -341,12 +343,12 @@ void testOmpSpeedup() {
   ocall_measure_time(&start);
 
   for (int i = 0; i < maxThread; ++i) {
-    LinearORAM::LinearORAM<SortElement> oram;
+    LinearORAM::LinearORAM<TestElement> oram;
     uint64_t size = 256;
     oram.SetSize(size);
     uint64_t out;
     for (int r = 0; r < 1e5; ++r) {
-      oram.Update(UniformRandom() % size, 0, [](SortElement& val) {
+      oram.Update(UniformRandom() % size, 0, [](TestElement& val) {
         val.key++;
         return true;
       });
@@ -360,12 +362,12 @@ void testOmpSpeedup() {
   ocall_measure_time(&start);
 #pragma omp parallel for schedule(static)
   for (int i = 0; i < maxThread; ++i) {
-    LinearORAM::LinearORAM<SortElement> oram;
+    LinearORAM::LinearORAM<TestElement> oram;
     uint64_t size = 256;
     oram.SetSize(size);
     uint64_t out;
     for (int r = 0; r < 1e5; ++r) {
-      oram.Update(UniformRandom() % size, 0, [](SortElement& val) {
+      oram.Update(UniformRandom() % size, 0, [](TestElement& val) {
         val.key++;
         return true;
       });
@@ -425,7 +427,7 @@ void testOmpSpeedup() {
 void testORAMReadWrite() {
   for (int memSize : {1, 3, 5, 7, 9, 33, 40, 55, 127, 129, 543, 678, 1023, 1025,
                       2000, 10000, 50000}) {
-    CircuitORAM::ORAM<uint64_t> oram(memSize, 6);
+    CircuitORAM::ORAM<uint64_t> oram(memSize, 10 MB);
     std::vector<uint64_t> posMap(memSize);
     std::vector<uint64_t> valMap(memSize);
     for (uint64_t i = 0; i < memSize; i++) {
@@ -452,16 +454,16 @@ void testORAMInit() {
   uint64_t memSize = 4321;
   uint64_t size = 1234;
 
-  CircuitORAM::ORAM<SortElement> oram(memSize);
+  CircuitORAM::ORAM<TestElement> oram(memSize);
   std::vector<uint64_t> valMap(size);
-  StdVector<SortElement> vec(size);
+  StdVector<TestElement> vec(size);
   for (int i = 0; i < size; ++i) {
     valMap[i] = UniformRandom();
     vec[i].key = valMap[i];
   }
 
   StdVector<UidBlock<uint64_t>> posMap(size);
-  StdVector<SortElement>::Reader reader(vec.begin(), vec.end());
+  StdVector<TestElement>::Reader reader(vec.begin(), vec.end());
   StdVector<UidBlock<uint64_t>>::Writer posMapWriter(posMap.begin(),
                                                      posMap.end());
 
@@ -472,7 +474,7 @@ void testORAMInit() {
 
   for (int r = 0; r < 2; ++r) {
     for (uint64_t i = 0; i < size; i++) {
-      SortElement val;
+      TestElement val;
       uint64_t pos = oram.Read(posMap[i].data, i, val);
       posMap[i].data = pos;
       ASSERT_EQ(val.key, valMap[i]);
@@ -507,7 +509,7 @@ void testOMap() {
   for (size_t r = 0; r < round; ++r) {
     uint64_t i = UniformRandom(mapSize);
     int64_t val = UniformRandom(mapSize * 3);
-    bool res = omap.insert(i, val);
+    bool res = omap.insertOblivious(i, val);
     if (map.find(i) != map.end()) {
       if (!res) {
         printf("insert failed at round %lu, does not replace element\n", r);
@@ -527,7 +529,6 @@ void testOMap() {
   printf("oram insert time %f us\n", timediff * 1e-3 / round);
 
   ocall_measure_time(&start);
-#pragma omp parallel for
   for (size_t r = 0; r < round; ++r) {
     uint64_t i = UniformRandom(mapSize);
     int64_t val;
@@ -1000,13 +1001,11 @@ void ecall_omap_perf() {
     // testParOMapPerfDeferWriteBack(5e6, 32);
     // testCuckooOMapPerf();
     // testCuckooOMapPerfDiffCond();
-    // testParCuckooOMapPerf(8);
     // testRecursiveORAMPerf();
     // testOMapPerf();
     // testOMap();
     // testORAMInit();
     // testORAMReadWrite();
-    // testBuildBottomUp();
   } catch (std::exception& e) {
     printf("exception: %s\n", e.what());
   }

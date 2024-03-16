@@ -7,10 +7,6 @@
 #include "common/tracing/tracer.hpp"
 #include "common/utils.hpp"
 
-#ifndef IO_ROUND
-#define IO_ROUND 1
-#endif
-
 #define IV_SIZE 12
 
 namespace Concepts {
@@ -108,26 +104,21 @@ struct FreshEncrypted {
   }
 
   INLINE void Encrypt(const T& in, uint8_t iv[IV_SIZE]) {
-    // PROFILE_F();
-
     Encrypt(in, KEY, iv);
   }
 
   INLINE void Decrypt(T& out, const uint8_t* key,
                       uint8_t iv[IV_SIZE]) /*const*/ {
-    // PROFILE_F();
     bool r = aes_256_gcm_decrypt(SIZE, data, key, iv, tag,
                                  reinterpret_cast<uint8_t*>(&out));
     if (!r) {
-      printf("authentication failure\n");
-      abort();
+      throw std::runtime_error("Authentication failed during decrypt.");
     }
     Assert(r);
     IGNORE_UNUSED(r);
   }
 
   INLINE void Decrypt(T& out, uint8_t iv[IV_SIZE]) /*const*/ {
-    // PROFILE_F();
     Decrypt(out, KEY, iv);
   }
 

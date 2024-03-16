@@ -6,8 +6,12 @@
 #include "external_memory/stdvector.hpp"
 #include "static_sort.hpp"
 
-/// This file contains building blocks for external memory sorting algorithms,
-/// such as interleave and mergesplit.
+/**
+ * @brief This file implements two-way and multi-way mergesplit algorithms,
+ * described in https://eprint.iacr.org/2023/1258.pdf.
+ * Specifically, the algorithm may perform 8-way mergesplit with (0.5 +
+ * o(1))NlogN oblivious swaps.
+ */
 
 namespace EM::Algorithm {
 
@@ -213,8 +217,7 @@ INLINE void InterleaveBaseCase(Iterator begin, Iterator end,
       staticSort8(iter_pair);
       break;
     default:
-      X_LOG("wrong way partition\n");
-      abort();
+      throw std::runtime_error("Unsupported way of MergeSplit");
   }
 }
 
@@ -358,11 +361,9 @@ void MergeSplitInPlace(Iterator begin, Iterator end, Indicator indicator) {
     it->condChangeMark(changeMark, indicator);
     diff -= (uint64_t)changeMark;
   }
-  if constexpr (IO_ROUND > 0) {
-    if (diff) {
-      printf("Not enough ones\n");
-      std::abort();  // failed due to the lack of dummy elements
-    }
+
+  if (diff) {
+    throw std::runtime_error("MergeSplit fails. Consider padding more filler elements.");
   }
 
   const auto isMarked = [indicator = indicator](const auto& element) {
@@ -421,12 +422,12 @@ void MergeSplitTwoWay(Iterator beginLeft, Iterator beginRight, size_t Z,
     it->condChangeMark(changeMark, indicator);
     diff -= (uint64_t)changeMark;
   }
-  if constexpr (IO_ROUND > 0) {
-    if (diff) {
-      printf("First level not enough ones\n");
-      std::abort();  // failed due to the lack of dummy elements
-    }
+
+  if (diff) {
+    throw std::runtime_error(
+        "MergeSplit fails. Consider padding more filler elements.");
   }
+  
 
   const auto isMarked = [indicator = indicator](const auto& element) {
     return element.isMarked(indicator);
@@ -498,12 +499,12 @@ void MergeSplitKWay(const Iterator* begins, const size_t k, const size_t Z,
     }
   }
 
-  if constexpr (IO_ROUND > 0) {
-    if (mm256_contain_le_zero(remainCounts)) {
-      printf("Not enough ones\n");
-      std::abort();  // failed due to the lack of dummy elements
-    }
+
+  if (mm256_contain_le_zero(remainCounts)) {
+    throw std::runtime_error(
+        "MergeSplit fails. Consider padding more filler elements.");
   }
+  
   int currMark = 0;
   uint32_t currRemain = mm256_extract_epi32_var_indx(remainCounts, 0);
   // assume that there's at least one dummy for each mark

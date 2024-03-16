@@ -11,10 +11,6 @@
 #include <concepts>
 #endif
 
-#ifndef IO_ROUND
-#define IO_ROUND 1
-#endif
-
 namespace EM {
 enum PageSlotState { EMPTY_PAGE, PENDING_PAGE, DONE_PAGE };
 namespace Backend {
@@ -150,14 +146,13 @@ struct MemServerBackend : ServerBackend {
     for (size_t i = 0; i < chunkNum; ++i) {
       totalSize += sizes[i];
     }
-    for (int r = 0; r < IO_ROUND; ++r) {
-      ocall_Read_Batch(offsets, sizes, tmp, chunkNum, totalSize);
-    }
+
+    ocall_Read_Batch(offsets, sizes, tmp, chunkNum, totalSize);
+    
     uint8_t* pos = tmp;
     for (uint64_t i = 0; i < chunkNum; ++i) {
-      for (int r = 0; r < IO_ROUND; ++r) {
-        std::memcpy(addrs[i], pos, sizes[i]);
-      }
+      std::memcpy(addrs[i], pos, sizes[i]);
+      
       pos += sizes[i];
       *readChunks.states[i] = DONE_PAGE;
     }
@@ -181,9 +176,8 @@ struct MemServerBackend : ServerBackend {
     writeChunks.states[chunkNum] = &state;
     writeChunks.offsets[chunkNum] = offset;
     writeChunks.sizes[chunkNum] = sz;
-    for (int r = 0; r < IO_ROUND; ++r) {
-      std::memcpy(writeChunks.tmp + tmpOffset, from, sz);
-    }
+    std::memcpy(writeChunks.tmp + tmpOffset, from, sz);
+    
     ++chunkNum;
     tmpOffset += sz;
   }
@@ -202,9 +196,8 @@ struct MemServerBackend : ServerBackend {
     for (size_t i = 0; i < chunkNum; ++i) {
       totalSize += sizes[i];
     }
-    for (int r = 0; r < IO_ROUND; ++r) {
-      ocall_Write_Batch(offsets, sizes, tmp, chunkNum, totalSize);
-    }
+    ocall_Write_Batch(offsets, sizes, tmp, chunkNum, totalSize);
+    
     for (uint64_t i = 0; i < chunkNum; ++i) {
       *writeChunks.states[i] = DONE_PAGE;
     }

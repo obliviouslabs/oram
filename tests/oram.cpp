@@ -431,12 +431,12 @@ TEST(ORAM, NonPowerOfTwo) {
 
 TEST(ORAM, WithoutPositionMapLargePerf) {
   int memSize = 1 << 20;
-  ODSL::CircuitORAM::ORAM<SortElement> oram(memSize);
+  ODSL::CircuitORAM::ORAM<TestElement> oram(memSize);
 
   uint64_t numAccesses = 1e6;
   auto start = std::chrono::system_clock::now();
   for (uint64_t i = 0; i < numAccesses; i++) {
-    SortElement val;
+    TestElement val;
     uint64_t pos = oram.Read(i % memSize, 0, val);
   }
   auto end = std::chrono::system_clock::now();
@@ -446,17 +446,17 @@ TEST(ORAM, WithoutPositionMapLargePerf) {
 
 // TEST(ORAM, testInit) {
 //   uint64_t size = 1024;
-//   ORAM<SortElement> oram(size);
-//   StdVector<SortElement> vec(size);
+//   ORAM<TestElement> oram(size);
+//   StdVector<TestElement> vec(size);
 //   for (int i = 0; i < size; ++i) {
-//     vec[i] = SortElement();
+//     vec[i] = TestElement();
 //     vec[i].key = i;
 //   }
 //   StdVector<uint64_t> posMap(size);
 //   StdVector<uint64_t>::Writer posMapWriter(posMap.begin(), posMap.end());
 //   oram.InitFromVector(vec, posMapWriter);
 //   for (uint64_t i = 0; i < size; i++) {
-//     SortElement val;
+//     TestElement val;
 //     printf("read %lu at pos %lu\n", i, posMap[i]);
 //     uint64_t pos = oram.Read(posMap[i], i, val);
 //     posMap[i] = pos;
@@ -467,9 +467,9 @@ TEST(ORAM, WithoutPositionMapLargePerf) {
 TEST(ORAM, testInitNaive) {
   uint64_t memSize = 123456;
   uint64_t size = 100000;
-  ORAM<SortElement> oram(memSize);
+  ORAM<TestElement> oram(memSize);
   for (uint64_t i = 0; i < size; i++) {
-    oram.Write(i, SortElement());
+    oram.Write(i, TestElement());
   }
 }
 
@@ -484,17 +484,17 @@ TEST(ORAM, testInitWithReader) {
     size_t BackendSize = 1e9;
     EM::Backend::g_DefaultBackend =
         new EM::Backend::MemServerBackend(BackendSize);
-    ODSL::CircuitORAM::ORAM<SortElement, 2, 50, uint64_t, uint64_t> oram(
+    ODSL::CircuitORAM::ORAM<TestElement, 2, 50, uint64_t, uint64_t> oram(
         memSize);
     std::vector<uint64_t> valMap(size);
-    StdVector<SortElement> vec(size);
+    StdVector<TestElement> vec(size);
     for (int i = 0; i < size; ++i) {
       valMap[i] = UniformRandom();
       vec[i].key = valMap[i];
     }
     using ODSL::UidBlock;
     StdVector<UidBlock<uint64_t>> posMap(size);
-    StdVector<SortElement>::Reader reader(vec.begin(), vec.end());
+    StdVector<TestElement>::Reader reader(vec.begin(), vec.end());
     StdVector<UidBlock<uint64_t>>::Writer posMapWriter(posMap.begin(),
                                                        posMap.end());
     auto start = std::chrono::system_clock::now();
@@ -502,11 +502,11 @@ TEST(ORAM, testInitWithReader) {
     auto end = std::chrono::system_clock::now();
     std::chrono::duration<double> diff = end - start;
     printf("Time for initializing %lu elements of %lu bytes: %f s\n", size,
-           sizeof(SortElement), diff.count());
+           sizeof(TestElement), diff.count());
     for (int r = 0; r < 2; ++r) {
       for (uint64_t i = 0; i < size; i++) {
         // printf("read %lu at pos %lu\n", i, posMap[i].data);
-        SortElement val;
+        TestElement val;
         // printf("read %lu %lu at pos %lu\n", i, val, posMap[i]);
         uint64_t pos = oram.Read(posMap[i].data, i, val);
         posMap[i].data = pos;
@@ -518,8 +518,8 @@ TEST(ORAM, testInitWithReader) {
 
 TEST(RecursiveORAM, testInitDefault) {
   uint64_t size = 12345;
-  ODSL::RecursiveORAM<SortElement> oram(size);
-  oram.InitDefault(SortElement());
+  ODSL::RecursiveORAM<TestElement> oram(size);
+  oram.InitDefault(TestElement());
 }
 
 TEST(RecursiveORAM, testReadAfterWrite) {
