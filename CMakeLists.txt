@@ -42,7 +42,7 @@ include(cmake/boost.cmake)
 
 
 
-add_subdirectory(osort)
+add_subdirectory(omap)
 
 
 enable_testing()
