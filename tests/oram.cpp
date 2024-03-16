@@ -4,7 +4,7 @@
 
 #include <unordered_map>
 
-#include "external_memory/algorithm/sort_def.hpp"
+#include "external_memory/algorithm/element.hpp"
 #include "oram/circuit_oram.hpp"
 #include "oram/recursive_oram.hpp"
 #include "testutils.hpp"

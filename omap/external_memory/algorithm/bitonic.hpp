@@ -1,9 +1,9 @@
 #pragma once
 #include <vector>
 
+#include "element.hpp"
 #include "external_memory/extemvector.hpp"
 #include "external_memory/stdvector.hpp"
-#include "sort_def.hpp"
 #include "static_sort.hpp"
 
 namespace EM::Algorithm {
@@ -19,7 +19,7 @@ void SlowBitonicSort(Iterator begin, Iterator end, Compare cmp) {
         if (l > i) {
           bool llti = cmp(*(begin + l), *(begin + i));
           bool swapFlag = (((i & k) == 0) * llti) + (((i & k) != 0) * (!llti));
-          condSwap(swapFlag, *(begin + i), *(begin + l));
+          obliSwap(swapFlag, *(begin + i), *(begin + l));
         }
       }
     }
@@ -34,7 +34,7 @@ void BitonicMergePow2(Iterator begin, Iterator end, Compare cmp, bool dire) {
     Iterator leftIt = begin;
     Iterator rightIt = begin + halfSize;
     for (size_t i = 0; i < halfSize; ++i, ++leftIt, ++rightIt) {
-      condSwap(dire != cmp(*leftIt, *rightIt), *leftIt, *rightIt);
+      obliSwap(dire != cmp(*leftIt, *rightIt), *leftIt, *rightIt);
     }
     BitonicMergePow2(begin, leftIt, cmp, dire);
     BitonicMergePow2(leftIt, end, cmp, dire);
@@ -49,7 +49,7 @@ void BitonicMerge(Iterator begin, Iterator end, Compare cmp, bool dire) {
     Iterator leftIt = begin;
     Iterator rightIt = begin + halfSize;
     for (size_t i = 0; i < size - halfSize; ++i, ++leftIt, ++rightIt) {
-      condSwap(dire != cmp(*leftIt, *rightIt), *leftIt, *rightIt);
+      obliSwap(dire != cmp(*leftIt, *rightIt), *leftIt, *rightIt);
     }
     Iterator midIt = begin + halfSize;
     BitonicMergePow2(begin, midIt, cmp, dire);
@@ -147,8 +147,8 @@ void BitonicMergePow2SepPayload(KeyIterator keyBegin, KeyIterator keyEnd,
     for (size_t i = 0; i < halfSize;
          ++i, ++leftKeyIt, ++rightKeyIt, ++leftPayloadIt, ++rightPayloadIt) {
       bool swapFlag = dire != (*leftKeyIt < *rightKeyIt);
-      condSwap(swapFlag, *leftKeyIt, *rightKeyIt);
-      condSwap(swapFlag, *leftPayloadIt, *rightPayloadIt);
+      obliSwap(swapFlag, *leftKeyIt, *rightKeyIt);
+      obliSwap(swapFlag, *leftPayloadIt, *rightPayloadIt);
     }
     BitonicMergePow2SepPayload(keyBegin, leftKeyIt, payloadBegin, dire);
     BitonicMergePow2SepPayload(leftKeyIt, keyEnd, leftPayloadIt, dire);
@@ -168,8 +168,8 @@ void BitonicMergeSepPayload(KeyIterator keyBegin, KeyIterator keyEnd,
     for (size_t i = 0; i < size - halfSize;
          ++i, ++leftKeyIt, ++rightKeyIt, ++leftPayloadIt, ++rightPayloadIt) {
       bool swapFlag = dire != (*leftKeyIt < *rightKeyIt);
-      condSwap(swapFlag, *leftKeyIt, *rightKeyIt);
-      condSwap(swapFlag, *leftPayloadIt, *rightPayloadIt);
+      obliSwap(swapFlag, *leftKeyIt, *rightKeyIt);
+      obliSwap(swapFlag, *leftPayloadIt, *rightPayloadIt);
     }
     KeyIterator midKeyIt = keyBegin + halfSize;
     PayloadIterator midPayloadIt = payloadBegin + halfSize;

@@ -52,11 +52,7 @@ class RandomDevice : public std::random_device {
 
 class RandGen {
   RandomDevice<> rd;
-#ifdef ENCLAVE_MODE
-  br_aesctr_drbg_context ctx;
-  size_t idx = 0;
-  uint8_t buffer[4096];
-#else
+#ifndef ENCLAVE_MODE
   std::minstd_rand engine;
 #endif
  public:
@@ -81,28 +77,27 @@ uint64_t secure_hash_with_salt(const uint8_t* data, size_t data_size,
                                const uint8_t (&salt)[16]);
 
 template <typename T>
-uint64_t secure_hash_with_salt(const T& data,
-                               const uint8_t (&salt)[16]);
+uint64_t secure_hash_with_salt(const T& data, const uint8_t (&salt)[16]);
 
 template <typename T>
-void secure_hash_with_salt(const T& data,
-                               const uint8_t (&salt)[16], void* res, uint8_t resSize);
+void secure_hash_with_salt(const T& data, const uint8_t (&salt)[16], void* res,
+                           uint8_t resSize);
 #ifndef NOOPENSSL
 #include <openssl/crypto.h>
 #include <openssl/evp.h>
 #include <openssl/rand.h>
+
 #include <cstring>
 template <typename T>
-uint64_t secure_hash_with_salt(const T& data,
-                               const uint8_t (&salt)[16]) {
-  return secure_hash_with_salt((const uint8_t *)&data, sizeof(T), salt);
+uint64_t secure_hash_with_salt(const T& data, const uint8_t (&salt)[16]) {
+  return secure_hash_with_salt((const uint8_t*)&data, sizeof(T), salt);
 }
 
 template <typename T>
-void secure_hash_with_salt(const T& data,
-                               const uint8_t (&salt)[16], uint8_t* res, uint32_t resSize) {
+void secure_hash_with_salt(const T& data, const uint8_t (&salt)[16],
+                           uint8_t* res, uint32_t resSize) {
   const size_t data_size = sizeof(T);
-  EVP_MD_CTX *mdctx = EVP_MD_CTX_new();
+  EVP_MD_CTX* mdctx = EVP_MD_CTX_new();
   uint64_t result = 0;
   unsigned char hash[EVP_MAX_MD_SIZE];
   unsigned int lengthOfHash = 0;
@@ -145,54 +140,13 @@ void secure_hash_with_salt(const T& data,
   EVP_MD_CTX_free(mdctx);
 }
 
-template <typename T>
-class PRP {
-  unsigned char aes_key[EVP_MAX_KEY_LENGTH];
-  unsigned char iv[EVP_MAX_IV_LENGTH];
-
-  static void generate_aes_key_and_iv(unsigned char* aes_key,
-                                      unsigned char* iv) {
-    RAND_bytes(aes_key, EVP_CIPHER_key_length(EVP_aes_128_cbc()));
-    RAND_bytes(iv, EVP_CIPHER_iv_length(EVP_aes_128_cbc()));
-  }
-
-  static void prp_encrypt(const unsigned char* plaintext, int plaintext_len,
-                          const unsigned char* key, const unsigned char* iv,
-                          unsigned char* ciphertext, int* ciphertext_len) {
-    EVP_CIPHER_CTX* ctx;
-
-    // Create and initialize the context
-    ctx = EVP_CIPHER_CTX_new();
-    EVP_EncryptInit_ex(ctx, EVP_aes_128_cbc(), NULL, key, iv);
-
-    // Perform encryption
-    EVP_EncryptUpdate(ctx, ciphertext, ciphertext_len, plaintext,
-                      plaintext_len);
-    EVP_EncryptFinal_ex(ctx, ciphertext + *ciphertext_len, ciphertext_len);
-
-    // Clean up
-    EVP_CIPHER_CTX_free(ctx);
-  }
-
- public:
-  // Generate a random AES key and IV
-  PRP() { generate_aes_key_and_iv(aes_key, iv); }
-  T prp(T val) const {
-    uint8_t outBuffer[32];
-    int buffer_len;
-    prp_encrypt((unsigned char*)&val, sizeof(T), aes_key, iv, outBuffer,
-                &buffer_len);
-    return *(T*)outBuffer;
-  }
-};
 #else
 #include <cstring>
 
 #include "sgx_tcrypto.h"
 #include "sgx_trts.h"
 template <typename T>
-uint64_t secure_hash_with_salt(const T& data,
-                               const uint8_t (&salt)[16]) {
+uint64_t secure_hash_with_salt(const T& data, const uint8_t (&salt)[16]) {
   uint8_t data_with_salt[sizeof(T) + 16];
   memcpy(data_with_salt, &data, sizeof(T));
   memcpy(data_with_salt + sizeof(T), salt, 16);
@@ -204,8 +158,8 @@ uint64_t secure_hash_with_salt(const T& data,
 }
 
 template <typename T>
-void secure_hash_with_salt(const T& data,
-                               const uint8_t (&salt)[16], void* res, uint8_t resSize) {
+void secure_hash_with_salt(const T& data, const uint8_t (&salt)[16], void* res,
+                           uint8_t resSize) {
   Assert(resSize < sizeof(sgx_sha256_hash_t));
   uint8_t data_with_salt[sizeof(T) + 16];
   memcpy(data_with_salt, &data, sizeof(T));
@@ -215,9 +169,7 @@ void secure_hash_with_salt(const T& data,
   memcpy(res, &hash, resSize);
 }
 
-
-
-uint64_t secure_hash_with_salt(const uint8_t *data, size_t data_size,
+uint64_t secure_hash_with_salt(const uint8_t* data, size_t data_size,
                                const uint8_t (&salt)[16]) {
   sgx_sha_state_handle_t sha_handle;
   sgx_sha256_hash_t hash;
@@ -259,16 +211,4 @@ uint64_t secure_hash_with_salt(const uint8_t *data, size_t data_size,
   return result;
 }
 
-// TODO implement later
-template <typename T>
-class PRP {
-  uint64_t shift;
-
- public:
-  PRP() {
-    RandGen randGen;
-    shift = randGen.rand64();
-  }
-  T prp(T val) const { return val + shift; }
-};
 #endif

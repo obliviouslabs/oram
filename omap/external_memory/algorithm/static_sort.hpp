@@ -1,5 +1,5 @@
 #pragma once
-#include "sort_def.hpp"
+#include "element.hpp"
 
 /// This file contains a static sort class that uses a compile time generated.
 
@@ -18,7 +18,7 @@ class StaticSort {
   struct Swap {
     inline Swap(A &a, const int &i0, const int &i1) {
       bool cond = Compare()(*(a + i0), *(a + i1));
-      condSwap(cond, *(a + i0), *(a + i1));
+      obliSwap(cond, *(a + i0), *(a + i1));
     }
   };
 
@@ -26,8 +26,8 @@ class StaticSort {
   struct Swap<A, void> {
     inline Swap(A &a, const int &i0, const int &i1) {
       bool cond = *(a.second + i0) > *(a.second + i1);
-      condSwap(cond, *(a.first + i0), *(a.first + i1));
-      condSwap<false>(cond, *(a.second + i0), *(a.second + i1));
+      obliSwap(cond, *(a.first + i0), *(a.first + i1));
+      obliSwap(cond, *(a.second + i0), *(a.second + i1));
     }
   };
 

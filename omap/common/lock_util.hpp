@@ -5,7 +5,7 @@
 #endif
 #if TCS_NUM > 1
 #include "sgx_spinlock.h"
-// #include "sgx_thread.h"
+#include "sgx_thread.h"
 struct Lock {
   sgx_spinlock_t _lock = SGX_SPINLOCK_INITIALIZER;
   void lock() { sgx_spin_lock(&_lock); }
@@ -61,7 +61,8 @@ struct Mutex {
   void unlock() { _lock.unlock(); }
   Mutex() {}
   Mutex(const Mutex&) {}
-private:
+
+ private:
   std::mutex _lock;
 };
 #endif

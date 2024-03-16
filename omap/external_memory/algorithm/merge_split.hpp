@@ -1,11 +1,9 @@
 #pragma once
 #include <vector>
 
-#include "bitonic.hpp"
 #include "edge_rec.hpp"
+#include "element.hpp"
 #include "external_memory/stdvector.hpp"
-#include "or_compact_shuffle.hpp"
-#include "sort_def.hpp"
 #include "static_sort.hpp"
 
 /// This file contains building blocks for external memory sorting algorithms,
@@ -28,7 +26,7 @@ void InterleaveTwoWay(Iterator begin, Iterator end, const Check& isMarked) {
   Assert(size % 2 == 0);
   if (size == 2) {
     bool swapFlag = !isMarked(*begin);
-    condSwap(swapFlag, *begin, *(begin + 1));
+    obliSwap(swapFlag, *begin, *(begin + 1));
     return;
   }
   size_t leftHalfSize = (size + 2) / 4 * 2;
@@ -53,7 +51,7 @@ void InterleaveTwoWay(Iterator begin, Iterator end, const Check& isMarked) {
     bool rightTag = isMarked(*right);
     bool swapFlag = leftTag != targetBit;
     targetBit = rightTag != swapFlag;
-    condSwap(swapFlag, *left, *right);
+    obliSwap(swapFlag, *left, *right);
   }
   InterleaveTwoWay(begin, mid, isMarked);
   InterleaveTwoWay(mid, end, isMarked);
@@ -89,7 +87,7 @@ void InterleaveTwoWay(Iterator beginLeft, Iterator beginRight, size_t Z,
     bool rightTag = isMarked(*right);
     bool swapFlag = leftTag != targetBit;
     targetBit = rightTag != swapFlag;
-    condSwap(swapFlag, *left, *right);
+    obliSwap(swapFlag, *left, *right);
   }
 
   InterleaveTwoWay(beginLeft, endLeft, isMarked);
@@ -115,8 +113,8 @@ void Permute(Iterator begin, Iterator end, MarkIterator marksBegin,
     return;
   } else if (size == 2) {
     bool swapFlag = *marksBegin & 0xFU;
-    condSwap(swapFlag, *begin, *(begin + 1));
-    condSwap(swapFlag, *marksBegin, *(marksBegin + 1));
+    obliSwap(swapFlag, *begin, *(begin + 1));
+    obliSwap(swapFlag, *marksBegin, *(marksBegin + 1));
     return;
   }
   size_t halfSize = (size + 1) / 2;
@@ -161,8 +159,8 @@ void Permute(Iterator begin, Iterator end, MarkIterator marksBegin,
     uint8_t leftMark = *marksLeft & 0xFU;
     uint8_t rightMark = *marksRight & 0xFU;
     bool swapFlag = path.retrieveAndFlipEdge(leftMark, rightMark);
-    condSwap<false>(swapFlag, *marksLeft, *marksRight);
-    condSwap(swapFlag, *left, *right);
+    obliSwap(swapFlag, *marksLeft, *marksRight);
+    obliSwap(swapFlag, *left, *right);
   }
   Permute(begin, mid, marksBegin, marksMid, level + 1);
   Permute(mid, end, marksMid, marksEnd, level + 1);
@@ -171,8 +169,8 @@ void Permute(Iterator begin, Iterator end, MarkIterator marksBegin,
        marksRight != marksEnd; ++marksLeft, ++marksRight, ++left, ++right) {
     bool swapFlag = !(*marksRight & (0X10U << level));
 
-    condSwap(swapFlag, *left, *right);
-    condSwap(swapFlag, *marksLeft, *marksRight);
+    obliSwap(swapFlag, *left, *right);
+    obliSwap(swapFlag, *marksLeft, *marksRight);
   }
 }
 
@@ -266,10 +264,10 @@ void Interleave(Iterator begin, Iterator end, MarkIterator marksBegin,
     bool swapFlag = path.retrieveAndFlipEdge(*marksLeft, *marksRight);
 
     // 5%
-    condSwap<false>(swapFlag, *marksLeft, *marksRight);
+    obliSwap(swapFlag, *marksLeft, *marksRight);
 
     // 56%
-    condSwap(swapFlag, *left, *right);
+    obliSwap(swapFlag, *left, *right);
   }
   Interleave(begin, mid, marksBegin, marksMid, k);
   Interleave(mid, end, marksMid, marksEnd, k);
@@ -310,7 +308,7 @@ void InterleaveTwoWayPartition(Iterator beginLeft, Iterator beginRight,
   auto endRight = beginRight + Z;
   for (auto it1 = beginLeft + 1, it2 = beginRight + Z % 2; it2 < endRight;
        it1 += 2, it2 += 2) {
-    swap(*it1, *it2);
+    std::swap(*it1, *it2);
   }
 }
 
@@ -339,8 +337,7 @@ void InterleaveTwoWayPartition(Iterator beginLeft, Iterator beginRight,
 /// @param indicator bit mask or pivot
 /// @param method partition method
 template <class Iterator, typename Indicator>
-void MergeSplitInPlace(Iterator begin, Iterator end, Indicator indicator,
-                       const PartitionMethod method = INTERLEAVE_PARTITION) {
+void MergeSplitInPlace(Iterator begin, Iterator end, Indicator indicator) {
   // Balance the number of 0 and 1 at the indicator bit
   uint64_t markCount = 0;
   uint64_t n = end - begin;
@@ -372,23 +369,8 @@ void MergeSplitInPlace(Iterator begin, Iterator end, Indicator indicator,
     return element.isMarked(indicator);
   };
   // Partition 0 and 1 to even and odd bits
-  switch (method) {
-    case INTERLEAVE_PARTITION:
-      InterleaveTwoWayPartition(begin, end, isMarked);
-      break;
-    case OR_COMPACT:
-      OrCompact(begin, end, isMarked);
-      break;
-    case GOODRICH_COMPACT:
-      GoodrichCompact(begin, end, isMarked);
-      break;
-    case BITONIC:
-      auto cmp = [=](const auto& element1, const auto& element2) {
-        return (element1.isMarked(indicator) > (element2.isMarked(indicator))) |
-               ((element2.isDummy() & !(element2.isMarked(indicator))));
-      };
-      BitonicSort(begin, end, cmp);
-  }
+
+  InterleaveTwoWayPartition(begin, end, isMarked);
 }
 
 /// @brief A special case of multi-way mergesplit. Note that the left and right
@@ -403,19 +385,8 @@ void MergeSplitInPlace(Iterator begin, Iterator end, Indicator indicator,
 /// @param method partition method
 template <class Iterator, typename Indicator>
 void MergeSplitTwoWay(Iterator beginLeft, Iterator beginRight, size_t Z,
-                      Indicator indicator,
-                      const PartitionMethod method = OR_COMPACT) {
+                      Indicator indicator) {
   // Balance the number of 0 and 1 at the indicator bit
-  if (method != INTERLEAVE_PARTITION) {
-    using T = typename std::iterator_traits<Iterator>::value_type;
-    std::vector<T> temp(2 * Z);
-    std::copy(beginLeft, beginLeft + Z, temp.begin());
-    std::copy(beginRight, beginRight + Z, temp.begin() + Z);
-    MergeSplitInPlace(temp.begin(), temp.end(), indicator, method);
-    std::copy(temp.begin(), temp.begin() + Z, beginLeft);
-    std::copy(temp.begin() + Z, temp.end(), beginRight);
-    return;
-  }
   uint64_t markCount = 0;
   Iterator endLeft = beginLeft + Z, endRight = beginRight + Z;
   Iterator end = endLeft;
@@ -484,7 +455,7 @@ void MergeSplitKWay(const Iterator* begins, const size_t k, const size_t Z,
     // special case
     // avoids Euler tour search and also minimizes data movement
     if constexpr (std::is_same<PivotIterator, void*>::value) {
-      MergeSplitTwoWay(begins[0], begins[1], Z, 1UL, INTERLEAVE_PARTITION);
+      MergeSplitTwoWay(begins[0], begins[1], Z, 1UL);
       // update the tags
       for (auto it = begins[0]; it != begins[0] + Z; ++it) {
         it->tag = (int64_t)it->tag >> 1;
@@ -494,8 +465,7 @@ void MergeSplitKWay(const Iterator* begins, const size_t k, const size_t Z,
         it->tag = (int64_t)it->tag >> 1;
       }
     } else {
-      MergeSplitTwoWay(begins[0], begins[1], Z, *pivotBegin,
-                       INTERLEAVE_PARTITION);
+      MergeSplitTwoWay(begins[0], begins[1], Z, *pivotBegin);
     }
 
     return;

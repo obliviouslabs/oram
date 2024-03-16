@@ -1,6 +1,6 @@
 #pragma once
+#include "element.hpp"
 #include "external_memory/extemvector.hpp"
-#include "sort_def.hpp"
 #include "external_memory/stdvector.hpp"
 /// This file contains the implementation of the OrCompact and OrShuffle.
 
@@ -16,7 +16,7 @@ void OrOffCompactSeparateMark(Iterator begin, Iterator end,
   if (n == 2) {
     const MarkIterator markEnd = markMid + 1;
     bool swapFlag = (((!m) & (*markEnd - valMarkMid)) != z);
-    condSwap(swapFlag, *begin, *mid);
+    obliSwap(swapFlag, *begin, *mid);
     return;
   }
   size_t zLeft = z % (n / 2);
@@ -27,7 +27,7 @@ void OrOffCompactSeparateMark(Iterator begin, Iterator end,
   Iterator leftIt = begin, rightIt = mid;
   for (size_t i = 0; i != n / 2; ++i, ++leftIt, ++rightIt) {
     bool b = (s != (i >= zRight));
-    condSwap(b, *leftIt, *rightIt);
+    obliSwap(b, *leftIt, *rightIt);
   }
 }
 
@@ -52,7 +52,7 @@ void OrCompactSeparateMark(Iterator begin, Iterator end,
   Iterator leftIt = begin;
   Iterator rightIt = begin + n1;
   for (size_t i = 0; i != n2; ++i, ++leftIt, ++rightIt) {
-    condSwap(i >= m, *leftIt, *rightIt);
+    obliSwap(i >= m, *leftIt, *rightIt);
   }
 }
 
@@ -67,7 +67,7 @@ void OrOffDistributeSeparateMark(Iterator begin, Iterator end,
   if (n == 2) {
     const MarkIterator markEnd = markMid + 1;
     bool swapFlag = (((!m) & (*markEnd - valMarkMid)) != z);
-    condSwap(swapFlag, *begin, *mid);
+    obliSwap(swapFlag, *begin, *mid);
     return;
   }
   size_t zLeft = z % (n / 2);
@@ -76,7 +76,7 @@ void OrOffDistributeSeparateMark(Iterator begin, Iterator end,
   Iterator leftIt = begin, rightIt = mid;
   for (size_t i = 0; i != n / 2; ++i, ++leftIt, ++rightIt) {
     bool b = (s != (i >= zRight));
-    condSwap(b, *leftIt, *rightIt);
+    obliSwap(b, *leftIt, *rightIt);
   }
   OrOffDistributeSeparateMark(begin, mid, markBegin, zLeft);
   OrOffDistributeSeparateMark(mid, end, markMid, zRight);
@@ -101,7 +101,7 @@ void OrDistributeSeparateMark(Iterator begin, Iterator end,
   Iterator leftIt = begin;
   Iterator rightIt = begin + n1;
   for (size_t i = 0; i != n2; ++i, ++leftIt, ++rightIt) {
-    condSwap(i >= m, *leftIt, *rightIt);
+    obliSwap(i >= m, *leftIt, *rightIt);
   }
   OrDistributeSeparateMark(begin, n2It, markBegin);
   OrOffDistributeSeparateMark(n2It, end, markMid, (n1 - n2 + m) % n1);
@@ -143,7 +143,7 @@ void OrShuffle(Iterator begin, Iterator end, MarkIterator markBegin) {
   }
   if (n == 2) {
     bool flag = UniformRandomBit();
-    condSwap(flag, *begin, *(begin + 1));
+    obliSwap(flag, *begin, *(begin + 1));
     return;
   }
   size_t halfSize = n / 2;
@@ -208,7 +208,7 @@ void GoodrichCompact(Iterator begin, Iterator end, const Check& isMarked) {
     for (uint64_t j = (1UL << i); j < n; ++j) {
       bool jMarked = isMarked(*(begin + j));
       bool swapFlag = jMarked & (!!(dist[j] & ((2UL << i) - 1)));
-      condSwap(swapFlag, *(begin + j), *(begin + j - (1UL << i)));
+      obliSwap(swapFlag, *(begin + j), *(begin + j - (1UL << i)));
       CMOV(swapFlag, dist[j - (1UL << i)], (dist[j] >> (i + 1) << (i + 1)));
     }
   }

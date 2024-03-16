@@ -93,7 +93,7 @@ else
 endif
 
 App_Cpp_Files := App/App.cpp $(wildcard App/TrustedLibrary/*.cpp)
-App_Include_Paths := -IApp -I$(SGX_SDK)/include -I../../osort/
+App_Include_Paths := -IApp -I$(SGX_SDK)/include -I../../omap/
 
 App_C_Flags := -fPIC -Wno-attributes -Wno-deprecated-declarations $(App_Include_Paths)
 
@@ -143,9 +143,9 @@ else
 endif
 Crypto_Library_Name := sgx_tcrypto
 
-CLIENT_SOURCES = client.cpp ../../osort/common/encutils.cpp
+CLIENT_SOURCES = client.cpp ../../omap/common/encutils.cpp
 CLIENT_TARGET = client
-CLIENT_CXXFLAGS = -Wno-deprecated-declarations -std=c++20 -I../../osort/
+CLIENT_CXXFLAGS = -Wno-deprecated-declarations -std=c++20 -I../../omap/
 CLIENT_LDFLAGS = -lssl -lcrypto
 
 BEARSSL_SOURCES := \
@@ -164,7 +164,7 @@ BEARSSL_SOURCES := \
 
 Enclave_C_Files := $(BEARSSL_SOURCES) 
 Enclave_Cpp_Files := Enclave/Enclave.cpp $(wildcard Enclave/TrustedLibrary/*.cpp) 
-Enclave_Include_Paths := -IEnclave -I$(SGX_SDK)/include -I$(SGX_SDK)/include/libcxx -I$(SGX_SDK)/include/tlibc -I../../osort -IEnclave/bearssl/include -IEnclave/bearssl/src/bearssl
+Enclave_Include_Paths := -IEnclave -I$(SGX_SDK)/include -I$(SGX_SDK)/include/libcxx -I$(SGX_SDK)/include/tlibc -I../../omap -IEnclave/bearssl/include -IEnclave/bearssl/src/bearssl
 
 Enclave_Flags := -fvisibility=hidden -fpie -fstack-protector -fno-builtin-printf -march=native $(Enclave_Include_Paths)
 

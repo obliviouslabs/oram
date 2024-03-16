@@ -223,7 +223,6 @@ void read_rand(uint8_t *output, size_t size) {
 #include "bearssl_hash.h"
 #include "common/encutils.hpp"
 #define memset_s(s, smax, c, n) memset(s, c, n);
-#define MAX_ENC_SIZE 8192
 
 #define SGXSD_AES_GCM_IV_SIZE 12
 #define SGXSD_AES_GCM_MAC_SIZE 16
@@ -347,74 +346,23 @@ bool aes_256_ctr_decrypt(uint64_t ciphertextSize, uint8_t *ciphertext,
                                 plaintext, iv);
 }
 
-RandGen::RandGen() {
-#if TCS_NUM <= 1
-  new (this) RandGen(rd());
-#endif
-}
-
-RandGen::RandGen(uint64_t seed) {
-#if TCS_NUM <= 1
-  const br_block_ctr_class *aes_vtable =
-      &br_aes_x86ni_ctr_vtable;  // in theory we should use
-                                 // br_aes_x86ni_ctr_get_vtable() here, but it
-                                 // seems bearssl does not recognize the cpuid
-                                 // and always return NUll
-  // if (aes_vtable == NULL) {
-  //   printf("vtable fail\n");
-  //   throw 1;
-  // }
-  br_aesctr_drbg_init(&ctx, aes_vtable, &seed, 8);
-  br_aesctr_drbg_generate(&ctx, buffer, 4096);
-#endif
-}
+RandGen::RandGen() {}
 
 uint64_t RandGen::rand64() {
-#if TCS_NUM > 1
   uint64_t output;
   sgx_read_rand((uint8_t *)&output, sizeof(output));
   return output;
-#else
-  // Generate random output
-  if (idx > 4088) {
-    br_aesctr_drbg_generate(&ctx, buffer, 4096);
-    idx = 0;
-  }
-  uint64_t output = *(uint64_t *)(buffer + idx);
-  idx += 8;
-  return output;
-#endif
 }
 
 uint32_t RandGen::rand32() {
-#if TCS_NUM > 1
   uint32_t output;
   sgx_read_rand((uint8_t *)&output, sizeof(output));
   return output;
-#else
-  if (idx > 4092) {
-    br_aesctr_drbg_generate(&ctx, buffer, 4096);
-    idx = 0;
-  }
-  uint32_t output = *(uint32_t *)(buffer + idx);
-  idx += 4;
-  return output;
-#endif
 }
 uint8_t RandGen::rand1() {
-#if TCS_NUM > 1
   uint8_t output;
   sgx_read_rand((uint8_t *)&output, sizeof(output));
   return output & 1;
-#else
-  if (idx > 4095) {
-    br_aesctr_drbg_generate(&ctx, buffer, 4096);
-    idx = 0;
-  }
-  uint8_t output = *(uint8_t *)(buffer + idx);
-  idx += 1;
-  return output & 1;
-#endif
 }
 
 void read_rand(uint8_t *output, size_t size) { sgx_read_rand(output, size); }

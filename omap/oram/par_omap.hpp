@@ -3,8 +3,8 @@
 #include <omp.h>
 
 #include "cuckoo.hpp"
+#include "external_memory/algorithm/merge_split.hpp"
 #include "external_memory/algorithm/param_select.hpp"
-#include "external_memory/algorithm/sort_building_blocks.hpp"
 namespace ODSL {
 template <typename K, typename V, typename PositionType = uint64_t>
 struct ParOMap {
@@ -43,7 +43,7 @@ struct ParOMap {
   ParOMap() {}
 
   ParOMap(uint64_t mapSize, uint64_t shardCount) {
-      SetSize(mapSize, shardCount);
+    SetSize(mapSize, shardCount);
   }
 
   void SetSize(uint64_t mapSize, uint64_t shardCount) {
@@ -98,15 +98,18 @@ struct ParOMap {
 
   template <class Reader>
   void InitFromReader(Reader& reader,
-                      uint64_t cacheBytes = ((uint64_t)ENCLAVE_SIZE << 20) * 3 / 4) {
+                      uint64_t cacheBytes = ((uint64_t)ENCLAVE_SIZE << 20) * 3 /
+                                            4) {
     uint64_t shardCount = shards.size();
     // std::vector<uint64_t> shardCounter(shardCount);
     uint64_t initSize = reader.size();
     uint64_t maxInitSizePerShard = maxQueryPerShard(initSize, shardCount, -60);
     using NonObliviousCuckooHashMap = CuckooHashMap<K, V, false, PositionType>;
-    std::vector<NonObliviousCuckooHashMap> nonOMaps(shardCount, NonObliviousCuckooHashMap(shardSize, 0));
+    std::vector<NonObliviousCuckooHashMap> nonOMaps(
+        shardCount, NonObliviousCuckooHashMap(shardSize, 0));
     using Element = EM::Algorithm::TaggedT<KVPair>;
-    const size_t bktSize = std::min(8192UL, GetNextPowerOfTwo(maxInitSizePerShard));
+    const size_t bktSize =
+        std::min(8192UL, GetNextPowerOfTwo(maxInitSizePerShard));
     size_t bktRealSize = numRealPerBucket(bktSize, shardCount, -60);
     uint64_t minBatchSize = bktSize * shardCount;
     uint64_t maxBatchSize = cacheBytes / (sizeof(Element) + 8) / 2;
@@ -120,7 +123,8 @@ struct ParOMap {
     uint64_t bktPerShard = divRoundUp(totalBucketNeeded, shardCount);
     if (bktPerShard * bktSize > shardSize) {
       printf("Warning: enlarge omap for initialization\n");
-      shardSize = bktPerShard * bktSize; // we need large oram to hold these many elements
+      shardSize = bktPerShard *
+                  bktSize;  // we need large oram to hold these many elements
     }
     totalBucketNeeded = bktPerShard * shardCount;
     bktRealSize = divRoundUp(
@@ -132,7 +136,6 @@ struct ParOMap {
     uint64_t bucketPerBatch = parBatchCount * shardCount;
     uint64_t batchSize = bucketPerBatch * bktSize;
     uint64_t perBatchShardSize = parBatchCount * bktSize;
-    
 
     // for performing mergesplits
     Element* batch = new Element[batchSize];
@@ -194,14 +197,14 @@ struct ParOMap {
       Assert(realCount == initSize);
 #endif
 
-      
-  #pragma omp parallel for schedule(static)
+#pragma omp parallel for schedule(static)
       for (uint32_t i = 0; i < shardCount; ++i) {
         for (uint64_t j = 0; j < perBatchShardSize; ++j) {
           const Element& elem = batch[i * perBatchShardSize + j];
           const KVPair& kvPair = elem.v;
           // insert dummies like normal elements
-          nonOMaps[i].template insert<true>(kvPair.key, kvPair.value, elem.isDummy());
+          nonOMaps[i].template insert<true>(kvPair.key, kvPair.value,
+                                            elem.isDummy());
         }
       }
     }
@@ -211,7 +214,7 @@ struct ParOMap {
     for (auto& shard : shards) {
       shard.SetSize(shardSize, cacheBytes / shardCount);
     }
-    #pragma omp parallel for schedule(static)
+#pragma omp parallel for schedule(static)
     for (uint32_t i = 0; i < shardCount; ++i) {
       shards[i].InitFromNonOblivious(nonOMaps[i]);
     }
@@ -357,7 +360,9 @@ struct ParOMap {
     for (uint32_t i = 0; i < batchSize; ++i) {
       recoveryArr[i] = i;
     }
-    EM::Algorithm::ParBitonicSortSepPayload(keyInfoVec.begin(), keyInfoVec.end(), recoveryArr.begin(), shards.size() * 2);
+    EM::Algorithm::ParBitonicSortSepPayload(
+        keyInfoVec.begin(), keyInfoVec.end(), recoveryArr.begin(),
+        shards.size() * 2);
     std::vector<uint32_t> shardLoads(shardCount, 0);
     std::vector<uint32_t> prefixSumFirstCompaction(batchSize + 1);
     prefixSumFirstCompaction[0] = 0;
@@ -423,7 +428,9 @@ struct ParOMap {
       obliMove(isDup, resultVec[i], resultVec[i - 1]);
     }
 
-    EM::Algorithm::ParBitonicSortSepPayload(recoveryArr.begin(), recoveryArr.end(), resultVec.begin(), shards.size() * 2);
+    EM::Algorithm::ParBitonicSortSepPayload(
+        recoveryArr.begin(), recoveryArr.end(), resultVec.begin(),
+        shards.size() * 2);
     std::vector<uint8_t> foundFlags(batchSize);
     for (uint32_t i = 0; i < batchSize; ++i) {
       foundFlags[i] = resultVec[i].found;
@@ -463,11 +470,11 @@ struct ParOMap {
     }
   }
 
-template <class KeyIterator, class ValueIterator>
+  template <class KeyIterator, class ValueIterator>
   std::vector<uint8_t> insertParBatch(const KeyIterator keyBegin,
                                       const KeyIterator keyEnd,
                                       const ValueIterator valueBegin) {
-  uint64_t shardCount = shards.size();
+    uint64_t shardCount = shards.size();
     uint64_t batchSize = keyEnd - keyBegin;
     uint64_t shardSize = maxQueryPerShard(batchSize, shardCount);
     std::vector<KVInfo> keyInfoVec(batchSize);
@@ -482,7 +489,9 @@ template <class KeyIterator, class ValueIterator>
     for (uint32_t i = 0; i < batchSize; ++i) {
       recoveryArr[i] = i;
     }
-    EM::Algorithm::ParBitonicSortSepPayload(keyInfoVec.begin(), keyInfoVec.end(), recoveryArr.begin(), shards.size() * 2);
+    EM::Algorithm::ParBitonicSortSepPayload(
+        keyInfoVec.begin(), keyInfoVec.end(), recoveryArr.begin(),
+        shards.size() * 2);
     std::vector<uint32_t> shardLoads(shardCount, 0);
     std::vector<uint32_t> prefixSumFirstCompaction(batchSize + 1);
     prefixSumFirstCompaction[0] = 0;
@@ -529,13 +538,14 @@ template <class KeyIterator, class ValueIterator>
                                             prefixSumSecondCompaction.begin());
     // using ValResult = BaseMap::ValResult;
     std::vector<uint8_t> foundVec(shardCount * shardSize);
-    #pragma omp parallel for schedule(static)
+#pragma omp parallel for schedule(static)
     for (uint32_t i = 0; i < shardCount; ++i) {
       uint32_t numReal = shardLoads[i];
       for (uint32_t j = 0; j < shardSize; ++j) {
-          foundVec[i * shardSize + j] =
-              shards[i].insertOblivious(kvVec[i * shardSize + j].key, kvVec[i * shardSize + j].value, j >= numReal);
-        }
+        foundVec[i * shardSize + j] = shards[i].insertOblivious(
+            kvVec[i * shardSize + j].key, kvVec[i * shardSize + j].value,
+            j >= numReal);
+      }
     }
 
     EM::Algorithm::OrCompactSeparateMark(foundVec.begin(), foundVec.end(),
@@ -550,10 +560,11 @@ template <class KeyIterator, class ValueIterator>
       obliMove(isDup, foundVec[i], foundVec[i - 1]);
     }
 
-    EM::Algorithm::ParBitonicSortSepPayload(recoveryArr.begin(), recoveryArr.end(), foundVec.begin(), shards.size() * 2);
+    EM::Algorithm::ParBitonicSortSepPayload(recoveryArr.begin(),
+                                            recoveryArr.end(), foundVec.begin(),
+                                            shards.size() * 2);
     foundVec.resize(batchSize);
     return foundVec;
-
   }
 
   template <class KeyIterator>
@@ -574,7 +585,9 @@ template <class KeyIterator, class ValueIterator>
     for (uint32_t i = 0; i < batchSize; ++i) {
       recoveryArr[i] = i;
     }
-    EM::Algorithm::ParBitonicSortSepPayload(keyInfoVec.begin(), keyInfoVec.end(), recoveryArr.begin(), shards.size() * 2);
+    EM::Algorithm::ParBitonicSortSepPayload(
+        keyInfoVec.begin(), keyInfoVec.end(), recoveryArr.begin(),
+        shards.size() * 2);
     std::vector<uint32_t> shardLoads(shardCount, 0);
     std::vector<uint32_t> prefixSumFirstCompaction(batchSize + 1);
     prefixSumFirstCompaction[0] = 0;
@@ -619,13 +632,13 @@ template <class KeyIterator, class ValueIterator>
     EM::Algorithm::OrDistributeSeparateMark(keyVec.begin(), keyVec.end(),
                                             prefixSumSecondCompaction.begin());
     std::vector<uint8_t> foundVec(shardCount * shardSize);
-    #pragma omp parallel for schedule(static)
+#pragma omp parallel for schedule(static)
     for (uint32_t i = 0; i < shardCount; ++i) {
       uint32_t numReal = shardLoads[i];
       for (uint32_t j = 0; j < shardSize; ++j) {
-          foundVec[i * shardSize + j] =
-              shards[i].eraseOblivious(keyVec[i * shardSize + j], j >= numReal);
-        }
+        foundVec[i * shardSize + j] =
+            shards[i].eraseOblivious(keyVec[i * shardSize + j], j >= numReal);
+      }
     }
 
     EM::Algorithm::OrCompactSeparateMark(foundVec.begin(), foundVec.end(),
@@ -640,7 +653,9 @@ template <class KeyIterator, class ValueIterator>
       obliMove(isDup, foundVec[i], foundVec[i - 1]);
     }
 
-    EM::Algorithm::ParBitonicSortSepPayload(recoveryArr.begin(), recoveryArr.end(), foundVec.begin(), shards.size() * 2);
+    EM::Algorithm::ParBitonicSortSepPayload(recoveryArr.begin(),
+                                            recoveryArr.end(), foundVec.begin(),
+                                            shards.size() * 2);
     foundVec.resize(batchSize);
     return foundVec;
   }

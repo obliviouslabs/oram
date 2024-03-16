@@ -13,38 +13,6 @@
 #endif
 
 namespace EM::Algorithm {
-
-enum PartitionMethod {
-  INTERLEAVE_PARTITION,  // partition by interleaving
-  OR_COMPACT,            // partition by OR compact
-  GOODRICH_COMPACT,      // partition using goodrich's method (not the external
-                         // memory version)
-  BITONIC                // partition using bitonic sort
-};
-
-/// @brief conditionally swap two values
-/// @tparam perf if true, increment swap counter
-/// @param cond condition for swapping
-/// @param v1 first value
-/// @param v2 second value
-template <bool perf = true>
-INLINE void condSwap(const auto& cond, auto& v1, auto& v2) {
-  if constexpr (perf) {
-    PERFCTR_INCREMENT(swapCount);
-  }
-
-  obliSwap(cond, v1, v2);
-}
-
-/// @brief swap two values
-template <bool perf = true>
-INLINE void swap(auto& v1, auto& v2) {
-  if constexpr (perf) {
-    PERFCTR_INCREMENT(swapCount);
-  }
-  std::swap(v1, v2);
-}
-
 /// @brief Wrapper for flex-way butterfly o-sort
 /// @tparam T type of elements
 template <typename T>
