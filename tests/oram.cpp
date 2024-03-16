@@ -13,18 +13,6 @@ using namespace ODSL::CircuitORAM;
 
 TEST(ORAM, Init) { ORAM<int> oram(1024); }
 
-TEST(ORAM, EvictPathPerf) {
-  constexpr int Z = 5;
-  constexpr int stashSize = 10;
-  int depth = 4;
-  int pathSize = stashSize + Z * depth;
-  using ORAM_ = ORAM<int, Z, stashSize>;
-  for (int r = 0; r < 1000000; ++r) {
-    std::vector<ORAM_::Block_> blocks(pathSize);
-    ORAM_::EvictPath(blocks, 0);
-  }
-}
-
 TEST(ORAM, CommonSuffixLen) {
   uint64_t a = 3;
   uint64_t b = 5;
@@ -341,12 +329,7 @@ TEST(ORAM, StashLoad) {
 
       int stashLoad = 0;
       for (int j = 0; j < stashSize; ++j) {
-        if (!oram.stash->blocks[j].isDummy()) {
-          ++stashLoad;
-        }
-      }
-      for (int j = 0; j < Z; ++j) {
-        if (!oram.tree.arr[0].blocks[j].isDummy()) {
+        if (!oram.getStash()->blocks[j].isDummy()) {
           ++stashLoad;
         }
       }
@@ -372,13 +355,10 @@ TEST(ORAM, NonPowerOfTwo) {
       uint64_t pos = oram.Write(i, val);
       posMap[i] = pos;
       valMap[i] = val;
-
-      // printf("write %lu %lu to pos %lu\n", i, val, pos);
     }
     for (int r = 0; r < 7; ++r) {
       for (uint64_t i = 0; i < memSize; i++) {
         uint64_t val;
-        // printf("read %lu %lu at pos %lu\n", i, val, posMap[i]);
         uint64_t pos = oram.Read(posMap[i], i, val);
         posMap[i] = pos;
         ASSERT_EQ(val, valMap[i]);
@@ -387,47 +367,40 @@ TEST(ORAM, NonPowerOfTwo) {
   }
 }
 
-// TEST(ORAM, DiffCacheSize) {
-//   for (int memSize :
-//        {2, 3, 5, 7, 9, 33, 40, 55, 127, 129, 543, 678, 1023, 1025, 2000}) {
-//     for (size_t cacheSize = 6910886 / 512; cacheSize > 8192;
-//          cacheSize *= 0.95) {
-//       ODSL::CircuitORAM::ORAM<uint64_t, 2, 50, uint64_t, uint64_t, 288>
-//       oram(
-//           memSize, cacheSize);
+TEST(ORAM, DiffCacheSize) {
+  for (int memSize : {2, 3, 5, 7, 9, 33, 40, 55, 127, 129, 543, 678, 1023, 1025,
+                      2000, 3000}) {
+    for (size_t cacheSize = 1UL << 17; cacheSize > 1; cacheSize *= 0.95) {
+      ODSL::CircuitORAM::ORAM<uint64_t, 2, 20, uint64_t, uint64_t, 288> oram;
+      try {
+        oram.SetSize(memSize, cacheSize);
+      } catch (const std::runtime_error& e) {
+        if (strcmp(e.what(), "Circuit ORAM cache size too small") == 0) {
+          break;
+        } else {
+          throw;
+        }
+      }
 
-//       std::vector<uint64_t> posMap(memSize);
-//       std::vector<uint64_t> valMap(memSize);
-//       for (uint64_t i = 0; i < memSize; i++) {
-//         uint64_t val = UniformRandom();
-//         uint64_t pos = oram.Write(i, val);
-//         posMap[i] = pos;
-//         valMap[i] = val;
-
-//         // printf("write %lu %lu to pos %lu\n", i, val, pos);
-//       }
-//       for (int r = 0; r < 7; ++r) {
-//         for (uint64_t i = 0; i < memSize; i++) {
-//           uint64_t val = 0;
-//           uint64_t pos = oram.Read(posMap[i], i, val);
-//           posMap[i] = pos;
-//           if (val != valMap[i]) {
-//             std::vector<uint64_t> pathIdxs(GetLogBaseTwo(memSize) + 2);
-//             int pathLen = oram.tree.GetPathIdx(pathIdxs.begin(),
-//             pathIdxs.end(),
-//                                                posMap[i], memSize,
-//                                                oram.tree.GetCacheLevel());
-//             for (int i = 0; i < pathLen; i++) {
-//               printf("%lu ", pathIdxs[i]);
-//             }
-//             printf("\n");
-//           }
-//           ASSERT_EQ(val, valMap[i]);
-//         }
-//       }
-//     }
-//   }
-// }
+      std::vector<uint64_t> posMap(memSize);
+      std::vector<uint64_t> valMap(memSize);
+      for (uint64_t i = 0; i < memSize; i++) {
+        uint64_t val = UniformRandom();
+        uint64_t pos = oram.Write(i, val);
+        posMap[i] = pos;
+        valMap[i] = val;
+      }
+      for (int r = 0; r < 7; ++r) {
+        for (uint64_t i = 0; i < memSize; i++) {
+          uint64_t val = 0;
+          uint64_t pos = oram.Read(posMap[i], i, val);
+          posMap[i] = pos;
+          ASSERT_EQ(val, valMap[i]);
+        }
+      }
+    }
+  }
+}
 
 TEST(ORAM, WithoutPositionMapLargePerf) {
   int memSize = 1 << 20;
@@ -442,35 +415,6 @@ TEST(ORAM, WithoutPositionMapLargePerf) {
   auto end = std::chrono::system_clock::now();
   std::chrono::duration<double> diff = end - start;
   printf("Time per access: %f us\n", diff.count() * 1e6 / numAccesses);
-}
-
-// TEST(ORAM, testInit) {
-//   uint64_t size = 1024;
-//   ORAM<TestElement> oram(size);
-//   StdVector<TestElement> vec(size);
-//   for (int i = 0; i < size; ++i) {
-//     vec[i] = TestElement();
-//     vec[i].key = i;
-//   }
-//   StdVector<uint64_t> posMap(size);
-//   StdVector<uint64_t>::Writer posMapWriter(posMap.begin(), posMap.end());
-//   oram.InitFromVector(vec, posMapWriter);
-//   for (uint64_t i = 0; i < size; i++) {
-//     TestElement val;
-//     printf("read %lu at pos %lu\n", i, posMap[i]);
-//     uint64_t pos = oram.Read(posMap[i], i, val);
-//     posMap[i] = pos;
-//     ASSERT_EQ(val.key, i);
-//   }
-// }
-
-TEST(ORAM, testInitNaive) {
-  uint64_t memSize = 123456;
-  uint64_t size = 100000;
-  ORAM<TestElement> oram(memSize);
-  for (uint64_t i = 0; i < size; i++) {
-    oram.Write(i, TestElement());
-  }
 }
 
 TEST(ORAM, testInitWithReader) {
@@ -505,9 +449,7 @@ TEST(ORAM, testInitWithReader) {
            sizeof(TestElement), diff.count());
     for (int r = 0; r < 2; ++r) {
       for (uint64_t i = 0; i < size; i++) {
-        // printf("read %lu at pos %lu\n", i, posMap[i].data);
         TestElement val;
-        // printf("read %lu %lu at pos %lu\n", i, val, posMap[i]);
         uint64_t pos = oram.Read(posMap[i].data, i, val);
         posMap[i].data = pos;
         ASSERT_EQ(val.key, valMap[i]);

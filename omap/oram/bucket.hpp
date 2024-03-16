@@ -1,7 +1,11 @@
 #pragma once
 #include "block.hpp"
 
+/// @brief This file contains the definition of bucket used in oram.
+
 namespace ODSL {
+
+/// @brief A bucket is a wrapper around a set of blocks.
 template <typename T, const int Z, typename PositionType = uint64_t,
           typename UidType = uint64_t>
 struct Bucket {

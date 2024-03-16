@@ -3,11 +3,11 @@
 
 #include "common/defs.hpp"
 /**
- * A wrapper for std::vector with the same interface as the other containers
+ * A wrapper for std::vector with the same interface as the other vector
+ * containers
  * */
 template <typename T>
 struct StdVector : public std::vector<T> {
-  constexpr static bool useStdCopy = true;
   constexpr static size_t item_per_page = 1;
 
   struct Iterator : public std::vector<T>::iterator {
@@ -67,7 +67,9 @@ struct StdVector : public std::vector<T> {
   Iterator end() { return Iterator(std::vector<T>::end()); }
 
   void resize(uint64_t N) { std::vector<T>::resize(N); }
-  void SetSize(uint64_t N, uint64_t _ignore1 = 0, uint64_t _ignore2 = 0) { resize(N); }
+  void SetSize(uint64_t N, uint64_t _ignore1 = 0, uint64_t _ignore2 = 0) {
+    resize(N);
+  }
   INLINE size_t size() { return std::vector<T>::size(); }
 
   struct Reader {

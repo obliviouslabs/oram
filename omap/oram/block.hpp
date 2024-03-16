@@ -2,7 +2,15 @@
 #include "common/cpp_extended.hpp"
 #include "common/dummy.hpp"
 #include "common/mov_intrinsics.hpp"
+/// @brief This file contains the definition of the blocks used in oram.
+
 namespace ODSL {
+
+/// @brief A block is a wrapper around a data element, with a position and a
+/// unique id.
+/// @tparam T The type of the data
+/// @tparam PositionType The type of the position, default to uint64_t
+/// @tparam UidType The type of the unique id, default to uint64_t
 template <typename T, typename PositionType = uint64_t,
           typename UidType = uint64_t>
 struct Block {
@@ -24,14 +32,14 @@ struct Block {
   static_assert(std::is_trivially_copyable_v<T>,
                 "T must be trivially copyable");
 
-  INLINE bool invalidateAndCopyDataIfUidMatch(const UidType& uid, T& out) {
+  INLINE bool readAndRemove(const UidType& uid, T& out) {
     bool match = this->uid == uid;
     obliMove(match, this->uid, DUMMY<UidType>());
     obliMove(match, out, data);
     return match;
   }
 
-  INLINE bool conditionalFillIfDummy(bool cond, const Block& data) {
+  INLINE bool insert(bool cond, const Block& data) {
     return obliMove(cond & isDummy(), *this, data);
   }
 
@@ -46,6 +54,9 @@ struct Block {
 #endif
 };
 
+/// @brief A block with a unique id, but no position. Useful for linear oram.
+/// @tparam T The type of the data
+/// @tparam UidType The type of the unique id, default to uint64_t
 template <typename T, typename UidType = uint64_t>
 struct UidBlock {
   T data;

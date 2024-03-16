@@ -1,5 +1,6 @@
 #pragma once
 #include <functional>
+/// @brief Virtual vector that allows to access a virtualized memory
 namespace EM::VirtualVector {
 template <typename VT>
 struct Vector {
@@ -170,6 +171,8 @@ static OutputIterator CopyOut(InputIterator begin, InputIterator end,
   return to + (end - begin);
 }
 
+/// @brief A reader based on a customized virtualization function.
+/// @tparam VT The value type the reader reads
 template <typename VT>
 struct VirtualReader {
   using value_type = VT;
@@ -191,6 +194,8 @@ struct VirtualReader {
   iterator_type getIterator() { return it; }
 };
 
+/// @brief A writer that calls a customized function when performing write.
+/// @tparam VT The value type the writer writes
 template <typename VT>
 struct VirtualWriter {
   using value_type = VT;

@@ -3,7 +3,6 @@
 
 #include <vector>
 
-#include "common/encrypted.hpp"
 #include "external_memory/server/serverFrontend.hpp"
 /// @brief External memory vector using a direct map / lru cache to swap pages.
 namespace EM::ExtVector {
@@ -13,7 +12,6 @@ template <typename T,
           uint64_t cache_size = SERVER__CACHE_SIZE>
 struct Vector {
   static constexpr uint64_t item_per_page = page_size / sizeof(T);
-  constexpr static bool useStdCopy = true;
   struct Page {
     T pages[item_per_page];
     using Encrypted_t = std::conditional_t<
@@ -21,6 +19,7 @@ struct Vector {
         std::conditional_t<ENCRYPTED, Encrypted<Page>, NonEncrypted<Page>>>;
   };
 
+  // don't make the cache size a power of 2, avoid severe cache conflict
   static constexpr uint64_t DMCacheSize =
       cache_size != GetNextPowerOfTwo(cache_size)
           ? cache_size
@@ -70,24 +69,6 @@ struct Vector {
       return vec_ptr->server.AccessReadOnly(pageIdx).pages[pageOffset];
     }
 
-    // don't write back the page
-    const_reference derefNoWriteBack() const {
-      Assert(m_ptr < vec_ptr->N);
-      const size_t realIdx = m_ptr;
-      const size_t pageIdx = realIdx / item_per_page;
-      const size_t pageOffset = realIdx % item_per_page;
-      return vec_ptr->server.AccessNoWriteBack(pageIdx).pages[pageOffset];
-    }
-
-    // always skip read page
-    reference derefWriteOnly() {
-      Assert(m_ptr < vec_ptr->N);
-      const size_t realIdx = m_ptr;
-      const size_t pageIdx = realIdx / item_per_page;
-      const size_t pageOffset = realIdx % item_per_page;
-      return vec_ptr->server.AccessWriteOnly(pageIdx).pages[pageOffset];
-    }
-
     T* operator->() { return &(**this); }
 
     const T* operator->() const { return &(**this); }
@@ -120,10 +101,6 @@ struct Vector {
     page_idx_type get_page_idx() const { return m_ptr / item_per_page; }
 
     page_offset_type get_page_offset() const { return m_ptr % item_per_page; }
-
-    auto& getVector() { return *vec_ptr; }
-
-    static Vector* getNullVector() { return NULL; }
 
     friend bool operator==(const Iterator& a, const Iterator& b) {
       return a.m_ptr == b.m_ptr;
@@ -181,10 +158,6 @@ struct Vector {
   }
 
   Vector(Vector&& other) : N(other.N), server(std::move(other.server)) {}
-
-  T& AtForLateInit(uint64_t index) {
-    return Iterator(index, *this).derefWriteOnly();
-  }
 
   T& At(uint64_t index) {
     const size_t realIdx = index;
@@ -254,54 +227,4 @@ static OutputIterator Copy(InputIterator begin, InputIterator end,
   return to;
 }
 
-template <class InputIterator, class OutputIterator>
-static OutputIterator CopyWithoutWriteBackInput(InputIterator begin,
-                                                InputIterator end,
-                                                OutputIterator to) {
-  for (auto it = begin; it != end; ++it, ++to) {
-    *to = it.derefNoWriteBack();
-  }
-  return to;
-}
-
-template <class InputIterator, class OutputIterator>
-static OutputIterator CopyForLateInit(InputIterator begin, InputIterator end,
-                                      OutputIterator to) {
-  auto it = begin;
-  auto toEnd = to + (end - begin);
-  auto fullPageEnd = toEnd - toEnd.get_page_offset();
-  if (to < fullPageEnd) {
-    for (; to.get_page_offset() != 0; ++it, ++to) {
-      const auto& it_const = it;
-      *to = *it_const;
-    }
-    for (; to != fullPageEnd; ++it, ++to) {
-      const auto& it_const = it;
-      to.derefWriteOnly() = *it_const;
-    }
-  }
-
-  for (; to != toEnd; ++it, ++to) {
-    const auto& it_const = it;
-    *to = *it_const;
-  }
-  return to;
-}
-
-template <class Iterator, typename T>
-static void FillForLateInit(Iterator begin, Iterator end, const T& val) {
-  auto to = begin;
-  auto fullPageEnd = end - end.get_page_offset();
-  if (to < fullPageEnd) {
-    for (; to.get_page_offset() != 0; ++to) {
-      *to = val;
-    }
-    for (; to != fullPageEnd; ++to) {
-      to.derefWriteOnly() = val;
-    }
-  }
-  for (; to != end; ++to) {
-    *to = val;
-  }
-}
 }  // namespace EM::ExtVector

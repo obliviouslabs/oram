@@ -4,8 +4,8 @@
 #include <vector>
 
 #include "bucket.hpp"
-#include "external_memory/algorithm/or_compact_shuffle.hpp"
 #include "external_memory/algorithm/bitonic.hpp"
+#include "external_memory/algorithm/or_compact_shuffle.hpp"
 #include "external_memory/stdvector.hpp"
 #include "external_memory/virtualvector.hpp"
 #include "heap_tree.hpp"
@@ -21,7 +21,7 @@ template <class PathVec, typename UidType, typename T>
 void ReadElementAndRemoveFromPath(PathVec& path, const UidType& uid, T& out) {
   using Block_ = PathVec::value_type;
   for (Block_& b : path) {
-    b.invalidateAndCopyDataIfUidMatch(uid, out);
+    b.readAndRemove(uid, out);
   }
 }
 
@@ -29,7 +29,7 @@ template <class Iterator, typename UidType, typename T>
 void ReadElementAndRemoveFromPath(Iterator begin, Iterator end,
                                   const UidType& uid, T& out) {
   for (auto it = begin; it != end; ++it) {
-    it->invalidateAndCopyDataIfUidMatch(uid, out);
+    it->readAndRemove(uid, out);
   }
 }
 
@@ -40,7 +40,7 @@ bool WriteNewBlockToPath(PathVec& path, const Block_& block) {
   bool cond = true;
   // fill the first slot that's empty
   for (int i = 0; i < endIdx; i++) {
-    cond &= !path[i].conditionalFillIfDummy(cond, block);
+    cond &= !path[i].insert(cond, block);
   }
   return !cond;
 }
@@ -51,7 +51,7 @@ bool WriteNewBlockToTreeTop(PathVec& path, const Block_& block, int topSize) {
   bool cond = true;
   // fill the first slot that's empty
   for (int i = 0; i < topSize; i++) {
-    cond &= !path[i].conditionalFillIfDummy(cond, block);
+    cond &= !path[i].insert(cond, block);
   }
   return !cond;
 }

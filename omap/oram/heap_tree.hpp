@@ -5,7 +5,7 @@
 /**
  * @brief A tree stored in a heap structure, but pack several levels together,
  * and optimize for reverse lexico order eviction.
- * Below shows an exmpale of a tree with 6 leaves and 4 levels, the number in
+ * Below shows an exmaple of a tree with 6 leaves and 4 levels, the number in
  * the brackets are the indices of the nodes in the data array.
  *
  *  Cached:                 ***[0]
@@ -14,7 +14,7 @@
  *      *00[3]    |   *01[6]      |    *10[9]    |      *11[10]
  * 000[4]  100[5] | 001[7] 101[8] |              |
  *
- * @tparam T
+ * @tparam T The type of node in the tree
  * @tparam PositionType
  * @tparam page_size The size of the page, default to 4096 bytes
  * @tparam evict_freq Number of reverse lexico evictions per random access
@@ -22,6 +22,7 @@
 template <typename T, typename PositionType = uint64_t,
           const size_t page_size = 4096, const int evict_freq = 2>
 struct HeapTree {
+ private:
   static const int evict_freq_ = evict_freq;
   static constexpr size_t max_node_per_page = divRoundUp(page_size, sizeof(T));
   static constexpr size_t node_per_page_log2 =
@@ -58,6 +59,7 @@ struct HeapTree {
   PositionType extSize = 0;
   PositionType totalSize = 0;  // total number of nodes
 
+ public:
   HeapTree() {}
 
   HeapTree(PositionType _size, int _cacheLevel = 62) {
@@ -93,18 +95,24 @@ struct HeapTree {
     InitWithDefault(_size, T(), _cacheLevel);
   }
 
-  int GetCacheLevel() const { return cacheLevel; }
-
-  size_t GetLeafCount() const { return leafCount; }
-
-  size_t GetNodeCount() const { return totalSize; }
-
+  /**
+   * @brief Get the memory usage of the tree
+   *
+   * @param _size Number of leaves in the tree
+   * @param _cacheLevel The number of top levels to cache.
+   * @return uint64_t The memory usage in bytes
+   */
   static uint64_t GetMemoryUsage(PositionType _size, int _cacheLevel = 62) {
     size_t totalSize = 2 * _size - 1;
     size_t cacheSize = std::min((uint64_t)totalSize, (2UL << _cacheLevel) - 1);
     return Vec::GetMemoryUsage(totalSize, cacheSize);
   }
 
+  /**
+   * @brief Get the memory usage of the tree
+   *
+   * @return uint64_t The memory usage in bytes of this tree
+   */
   uint64_t GetMemoryUsage() const { return arr.GetMemoryUsage(); }
 
   /**
@@ -187,6 +195,14 @@ struct HeapTree {
     return pathLen;
   }
 
+  /**
+   * @brief Retrieve the node on the path
+   *
+   * @tparam Iterator The type of the iterator to store the path
+   * @param pos The index of the path
+   * @param pathBegin The begin iterator to store the path
+   * @return int The number of nodes in the path
+   */
   template <typename Iterator>
   int ReadPath(PositionType pos, Iterator pathBegin) {
     PositionType pathIdx[64];
@@ -201,12 +217,21 @@ struct HeapTree {
     return actualLevel;
   }
 
+  /**
+   * @brief Write the path to the tree
+   *
+   * @tparam Iterator The type of the iterator to store the path
+   * @param pos The index of the path
+   * @param pathBegin The begin iterator to store the path
+   * @return int The number of nodes in the path
+   */
   template <typename Iterator>
   int WritePath(PositionType pos, const Iterator pathBegin) {
     PositionType pathIdx[64];
     int actualLevel = GetPathIdx(&pathIdx[0], &pathIdx[totalLevel], pos,
                                  leafCount, cacheLevel);
-
+    // we have checked that total level <= 64
+    Assert(actualLevel <= totalLevel);
     for (int i = 0; i < actualLevel; ++i) {
       PositionType idx = pathIdx[i];
       arr[idx] = *(pathBegin + i);

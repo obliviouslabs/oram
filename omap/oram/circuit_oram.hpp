@@ -1,7 +1,23 @@
 #pragma once
 
 #include "oram_common.hpp"
+
+/// @brief This file implements Circuit ORAM
+
 namespace ODSL::CircuitORAM {
+/// @brief Circuit ORAM implementation.
+/// @tparam T   Type of data stored in the ORAM
+/// @tparam PositionType   Type of the position, default to uint64_t. Each
+/// position corresponds to a path in the ORAM tree.
+/// @tparam UidType   Type of the unique id, default to uint64_t. Each block in
+/// the ORAM has a unique id. The unique id is used to identify the block in the
+/// ORAM. Dummy blocks have a unique id of DUMMY<UidType>().
+/// @tparam Z   The number of blocks in each bucket
+/// @tparam stashSize   The number of blocks in the stash, not counting the root
+/// bucket.
+/// @tparam page_size   The size of the page if part of the data is stored in
+/// external memory, default to 4096 bytes
+/// @tparam evict_freq  The number of reverse lexico evictions per random access
 template <typename T, const int Z = 2, const int stashSize = 20,
           typename PositionType = uint64_t, typename UidType = uint64_t,
           const uint64_t page_size = 4096, int evict_freq = 2>
@@ -11,6 +27,7 @@ struct ORAM {
   using Bucket_ = Bucket<T, Z, PositionType, UidType>;
   using HeapTree_ = HeapTree<Bucket_, PositionType, page_size, evict_freq>;
 
+ private:
   HeapTree_ tree;
 
   Stash* stash = nullptr;
@@ -20,196 +37,6 @@ struct ORAM {
   PositionType evictCounter = 0;
 
   std::vector<Block_> path;
-
-  ORAM() {}
-
-  ORAM(PositionType size) { SetSize(size); }
-
-  ORAM(PositionType size, size_t cacheBytes) { SetSize(size, cacheBytes); }
-
-  void SetSize(PositionType size, size_t cacheBytes = 1UL << 62) {
-    if (_size) {
-      throw std::runtime_error("Circuit ORAM double initialization");
-    }
-
-    _size = size;
-    int cacheLevel = GetMaxCacheLevel<T, Z, stashSize, PositionType, UidType>(
-        size, cacheBytes);
-    if (cacheLevel < 0) {
-      throw std::runtime_error("Circuit ORAM cache size too small");
-    }
-    Bucket_ dummyBucket;
-    for (int i = 0; i < Z; ++i) {
-      dummyBucket.blocks[i].uid = DUMMY<UidType>();
-    }
-    tree.InitWithDefault(size, dummyBucket, cacheLevel);
-    depth = GetLogBaseTwo(size - 1) + 2;
-    if (depth > 64) {
-      throw std::runtime_error("Circuit ORAM too large");
-    }
-    stash = new Stash();
-    path.resize(stashSize + Z * depth);
-  }
-
-  static size_t GetMemoryUsage(PositionType size,
-                               size_t cacheBytes = 1UL << 62) {
-    return sizeof(Stash) +
-           HeapTree_::getMemoryUsage(
-               size, GetMaxCacheLevel<T, Z, stashSize, PositionType, UidType>(
-                         size, cacheBytes));
-  }
-
-  size_t GetMemoryUsage() const {
-    return sizeof(Stash) + tree.GetMemoryUsage();
-  }
-
-  template <typename Reader, class PosMapWriter>
-  void InitFromReader(Reader& reader, PosMapWriter& posMapWriter) {
-    size_t initSize = reader.size();
-    for (UidType uid = 0; uid != (UidType)initSize; ++uid) {
-      PositionType newPos = Write(uid, reader.read());
-      posMapWriter.write(UidBlock<PositionType, UidType>(newPos, uid));
-    }
-  }
-
-  PositionType size() const { return _size; }
-
-  ~ORAM() {
-    if (stash) {
-      delete stash;
-      stash = nullptr;
-    }
-  }
-
-  ORAM& operator=(const ORAM& other) = default;
-  ORAM& operator=(ORAM&& other) = default;
-
-  template <const int _evict_freq = evict_freq>
-  INLINE void writeBlockWithRetry(const Block_& newBlock, PositionType pos,
-                                  int pathLen, int retry = 10) {
-    while (true) {
-      bool success = WriteNewBlockToTreeTop(path, newBlock, stashSize + Z);
-      EvictPath(path, pos, pathLen);
-      WriteBackPath(path, pos);
-      Evict<_evict_freq>();
-      if (success) {
-        break;
-      }
-      if (!retry) {
-        throw std::runtime_error("ORAM read failed");
-      }
-      --retry;
-      pos = (evictCounter++) % size();
-      pathLen = ReadPath(pos, path);
-    }
-  }
-
-  PositionType Read(PositionType pos, const UidType& uid, T& out,
-                    PositionType newPos) {
-    int len = ReadPath(pos, path);
-
-    ReadElementAndRemoveFromPath(path.begin(), path.begin() + len, uid, out);
-
-    Block_ newBlock(out, newPos, uid);
-    writeBlockWithRetry(newBlock, pos, len);
-    return newPos;
-  }
-
-  void Evict(PositionType pos) {
-    int len = ReadPath(pos, path);
-    EvictPath(path, pos, len);
-    WriteBackPath(path, pos);
-  }
-
-  template <const int _evict_freq = evict_freq>
-  void Evict() {
-    for (int i = 0; i < _evict_freq; ++i) {
-      Evict((evictCounter++) % size());
-    }
-  }
-
-  PositionType Read(PositionType pos, const UidType& uid, T& out) {
-    PositionType newPos = UniformRandom(size() - 1);
-    return Read(pos, uid, out, newPos);
-  }
-
-  template <const int _evict_freq = evict_freq>
-  PositionType Write(const UidType& uid, const T& in, PositionType newPos) {
-    PositionType pos = (evictCounter++) % size();
-    int len = ReadPath(pos, path);
-    Block_ newBlock(in, newPos, uid);
-    writeBlockWithRetry<_evict_freq>(newBlock, pos, len);
-    return newPos;
-  }
-
-  template <const int _evict_freq = evict_freq>
-  PositionType Write(const UidType& uid, const T& in) {
-    PositionType newPos = UniformRandom(size() - 1);
-    return Write<evict_freq>(uid, in, newPos);
-  }
-
-  template <class Func>
-  PositionType Update(PositionType pos, const UidType& uid,
-                      const Func& updateFunc) {
-    T out;
-    return Update(pos, uid, updateFunc, out);
-  }
-
-  template <class Func>
-  PositionType Update(PositionType pos, const UidType& uid, PositionType newPos,
-                      const Func& updateFunc) {
-    T out;
-    return Update(pos, uid, newPos, updateFunc, out);
-  }
-
-  template <class Func>
-  PositionType Update(PositionType pos, const UidType& uid,
-                      const Func& updateFunc, T& out) {
-    return Update(pos, uid, updateFunc, out, uid);  // does not change uid
-  }
-
-  template <class Func>
-  PositionType Update(PositionType pos, const UidType& uid, PositionType newPos,
-                      const Func& updateFunc, T& out) {
-    return Update(pos, uid, newPos, updateFunc, out,
-                  uid);  // does not change uid
-  }
-
-  template <class Func>
-  PositionType Update(PositionType pos, const UidType& uid,
-                      const Func& updateFunc, T& out,
-                      const UidType& updatedUid) {
-    PositionType newPos = UniformRandom(size() - 1);
-    return Update(pos, uid, newPos, updateFunc, out, updatedUid);
-  }
-
-  template <class Func>
-  PositionType Update(PositionType pos, const UidType& uid, PositionType newPos,
-                      const Func& updateFunc, T& out,
-                      const UidType& updatedUid) {
-    int len = ReadPath(pos, path);
-    ReadElementAndRemoveFromPath(path.begin(), path.begin() + len, uid, out);
-    bool keepFlag = updateFunc(out);
-    UidType newUid = DUMMY<UidType>();
-    obliMove(keepFlag, newUid, updatedUid);
-    Block_ newBlock(out, newPos, updatedUid);
-    writeBlockWithRetry(newBlock, pos, len);
-    return newPos;
-  }
-
-  int ReadPath(PositionType pos, std::vector<Block_>& path) {
-    Assert(path.size() == stashSize + Z * depth);
-
-    memcpy(&path[0], stash->blocks, stashSize * sizeof(Block_));
-
-    int level = tree.ReadPath(pos, (Bucket_*)(&path[stashSize]));
-    return stashSize + Z * level;
-  }
-
-  void WriteBackPath(const std::vector<Block_>& path, PositionType pos) {
-    memcpy(stash->blocks, &path[0], stashSize * sizeof(Block_));
-    tree.WritePath(pos, (Bucket_*)(&path[stashSize]));
-  }
 
   static void EvictPath(std::vector<Block_>& path, PositionType pos,
                         int pathLen) {
@@ -299,6 +126,199 @@ struct ORAM {
     }
   }
 
+  void Evict(PositionType pos) {
+    int len = ReadPath(pos, path);
+    EvictPath(path, pos, len);
+    WriteBackPath(path, pos);
+  }
+
+  template <const int _evict_freq = evict_freq>
+  void Evict() {
+    for (int i = 0; i < _evict_freq; ++i) {
+      Evict((evictCounter++) % size());
+    }
+  }
+
+  template <const int _evict_freq = evict_freq>
+  INLINE void writeBlockWithRetry(const Block_& newBlock, PositionType pos,
+                                  int pathLen, int retry = 10) {
+    while (true) {
+      bool success = WriteNewBlockToTreeTop(path, newBlock, stashSize + Z);
+      EvictPath(path, pos, pathLen);
+      WriteBackPath(path, pos);
+      Evict<_evict_freq>();
+      if (success) {
+        break;
+      }
+      if (!retry) {
+        throw std::runtime_error("ORAM read failed");
+      }
+      --retry;
+      pos = (evictCounter++) % size();
+      pathLen = ReadPath(pos, path);
+    }
+  }
+
+ public:
+  ORAM() {}
+
+  ORAM(PositionType size) { SetSize(size); }
+
+  ORAM(PositionType size, size_t cacheBytes) { SetSize(size, cacheBytes); }
+
+  Stash* getStash() { return stash; }
+
+  void SetSize(PositionType size, size_t cacheBytes = 1UL << 62) {
+    if (_size) {
+      throw std::runtime_error("Circuit ORAM double initialization");
+    }
+
+    _size = size;
+    int cacheLevel = GetMaxCacheLevel<T, Z, stashSize, PositionType, UidType>(
+        size, cacheBytes);
+    if (cacheLevel < 0) {
+      throw std::runtime_error("Circuit ORAM cache size too small");
+    }
+    Bucket_ dummyBucket;
+    for (int i = 0; i < Z; ++i) {
+      dummyBucket.blocks[i].uid = DUMMY<UidType>();
+    }
+    tree.InitWithDefault(size, dummyBucket, cacheLevel);
+    depth = GetLogBaseTwo(size - 1) + 2;
+    if (depth > 64) {
+      throw std::runtime_error("Circuit ORAM too large");
+    }
+    stash = new Stash();
+    path.resize(stashSize + Z * depth);
+  }
+
+  static size_t GetMemoryUsage(PositionType size,
+                               size_t cacheBytes = 1UL << 62) {
+    return sizeof(Stash) +
+           HeapTree_::getMemoryUsage(
+               size, GetMaxCacheLevel<T, Z, stashSize, PositionType, UidType>(
+                         size, cacheBytes));
+  }
+
+  size_t GetMemoryUsage() const {
+    return sizeof(Stash) + tree.GetMemoryUsage();
+  }
+
+  template <typename Reader, class PosMapWriter>
+  void InitFromReader(Reader& reader, PosMapWriter& posMapWriter) {
+    size_t initSize = reader.size();
+    for (UidType uid = 0; uid != (UidType)initSize; ++uid) {
+      PositionType newPos = Write(uid, reader.read());
+      posMapWriter.write(UidBlock<PositionType, UidType>(newPos, uid));
+    }
+  }
+
+  PositionType size() const { return _size; }
+
+  ~ORAM() {
+    if (stash) {
+      delete stash;
+      stash = nullptr;
+    }
+  }
+
+  ORAM& operator=(const ORAM& other) = default;
+  ORAM& operator=(ORAM&& other) = default;
+
+  PositionType Read(PositionType pos, const UidType& uid, T& out,
+                    PositionType newPos) {
+    int len = ReadPath(pos, path);
+
+    ReadElementAndRemoveFromPath(path.begin(), path.begin() + len, uid, out);
+
+    Block_ newBlock(out, newPos, uid);
+    writeBlockWithRetry(newBlock, pos, len);
+    return newPos;
+  }
+
+  PositionType Read(PositionType pos, const UidType& uid, T& out) {
+    PositionType newPos = UniformRandom(size() - 1);
+    return Read(pos, uid, out, newPos);
+  }
+
+  template <const int _evict_freq = evict_freq>
+  PositionType Write(const UidType& uid, const T& in, PositionType newPos) {
+    PositionType pos = (evictCounter++) % size();
+    int len = ReadPath(pos, path);
+    Block_ newBlock(in, newPos, uid);
+    writeBlockWithRetry<_evict_freq>(newBlock, pos, len);
+    return newPos;
+  }
+
+  template <const int _evict_freq = evict_freq>
+  PositionType Write(const UidType& uid, const T& in) {
+    PositionType newPos = UniformRandom(size() - 1);
+    return Write<evict_freq>(uid, in, newPos);
+  }
+
+  template <class Func>
+  PositionType Update(PositionType pos, const UidType& uid,
+                      const Func& updateFunc) {
+    T out;
+    return Update(pos, uid, updateFunc, out);
+  }
+
+  template <class Func>
+  PositionType Update(PositionType pos, const UidType& uid, PositionType newPos,
+                      const Func& updateFunc) {
+    T out;
+    return Update(pos, uid, newPos, updateFunc, out);
+  }
+
+  template <class Func>
+  PositionType Update(PositionType pos, const UidType& uid,
+                      const Func& updateFunc, T& out) {
+    return Update(pos, uid, updateFunc, out, uid);  // does not change uid
+  }
+
+  template <class Func>
+  PositionType Update(PositionType pos, const UidType& uid, PositionType newPos,
+                      const Func& updateFunc, T& out) {
+    return Update(pos, uid, newPos, updateFunc, out,
+                  uid);  // does not change uid
+  }
+
+  template <class Func>
+  PositionType Update(PositionType pos, const UidType& uid,
+                      const Func& updateFunc, T& out,
+                      const UidType& updatedUid) {
+    PositionType newPos = UniformRandom(size() - 1);
+    return Update(pos, uid, newPos, updateFunc, out, updatedUid);
+  }
+
+  template <class Func>
+  PositionType Update(PositionType pos, const UidType& uid, PositionType newPos,
+                      const Func& updateFunc, T& out,
+                      const UidType& updatedUid) {
+    int len = ReadPath(pos, path);
+    ReadElementAndRemoveFromPath(path.begin(), path.begin() + len, uid, out);
+    bool keepFlag = updateFunc(out);
+    UidType newUid = DUMMY<UidType>();
+    obliMove(keepFlag, newUid, updatedUid);
+    Block_ newBlock(out, newPos, updatedUid);
+    writeBlockWithRetry(newBlock, pos, len);
+    return newPos;
+  }
+
+  int ReadPath(PositionType pos, std::vector<Block_>& path) {
+    Assert(path.size() == stashSize + Z * depth);
+
+    memcpy(&path[0], stash->blocks, stashSize * sizeof(Block_));
+
+    int level = tree.ReadPath(pos, (Bucket_*)(&path[stashSize]));
+    return stashSize + Z * level;
+  }
+
+  void WriteBackPath(const std::vector<Block_>& path, PositionType pos) {
+    memcpy(stash->blocks, &path[0], stashSize * sizeof(Block_));
+    tree.WritePath(pos, (Bucket_*)(&path[stashSize]));
+  }
+
   // requires uid to be sorted
   const std::vector<PositionType> GetRandNewPoses(uint64_t batchSize) {
     std::vector<PositionType> newPos(batchSize);
@@ -325,13 +345,6 @@ struct ORAM {
       PositionType randPos = UniformRandom(size() - 1);
       obliMove(uid[i] == uid[i - 1], pos[i], randPos);
     }
-  }
-
-  std::vector<Block_> getTopKLevel(int k) {
-    std::vector<Block_> topK(stashSize + Z * ((1UL << k) - 1));
-    memcpy(&topK[0], stash->blocks, stashSize * sizeof(Block_));
-    tree.getTopKLevel(k, (Bucket_*)(&topK[stashSize]));
-    return topK;
   }
 
   void duplicateVal(uint64_t batchSize, T* out, const UidType* uid) {
