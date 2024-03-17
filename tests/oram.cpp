@@ -327,7 +327,7 @@ TEST(ORAM, StashLoad) {
 
       int stashLoad = 0;
       for (int j = 0; j < stashSize; ++j) {
-        if (!oram.getStash()->blocks[j].isDummy()) {
+        if (!oram.getStash().blocks[j].isDummy()) {
           ++stashLoad;
         }
       }
