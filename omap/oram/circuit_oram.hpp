@@ -359,54 +359,36 @@ struct ORAM {
     deDuplicatePoses(batchSize, pos, uid);
 
     // reads elements in the subtree
-    std::vector<Block_> localPath(stashSize + Z * depth);
-    memcpy(&localPath[0], stash->blocks, stashSize * sizeof(Block_));
+    memcpy(&path[0], stash->blocks, stashSize * sizeof(Block_));
     for (int i = 0; i < batchSize; ++i) {
-      int actualLevel =
-          tree.ReadPath(pos[i], (Bucket_*)&(localPath[stashSize]));
-      ReadElementAndRemoveFromPath(
-          localPath.begin(), localPath.begin() + stashSize + Z * actualLevel,
-          uid[i], out[i]);
-      tree.WritePath(pos[i], (Bucket_*)&(localPath[stashSize]));
+      int actualLevel = tree.ReadPath(pos[i], (Bucket_*)&(path[stashSize]));
+      ReadElementAndRemoveFromPath(path.begin(),
+                                   path.begin() + stashSize + Z * actualLevel,
+                                   uid[i], out[i]);
+      tree.WritePath(pos[i], (Bucket_*)&(path[stashSize]));
     }
-    memcpy(stash->blocks, &localPath[0], stashSize * sizeof(Block_));
+    memcpy(stash->blocks, &path[0], stashSize * sizeof(Block_));
     duplicateVal(batchSize, out, uid);
   }
 
   void BatchWriteBack(uint64_t batchSize, const UidType* uid,
                       const PositionType* newPos, const T* in,
                       const std::vector<bool>& writeBackFlags) {
-    std::vector<Block_> localPath(stashSize + Z * depth);
-    std::vector<Block_> toWrite(batchSize);
+    // only copy stash once
+    memcpy(&path[0], stash->blocks, stashSize * sizeof(Block_));
     for (uint64_t i = 0; i < batchSize; ++i) {
-      toWrite[i].uid = DUMMY<UidType>();
+      PositionType p = evictCounter++ % size();
+      int actualLevel = tree.ReadPath(p, (Bucket_*)&(path[stashSize]));
+      Block_ toWrite = {in[i], newPos[i], DUMMY<UidType>()};
       bool writeBack = writeBackFlags[i];
       if (i > 0) {
         writeBack &= (uid[i] != uid[i - 1]);
       }
-      obliMove(writeBack, toWrite[i].uid, uid[i]);
-      // for duplicate uids the positions should be random
-      toWrite[i].position = newPos[i];
-      toWrite[i].data = in[i];
+      obliMove(writeBack, toWrite.uid, uid[i]);
+      writeBlockWithRetry(toWrite, p, stashSize + Z * actualLevel);
     }
 
-    // std::vector<Block_> localPath(stashSize + Z * depth);
-    memcpy(&localPath[0], stash->blocks, stashSize * sizeof(Block_));
-    for (uint64_t i = 0; i < batchSize; ++i) {
-      const Block_& toWriteBlock = toWrite[i];
-
-      // this part may be slow (5% run time for batch size = 1000)
-      bool success = WriteNewBlockToTreeTop(localPath, toWriteBlock, stashSize);
-      Assert(success || toWriteBlock.isDummy());
-      for (int i = 0; i < evict_freq + 1; ++i) {
-        PositionType p = evictCounter++ % size();
-        int actualLevel = tree.ReadPath(p, (Bucket_*)&(localPath[stashSize]));
-        EvictPath(localPath, p, actualLevel, stashSize, 0);
-        tree.WritePath(p, (Bucket_*)&(localPath[stashSize]));
-      }
-    }
-
-    memcpy(stash->blocks, &localPath[0], stashSize * sizeof(Block_));
+    memcpy(stash->blocks, &path[0], stashSize * sizeof(Block_));
   }
 
   template <class Func>
