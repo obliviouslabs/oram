@@ -1,11 +1,9 @@
-#include "oram/oram.hpp"
-
 #include <gtest/gtest.h>
 
 #include <unordered_map>
 
 #include "external_memory/algorithm/element.hpp"
-#include "oram/circuit_oram.hpp"
+#include "oram/adaptive_oram.hpp"
 #include "oram/recursive_oram.hpp"
 #include "testutils.hpp"
 
@@ -66,7 +64,7 @@ TEST(ORAM, WithoutPositionMap1) {
 
 TEST(ORAM, BatchUpdate) {
   int memSize = 400;
-  ODSL::ORAM<uint64_t> oram(memSize, 1UL << 62);
+  ODSL::AdaptiveORAM::ORAM<uint64_t> oram(memSize, 1UL << 62);
   std::vector<uint64_t> posMap(memSize);
   std::vector<uint64_t> valMap(memSize);
   for (uint64_t i = 0; i < memSize; i++) {
@@ -462,7 +460,7 @@ template <bool useCompact>
 void testBatchReadWrite() {
   for (uint64_t size = 1; size < 100; ++size) {
     for (uint64_t batchSize = 1; batchSize < 200; ++batchSize) {
-      ODSL::LinearORAM::LinearORAM<int64_t> oram(size);
+      ODSL::LinearORAM::ORAM<int64_t> oram(size);
       std::vector<int64_t> ref(size);
       for (uint64_t i = 0; i < size; i++) {
         oram.Write(i, i * 3);

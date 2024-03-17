@@ -1,6 +1,6 @@
 #pragma once
 
-#include "oram.hpp"
+#include "adaptive_oram.hpp"
 
 namespace ODSL {
 
@@ -38,11 +38,11 @@ struct RecursiveORAM {
 #endif
   };
 
-  using InternalORAM = ORAM<InternalNode, PositionType, UidType>;
+  using InternalORAM = AdaptiveORAM::ORAM<InternalNode, PositionType, UidType>;
 
   std::vector<InternalORAM> internalOrams;
 
-  using LeafORAM = ORAM<LeafNode, PositionType, UidType>;
+  using LeafORAM = AdaptiveORAM::ORAM<LeafNode, PositionType, UidType>;
   LeafORAM leafOram;
   std::vector<PositionType> oramSizes;
   std::vector<UidType> uids;

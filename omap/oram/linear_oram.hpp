@@ -1,8 +1,4 @@
 #pragma once
-#include <omp.h>
-
-#include <functional>
-
 #include "common/cpp_extended.hpp"
 #include "external_memory/algorithm/or_compact_shuffle.hpp"
 #include "oram/block.hpp"
@@ -14,12 +10,14 @@
  */
 namespace ODSL::LinearORAM {
 template <typename T, typename UidType = uint64_t>
-struct LinearORAM {
-  std::vector<T> data;
-  UidType _size;
+struct ORAM {
+ private:
+  std::vector<T> data;  // oram data, indexed by uid
+  UidType _size;        // oram size
 
-  LinearORAM() : _size(0), data(0) {}
-  LinearORAM(UidType size) : _size(size), data(size) {}
+ public:
+  ORAM() : _size(0), data(0) {}
+  ORAM(UidType size) : _size(size), data(size) {}
 
   template <typename Reader>
   void InitFromReader(Reader reader) {
@@ -27,11 +25,6 @@ struct LinearORAM {
     for (UidType i = 0; i < initSize; i++) {
       data[i] = reader.read();
     }
-  }
-
-  template <typename Reader, typename Writer>
-  void InitFromReader(Reader reader, Writer writer) {
-    InitFromReader(reader);
   }
 
   size_t size() const { return _size; }
@@ -78,8 +71,15 @@ struct LinearORAM {
     Write(newUid, out);
   }
 
+  /**
+   * @brief Read multiple uids from the oram, requires uid to be sorted.
+   *
+   * @param batchSize the number of uids to read
+   * @param uid pointer to array of the uids to read
+   * @param out pointer to array of the output
+   */
   void BatchRead(uint64_t batchSize, const UidType* uid, T* out) {
-    if (std::min(batchSize, _size) > 20) {
+    if (std::min(batchSize, _size) > 40) {
       BatchReadViaCompaction(batchSize, uid, out);
     } else {
       BatchReadNaive(batchSize, uid, out);
@@ -92,6 +92,12 @@ struct LinearORAM {
     }
   }
 
+  /**
+   * @brief When both the batch size and the oram size are large, we use
+   * compaction and distribution algorithms to read the oram. The time
+   * complexity is O(N log N + B log B), where N is the oram size and B is the
+   * batch size.
+   */
   void BatchReadViaCompaction(uint64_t batchSize, const UidType* uid, T* out) {
     std::vector<UidType> uidCopy(std::max((uint64_t)_size + 1, batchSize),
                                  DUMMY<UidType>());
@@ -103,13 +109,16 @@ struct LinearORAM {
     prefixSum[1] = 1;  // the first uid must be kept
     for (uint64_t i = 1; i < batchSize; i++) {
       bool isDup = uid[i] == uid[i - 1];
+      // if not dummy, let uidCopy[i] be the number of distinct uids before it
       uidCopy[i] -= prefixSum[i];
       obliMove(isDup, uidCopy[i], DUMMY<UidType>());
       prefixSum[i + 1] = prefixSum[i] + !isDup;
     }
+    // compact the unique uids
     EM::Algorithm::OrCompactSeparateMark(
         uidCopy.begin(), uidCopy.begin() + batchSize, prefixSum.begin());
 
+    // prepare marks for distributing uids to there corresponding location
     int distributeLevel = GetLogBaseTwo(_size - 1);
     for (uint64_t mask = 1UL << distributeLevel; mask != 0; mask >>= 1) {
       for (int64_t i = _size - mask - 1; i >= 0; --i) {
@@ -119,6 +128,8 @@ struct LinearORAM {
       }
     }
 
+    // distribute the uids to their corresponding location
+    // let uid store the prefix sum of the number of real uids before it
     UidType oramPrefixSum = 0;
     for (uint64_t i = 0; i < _size; ++i) {
       bool isReal = uidCopy[i] != DUMMY<UidType>();
@@ -126,11 +137,17 @@ struct LinearORAM {
       oramPrefixSum += isReal;
     }
     uidCopy[_size] = oramPrefixSum;
+
+    // compact the oram entries we want to query
     EM::Algorithm::OrCompactSeparateMark(
         oramCopy.begin(), oramCopy.begin() + _size, uidCopy.begin());
 
+    // distribute these oram entries to align with the first unique uids in the
+    // batch
     EM::Algorithm::OrDistributeSeparateMark(
         oramCopy.begin(), oramCopy.begin() + batchSize, prefixSum.begin());
+
+    // propagate results for duplicates, and copy the results to the output
     for (uint64_t i = 0; i < batchSize; i++) {
       if (i > 0) {
         bool isDup = uid[i] == uid[i - 1];
@@ -141,9 +158,18 @@ struct LinearORAM {
     }
   }
 
+  /**
+   * @brief Write multiple uids to the oram, requires uid to be sorted.
+   *
+   * @param batchSize the number of uids to write
+   * @param uid pointer to array of the uids to write
+   * @param in pointer to array of the input
+   * @param keepFlag pointer to array of the keep flags, if keepFlag[i] is
+   * false, the i-th uid will be a dummy write
+   */
   void BatchWriteBack(uint64_t batchSize, const UidType* uid, const T* in,
                       const std::vector<bool>& keepFlag) {
-    if (std::min(batchSize, _size) > 20) {
+    if (std::min(batchSize, _size) > 40) {
       BatchWriteBackViaCompaction(batchSize, uid, in, keepFlag);
     } else {
       BatchWriteBackNaive(batchSize, uid, in, keepFlag);
@@ -160,6 +186,12 @@ struct LinearORAM {
     }
   }
 
+  /**
+   * @brief When both the batch size and the oram size are large, we use
+   * compaction and distribution algorithms to write the oram. The time
+   * complexity is O(N log N + B log B), where N is the oram size and B is the
+   * batch size. Similar to the BatchReadViaCompaction function.
+   */
   void BatchWriteBackViaCompaction(uint64_t batchSize, const UidType* uid,
                                    const T* in,
                                    const std::vector<bool>& keepFlag) {
@@ -198,8 +230,6 @@ struct LinearORAM {
       oramPrefixSum += isReal;
     }
     uidCopy[_size] = oramPrefixSum;
-    // EM::Algorithm::OrCompactSeparateMark(
-    //     oramCopy.begin(), oramCopy.begin() + _size, uidCopy.begin());
     EM::Algorithm::OrCompactSeparateMark(
         inCopy.begin(), inCopy.begin() + batchSize, prefixSum.begin());
 
@@ -211,6 +241,15 @@ struct LinearORAM {
     }
   }
 
+  /**
+   * @brief Update multiple uids in the oram, requires uid to be sorted.
+   *
+   * @tparam Func the type of the update function
+   * @param batchSize the number of uids to update
+   * @param uid pointer to array of the uids to update
+   * @param updateFunc the update function
+   * @param out pointer to array of the output
+   */
   template <class Func>
   void BatchUpdate(uint64_t batchSize, const UidType* uid,
                    const Func& updateFunc, T* out) {
@@ -219,7 +258,6 @@ struct LinearORAM {
     std::vector<bool> keepFlag = updateFunc(batchSize, out);
 
     BatchWriteBack(batchSize, uid, out, keepFlag);
-    // deduplicate uids
   }
 
   template <class Func>
@@ -230,4 +268,3 @@ struct LinearORAM {
   }
 };
 };  // namespace ODSL::LinearORAM
-    // namespace ODSL::LinearORAM

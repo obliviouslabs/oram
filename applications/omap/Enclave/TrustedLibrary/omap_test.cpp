@@ -343,7 +343,7 @@ void testOmpSpeedup() {
   ocall_measure_time(&start);
 
   for (int i = 0; i < maxThread; ++i) {
-    LinearORAM::LinearORAM<TestElement> oram;
+    LinearORAM::ORAM<TestElement> oram;
     uint64_t size = 256;
     oram.SetSize(size);
     uint64_t out;
@@ -362,7 +362,7 @@ void testOmpSpeedup() {
   ocall_measure_time(&start);
 #pragma omp parallel for schedule(static)
   for (int i = 0; i < maxThread; ++i) {
-    LinearORAM::LinearORAM<TestElement> oram;
+    LinearORAM::ORAM<TestElement> oram;
     uint64_t size = 256;
     oram.SetSize(size);
     uint64_t out;

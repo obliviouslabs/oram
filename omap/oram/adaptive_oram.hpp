@@ -9,11 +9,11 @@
  * size.
  *
  */
-namespace ODSL {
+namespace ODSL::AdaptiveORAM {
 template <typename T, typename PositionType = uint64_t,
           typename UidType = uint64_t>
 struct ORAM {
-  using LinearORAM_ = LinearORAM::LinearORAM<T, UidType>;
+  using LinearORAM_ = LinearORAM::ORAM<T, UidType>;
   using ORAM_ = CircuitORAM::ORAM<T, 2, 20, PositionType, UidType, 4096, 2>;
   LinearORAM_* linearOram = NULL;
   ORAM_* treeOram = NULL;
