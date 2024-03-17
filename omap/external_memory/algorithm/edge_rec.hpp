@@ -1,4 +1,5 @@
 #pragma once
+#include "common/utils.hpp"
 /// @brief EdgeRec is a bitset that records the edges in a graph
 /// @tparam Bits the type of the bitset, default is uint64_t
 template <typename Bits = uint64_t>

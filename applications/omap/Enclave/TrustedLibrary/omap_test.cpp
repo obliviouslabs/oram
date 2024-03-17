@@ -6,7 +6,7 @@
 #include <functional>
 #include <unordered_map>
 
-#include "oram/cuckoo.hpp"
+#include "oram/omap.hpp"
 #include "oram/par_omap.hpp"
 #include "oram/recursive_oram.hpp"
 #include "sgx_thread.h"
@@ -486,7 +486,7 @@ void testOMap() {
   printf("test omap\n");
   size_t mapSize = 1e6;
   size_t initSize = 1e6;
-  CuckooHashMap<uint64_t, int64_t, true> omap(mapSize);
+  OHashMap<uint64_t, int64_t, true> omap(mapSize);
   std::unordered_map<uint64_t, int64_t> map;
   for (int i = 0; i < initSize; i++) {
     map[i] = i * 3;
@@ -591,7 +591,7 @@ void testOMapPerf() {
   printf("actual working thread max %d\n", omp_get_max_threads());
   size_t mapSize = 5e6;
   size_t initSize = 4e6;
-  CuckooHashMap<ETH_Addr, ERC20_Balance, true> omap(mapSize);
+  OHashMap<ETH_Addr, ERC20_Balance, true> omap(mapSize);
 
   std::function<std::pair<ETH_Addr, ERC20_Balance>(uint64_t)> readerFunc =
       [](uint64_t i) { return std::pair<ETH_Addr, ERC20_Balance>(); };
@@ -648,10 +648,10 @@ void testOMapPerf() {
   printf("oram erase time %f us\n", timediff * 1e-3 / round);
 }
 
-void testCuckooOMapPerf(size_t mapSize = 5e6) {
+void testOHashMapPerf(size_t mapSize = 5e6) {
   int round = 1e5;
   size_t initSize = mapSize - round;
-  CuckooHashMap<ETH_Addr, ERC20_Balance, true, uint32_t> omap(mapSize);
+  OHashMap<ETH_Addr, ERC20_Balance, true, uint32_t> omap(mapSize);
 
   std::function<std::pair<ETH_Addr, ERC20_Balance>(uint64_t)> readerFunc =
       [](uint64_t i) { return std::pair<ETH_Addr, ERC20_Balance>(); };
@@ -703,10 +703,10 @@ struct Bytes {
   uint8_t data[size];
 };
 
-void testCuckooOMapPerfSignal(size_t mapSize = 5e6) {
+void testOHashMapPerfSignal(size_t mapSize = 5e6) {
   int round = 1e5;
   size_t initSize = mapSize - round;
-  CuckooHashMap<uint64_t, Bytes<240>, true, uint32_t> omap(mapSize);
+  OHashMap<uint64_t, Bytes<240>, true, uint32_t> omap(mapSize);
 
   std::function<std::pair<uint64_t, Bytes<240>>(uint64_t)> readerFunc =
       [](uint64_t i) { return std::pair<uint64_t, Bytes<240>>(); };
@@ -954,7 +954,7 @@ void testParOMapPerfDiffCond() {
   }
 }
 
-void testCuckooOMapPerfDiffCond() {
+void testOHashMapPerfDiffCond() {
   if (EM::Backend::g_DefaultBackend) {
     delete EM::Backend::g_DefaultBackend;
   }
@@ -964,8 +964,8 @@ void testCuckooOMapPerfDiffCond() {
   for (uint32_t mapSize :
        {1e5, 2e5, 5e5, 1e6, 2e6, 5e6, 1e7, 2e7, 5e7, 1e8, 2e8, 5e8, 1e9}) {
     try {
-      testCuckooOMapPerf(mapSize);
-      // testCuckooOMapPerfSignal(mapSize);
+      testOHashMapPerf(mapSize);
+      // testOHashMapPerfSignal(mapSize);
     } catch (const std::runtime_error& e) {
       printf("Caught a runtime_error: %s\n", e.what());
     }
@@ -999,8 +999,8 @@ void ecall_omap_perf() {
     testParOMapPerfDiffCond();
     // testParOMapPerf(5e6, 32);
     // testParOMapPerfDeferWriteBack(5e6, 32);
-    // testCuckooOMapPerf();
-    // testCuckooOMapPerfDiffCond();
+    // testOHashMapPerf();
+    // testOHashMapPerfDiffCond();
     // testRecursiveORAMPerf();
     // testOMapPerf();
     // testOMap();

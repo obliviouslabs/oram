@@ -3,14 +3,14 @@
 namespace ODSL {
 
 template <typename K, typename PositionType = uint64_t>
-struct CuckooHashMapIndexer {
+struct OHashMapIndexer {
   static constexpr int saltLength = 16;
   uint8_t salts[saltLength];
   PositionType _size;
 
-  CuckooHashMapIndexer() {}
+  OHashMapIndexer() {}
 
-  CuckooHashMapIndexer(PositionType size) { SetSize(size); }
+  OHashMapIndexer(PositionType size) { SetSize(size); }
 
   void SetSize(PositionType size) {
     _size = size;
@@ -45,7 +45,7 @@ struct CuckooHashMapIndexer {
 };
 
 template <typename K, typename V>
-struct CuckooHashMapEntry {
+struct OHashMapEntry {
   bool valid = false;
   bool dummy = false;
   K key;
@@ -53,7 +53,7 @@ struct CuckooHashMapEntry {
 #ifndef ENCLAVE_MODE
   // cout
   friend std::ostream& operator<<(std::ostream& os,
-                                  const CuckooHashMapEntry& entry) {
+                                  const OHashMapEntry& entry) {
     os << "(" << entry.valid << ", " << entry.key << ", " << entry.value << ")";
     return os;
   }
@@ -61,12 +61,12 @@ struct CuckooHashMapEntry {
 };
 
 template <typename K, typename V, const short bucketSize>
-struct CuckooHashMapBucket {
-  CuckooHashMapEntry<K, V> entries[bucketSize];
+struct OHashMapBucket {
+  OHashMapEntry<K, V> entries[bucketSize];
 #ifndef ENCLAVE_MODE
   // cout
   friend std::ostream& operator<<(std::ostream& os,
-                                  const CuckooHashMapBucket& bucket) {
+                                  const OHashMapBucket& bucket) {
     os << "[";
     for (int i = 0; i < bucketSize; ++i) {
       os << bucket.entries[i];
@@ -80,9 +80,9 @@ struct CuckooHashMapBucket {
 #endif
 };
 
-template <typename K, typename V, const bool isOblivious,
+template <typename K, typename V, const bool isOblivious = true,
           typename PositionType = uint64_t, const bool parallel_init = true>
-struct CuckooHashMap {
+struct OHashMap {
   static constexpr int saltLength = 16;
   static constexpr double loadFactor = 0.7;
   static constexpr short bucketSize = 2;
@@ -90,15 +90,15 @@ struct CuckooHashMap {
   PositionType _size;
   PositionType load;
   PositionType tableSize;
-  using BucketType = CuckooHashMapBucket<K, V, bucketSize>;
+  using BucketType = OHashMapBucket<K, V, bucketSize>;
   using TableType =
       std::conditional_t<isOblivious, RecursiveORAM<BucketType, PositionType>,
                          StdVector<BucketType>>;
   // EM::CacheFrontVector::Vector<BucketType, sizeof(BucketType), true, true,
   //  1024>>;
   TableType table0, table1;
-  CuckooHashMapIndexer<K, PositionType> indexer;
-  using KVEntry = CuckooHashMapEntry<K, V>;
+  OHashMapIndexer<K, PositionType> indexer;
+  using KVEntry = OHashMapEntry<K, V>;
   std::vector<KVEntry> stash;
 
   struct ValResult {
@@ -106,15 +106,15 @@ struct CuckooHashMap {
     bool found;
   };
 
-  CuckooHashMap() {}
+  OHashMap() {}
 
-  CuckooHashMap(PositionType size) { SetSize(size); }
+  OHashMap(PositionType size) { SetSize(size); }
 
-  CuckooHashMap(PositionType size, uint64_t cacheBytes) {
+  OHashMap(PositionType size, uint64_t cacheBytes) {
     SetSize(size, cacheBytes);
   }
 
-  CuckooHashMap(PositionType size, uint64_t cacheBytes, int maxThreads) {
+  OHashMap(PositionType size, uint64_t cacheBytes, int maxThreads) {
     SetSize(size, cacheBytes, maxThreads);
   }
 
@@ -129,16 +129,16 @@ struct CuckooHashMap {
     table1.SetSize(tableSize, cacheBytes / 2);
   }
 
-  void SetIndexer(const CuckooHashMapIndexer<K, PositionType>& indexer) {
+  void SetIndexer(const OHashMapIndexer<K, PositionType>& indexer) {
     this->indexer = indexer;
   }
 
-  using NonObliviousCuckooHashMap = CuckooHashMap<K, V, false, PositionType>;
+  using NonObliviousOHashMap = OHashMap<K, V, false, PositionType>;
 
-  void InitFromNonOblivious(NonObliviousCuckooHashMap& other) {
+  void InitFromNonOblivious(NonObliviousOHashMap& other) {
     static_assert(isOblivious);
     if (tableSize != other.tableSize || _size != other._size) {
-      throw std::runtime_error("CuckooHashMap InitFromNonOblivious failed");
+      throw std::runtime_error("OHashMap InitFromNonOblivious failed");
     }
     load = other.load;
     // stash = other.stash;
@@ -191,9 +191,9 @@ struct CuckooHashMap {
         insert(entry.first, entry.second);
       }
     } else {
-      NonObliviousCuckooHashMap nonObliviousCuckooHashMap(_size, 0);
-      nonObliviousCuckooHashMap.InitFromReader(reader);
-      InitFromNonOblivious(nonObliviousCuckooHashMap);
+      NonObliviousOHashMap nonObliviousOHashMap(_size, 0);
+      nonObliviousOHashMap.InitFromReader(reader);
+      InitFromNonOblivious(nonObliviousOHashMap);
     }
   }
 
@@ -419,9 +419,9 @@ struct CuckooHashMap {
         return false;
       }
     }
-    printf("Warning CuckooHashMap uses stash\n");
+    printf("Warning OHashMap uses stash\n");
     if (!insertToStash(entryToInsert, stash)) {
-      throw std::runtime_error("CuckooHashMap insert failed");
+      throw std::runtime_error("OHashMap insert failed");
     }
     return false;
   }
@@ -474,7 +474,7 @@ struct CuckooHashMap {
       updateHelper(idx0, table0, swapUpdateFunc);
     }
     if (!insertToStashOblivious(entryToInsert, stash)) {
-      throw std::runtime_error("CuckooHashMap insert failed");
+      throw std::runtime_error("OHashMap insert failed");
     }
     return exist;
   }

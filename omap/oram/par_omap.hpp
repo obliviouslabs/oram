@@ -2,14 +2,14 @@
 
 #include <omp.h>
 
-#include "cuckoo.hpp"
 #include "external_memory/algorithm/merge_split.hpp"
 #include "external_memory/algorithm/param_select.hpp"
+#include "omap.hpp"
 namespace ODSL {
 template <typename K, typename V, typename PositionType = uint64_t>
 struct ParOMap {
   // std::vector<OMap<K, V, 9, PositionType>> shards;
-  using BaseMap = CuckooHashMap<K, V, true, PositionType, true>;
+  using BaseMap = OHashMap<K, V, true, PositionType, true>;
   std::vector<BaseMap> shards;
   uint64_t shardSize = 0;
   uint8_t randSalt[16];
@@ -102,9 +102,9 @@ struct ParOMap {
     // std::vector<uint64_t> shardCounter(shardCount);
     uint64_t initSize = reader.size();
     uint64_t maxInitSizePerShard = maxQueryPerShard(initSize, shardCount, -60);
-    using NonObliviousCuckooHashMap = CuckooHashMap<K, V, false, PositionType>;
-    std::vector<NonObliviousCuckooHashMap> nonOMaps(
-        shardCount, NonObliviousCuckooHashMap(shardSize, 0));
+    using NonObliviousOHashMap = OHashMap<K, V, false, PositionType>;
+    std::vector<NonObliviousOHashMap> nonOMaps(
+        shardCount, NonObliviousOHashMap(shardSize, 0));
     using Element = EM::Algorithm::TaggedT<KVPair>;
     const size_t bktSize =
         std::min(8192UL, GetNextPowerOfTwo(maxInitSizePerShard));

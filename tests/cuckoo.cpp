@@ -1,17 +1,16 @@
-#include "oram/cuckoo.hpp"
-
 #include <gtest/gtest.h>
 
+#include "oram/omap.hpp"
 #include "unordered_map"
 
 using namespace ODSL;
 
 template <bool isOblivious>
-void testCuckooHashMap() {
+void testOHashMap() {
   for (int r = 0; r < 1e2; ++r) {
     int mapSize = 50;
     int keySpace = 100;
-    CuckooHashMap<int, int, isOblivious> map(mapSize);
+    OHashMap<int, int, isOblivious> map(mapSize);
     map.InitDefault();
     std::unordered_map<int, int> std_map;
     for (int r = 0; r < 2 * keySpace; ++r) {
@@ -41,11 +40,11 @@ void testCuckooHashMap() {
 }
 
 template <bool isOblivious>
-void testCuckooHashMapInitFromReader() {
+void testOHashMapInitFromReader() {
   for (int r = 0; r < 1e2; ++r) {
     int mapSize = 5000;
     int keySpace = 10000;
-    CuckooHashMap<int, int, isOblivious> map(mapSize);
+    OHashMap<int, int, isOblivious> map(mapSize);
     std::unordered_map<int, int> std_map;
     for (int r = 0; r < mapSize; ++r) {
       int key = rand() % keySpace;
@@ -82,12 +81,12 @@ void testCuckooHashMapInitFromReader() {
   }
 }
 
-void testCuckooHashMapInitFromNonObliviousWithDummy() {
+void testOHashMapInitFromNonObliviousWithDummy() {
   for (int r = 0; r < 1e1; ++r) {
     int mapSize = 5000;
     int keySpace = 10000;
-    CuckooHashMap<int, int, true> map(mapSize);
-    CuckooHashMap<int, int, false> nonOMap(mapSize);
+    OHashMap<int, int, true> map(mapSize);
+    OHashMap<int, int, false> nonOMap(mapSize);
     std::unordered_map<int, int> std_map;
     for (int r = 0; r < mapSize; ++r) {
       int key = rand() % keySpace;
@@ -125,13 +124,13 @@ void testCuckooHashMapInitFromNonObliviousWithDummy() {
 }
 
 template <bool isOblivious>
-void testCuckooHashMapFindBatch() {
+void testOHashMapFindBatch() {
   for (int r = 0; r < 10; ++r) {
     int mapSize = 23456;
     int keySpace = mapSize;
     int batchSize = 1000;
     int numBatch = 10;
-    using CHMap = CuckooHashMap<int, int, isOblivious, uint64_t, true>;
+    using CHMap = OHashMap<int, int, isOblivious, uint64_t, true>;
     CHMap map(mapSize, 1UL << 62);
     std::unordered_map<int, int> std_map;
     for (int r = 0; r < mapSize * 2 / 3; ++r) {
@@ -178,22 +177,20 @@ void testCuckooHashMapFindBatch() {
   }
 }
 
-TEST(Cuckoo, CuckooHashMapNonOblivious) { testCuckooHashMap<false>(); }
+TEST(Cuckoo, OHashMapNonOblivious) { testOHashMap<false>(); }
 
-TEST(Cuckoo, CuckooHashMapOblivious) { testCuckooHashMap<true>(); }
+TEST(Cuckoo, OHashMapOblivious) { testOHashMap<true>(); }
 
-TEST(Cuckoo, CuckooHashMapInitFromReaderNonOblivious) {
-  testCuckooHashMapInitFromReader<false>();
+TEST(Cuckoo, OHashMapInitFromReaderNonOblivious) {
+  testOHashMapInitFromReader<false>();
 }
 
-TEST(Cuckoo, CuckooHashMapInitFromReaderOblivious) {
-  testCuckooHashMapInitFromReader<true>();
+TEST(Cuckoo, OHashMapInitFromReaderOblivious) {
+  testOHashMapInitFromReader<true>();
 }
 
-TEST(Cuckoo, CuckooHashMapFindBatchOblivious) {
-  testCuckooHashMapFindBatch<true>();
-}
+TEST(Cuckoo, OHashMapFindBatchOblivious) { testOHashMapFindBatch<true>(); }
 
-TEST(Cuckoo, CuckooHashMapInitWithDummy) {
-  testCuckooHashMapInitFromNonObliviousWithDummy();
+TEST(Cuckoo, OHashMapInitWithDummy) {
+  testOHashMapInitFromNonObliviousWithDummy();
 }
