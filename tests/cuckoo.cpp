@@ -55,7 +55,7 @@ void testCuckooHashMapInitFromReader() {
     auto it = std_map.begin();
     EM::VirtualVector::VirtualReader<std::pair<int, int>> reader(
         std_map.size(), [&it](uint64_t) { return *it++; });
-    map.InitFromReaderInPlace(reader);
+    map.InitFromReader(reader);
     for (int r = 0; r < 2 * keySpace; ++r) {
       if (std_map.size() < mapSize) {
         int key = rand() % keySpace;
@@ -142,7 +142,7 @@ void testCuckooHashMapFindBatch() {
     auto it = std_map.begin();
     EM::VirtualVector::VirtualReader<std::pair<int, int>> reader(
         std_map.size(), [&it](uint64_t) { return *it++; });
-    map.InitFromReaderInPlace(reader);
+    map.InitFromReader(reader);
     for (int r = 0; r < numBatch; ++r) {
       std::vector<int> keys(batchSize);
       using ValResult = CHMap::ValResult;

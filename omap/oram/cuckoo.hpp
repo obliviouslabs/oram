@@ -165,13 +165,13 @@ struct CuckooHashMap {
     if constexpr (parallel_init) {
       // seems to have concurrency bug
 #pragma omp task
-      { table0.InitFromReaderInPlace(reader0); }
+      { table0.InitFromReader(reader0); }
 
-      { table1.InitFromReaderInPlace(reader1); }
+      { table1.InitFromReader(reader1); }
 #pragma omp taskwait
     } else {
-      table0.InitFromReaderInPlace(reader0);
-      table1.InitFromReaderInPlace(reader1);
+      table0.InitFromReader(reader0);
+      table1.InitFromReader(reader1);
     }
     for (const auto& entry : other.stash) {
       if (entry.valid) {
@@ -184,7 +184,7 @@ struct CuckooHashMap {
   }
 
   template <typename Reader>
-  void InitFromReaderInPlace(Reader& reader) {
+  void InitFromReader(Reader& reader) {
     if constexpr (!isOblivious) {
       while (!reader.eof()) {
         std::pair<K, V> entry = reader.read();
@@ -192,7 +192,7 @@ struct CuckooHashMap {
       }
     } else {
       NonObliviousCuckooHashMap nonObliviousCuckooHashMap(_size, 0);
-      nonObliviousCuckooHashMap.InitFromReaderInPlace(reader);
+      nonObliviousCuckooHashMap.InitFromReader(reader);
       InitFromNonOblivious(nonObliviousCuckooHashMap);
     }
   }

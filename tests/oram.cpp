@@ -537,7 +537,7 @@ TEST(RecursiveORAM, testReadAfterInit) {
     ref[i] = UniformRandom();
   }
   StdVector<int64_t>::Reader reader(ref.begin(), ref.end());
-  oram.InitFromReaderInPlace(reader);
+  oram.InitFromReader(reader);
   for (int round = 0; round < 1e5; ++round) {
     uint64_t addr = UniformRandom(size - 1);
     int64_t val;
@@ -554,7 +554,8 @@ TEST(RecursiveORAM, testMixed) {
   for (uint64_t i = 0; i < size; i++) {
     ref[i] = UniformRandom();
   }
-  oram.InitFromVector(ref);
+  Vec::Reader reader(ref.begin(), ref.end());
+  oram.InitFromReader(reader);
   for (int round = 0; round < 1e6; ++round) {
     int op = UniformRandom(2);
     uint64_t addr = UniformRandom(size - 1);
@@ -589,7 +590,7 @@ TEST(RecursiveORAM, testBatchAccessDefer) {
     ref[i] = UniformRandom();
   }
   StdVector<uint64_t>::Reader reader(ref.begin(), ref.end());
-  oram.InitFromReaderInPlace(reader);
+  oram.InitFromReader(reader);
   for (int round = 0; round < 1e4; ++round) {
     // uint64_t addr = UniformRandom(size - 1);
     // int64_t val;

@@ -604,6 +604,7 @@ struct ORAM {
    * @param pos The positions of the blocks
    * @param uid The uids of the blocks
    * @param out The output blocks
+   *
    */
   void BatchReadAndRemove(uint64_t batchSize, PositionType* pos,
                           const UidType* uid, T* out) {
@@ -667,7 +668,7 @@ struct ORAM {
    *
    * @tparam Func The type of the update function
    * @param batchSize The number of blocks
-   * @param pos The positions of the blocks
+   * @param pos The positions of the blocks. May be modified.
    * @param uid The uids of the blocks. Requires uid to be sorted.
    * @param newPos The new positions of the blocks
    * @param updateFunc The update function. The update function should take a
@@ -691,7 +692,7 @@ struct ORAM {
    *
    * @tparam Func The type of the update function
    * @param batchSize The number of blocks
-   * @param pos The positions of the blocks
+   * @param pos The positions of the blocks. May be modified.
    * @param uid The uids of the blocks. Requires uid to be sorted.
    * @param newPos The new positions of the blocks
    * @param updateFunc The update function. The update function should take a
@@ -712,7 +713,7 @@ struct ORAM {
    *
    * @tparam Func The type of the update function
    * @param batchSize The number of blocks
-   * @param pos The positions of the blocks
+   * @param pos The positions of the blocks. May be modified.
    * @param uid The uids of the blocks. Requires uid to be sorted.
    * @param updateFunc The update function. The update function should take a
    * integer batchSize and a pointer to an array of batchSize blocks, and return

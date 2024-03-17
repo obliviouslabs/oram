@@ -137,13 +137,51 @@ struct ORAM {
   }
 
   /**
-   * @brief Update the element at pos with uid.
+   * @brief Read a block from the ORAM and assign it to a new position
    *
-   * @param pos position (path idx) of the element
-   * @param uid uid of the element
-   * @param updateFunc may modify the element in place, return true to keep the
-   * element, false to delete it.
-   * @return PositionType new position of the element
+   * @param pos The current position of the block
+   * @param uid The unique id of the block
+   * @param out The output block
+   * @param newPos The new position of the block
+   * @return PositionType The new position of the block
+   */
+  PositionType Read(PositionType pos, const UidType& uid, T& out,
+                    PositionType newPos) {
+    if (isLinear) {
+      linearOram->Read(uid, out);
+      return 0;
+    } else {
+      return treeOram->Read(pos, uid, out, newPos);
+    }
+  }
+
+  /**
+   * @brief Write a new block to the ORAM
+   *
+   * @param uid The unique id of the block
+   * @param in The new block to write
+   * @param newPos The new position of the block
+   * @return PositionType The new position of the block
+   */
+  PositionType Write(const UidType& uid, const T& in, PositionType newPos) {
+    if (isLinear) {
+      linearOram->Write(uid, in);
+      return 0;
+    } else {
+      return treeOram->Write(uid, in, newPos);
+    }
+  }
+
+  /**
+   * @brief Update a block in the ORAM and assign it to a random new position
+   *
+   * @tparam Func The type of the update function. The update function should
+   * take a reference to the block and return a bool. If the return value is
+   * true, the block is kept, otherwise it is deleted.
+   * @param pos The current position of the block
+   * @param uid The unique id of the block
+   * @param updateFunc The update function
+   * @return PositionType The random new position of the block
    */
   template <class Func>
   PositionType Update(PositionType pos, const UidType& uid,
@@ -156,7 +194,18 @@ struct ORAM {
     }
   }
 
-  // allow read the updated value
+  /**
+   * @brief Update a block in the ORAM and assign it to a random new position
+   *
+   * @tparam Func The type of the update function. The update function should
+   * take a reference to the block and return a bool. If the return value is
+   * true, the block is kept, otherwise it is deleted.
+   * @param pos The current position of the block
+   * @param uid The unique id of the block
+   * @param updateFunc The update function
+   * @param out Output the updated block
+   * @return PositionType The random new position of the block
+   */
   template <class Func>
   PositionType Update(PositionType pos, const UidType& uid,
                       const Func& updateFunc, T& out) {
@@ -168,7 +217,20 @@ struct ORAM {
     }
   }
 
-  // allow update the uid
+  /**
+   * @brief Update a block in the ORAM and assign it to a random new position.
+   * Possibly change the uid.
+   *
+   * @tparam Func The type of the update function. The update function should
+   * take a reference to the block and return a bool. If the return value is
+   * true, the block is kept, otherwise it is deleted.
+   * @param pos The current position of the block
+   * @param uid The unique id of the block
+   * @param updateFunc The update function
+   * @param out Output the updated block
+   * @param updatedUid The new uid of the block
+   * @return PositionType The random new position of the block
+   */
   template <class Func>
   PositionType Update(PositionType pos, const UidType& uid,
                       const Func& updateFunc, T& out,
@@ -181,25 +243,18 @@ struct ORAM {
     }
   }
 
-  PositionType Read(PositionType pos, const UidType& uid, T& out,
-                    PositionType newPos) {
-    if (isLinear) {
-      linearOram->Read(uid, out);
-      return 0;
-    } else {
-      return treeOram->Read(pos, uid, out, newPos);
-    }
-  }
-
-  PositionType Write(const UidType& uid, const T& in, PositionType newPos) {
-    if (isLinear) {
-      linearOram->Write(uid, in);
-      return 0;
-    } else {
-      return treeOram->Write(uid, in, newPos);
-    }
-  }
-
+  /**
+   * @brief Update a block in the ORAM and assign it to a new position
+   *
+   * @tparam Func The type of the update function. The update function should
+   * take a reference to the block and return a bool. If the return value is
+   * true, the block is kept, otherwise it is deleted.
+   * @param pos The current position of the block
+   * @param uid The unique id of the block
+   * @param newPos The new position of the block
+   * @param updateFunc The update function
+   * @return PositionType
+   */
   template <class Func>
   PositionType Update(PositionType pos, const UidType& uid, PositionType newPos,
                       const Func& updateFunc) {
@@ -211,6 +266,19 @@ struct ORAM {
     }
   }
 
+  /**
+   * @brief Update a block in the ORAM and assign it to a new position
+   *
+   * @tparam Func The type of the update function. The update function should
+   * take a reference to the block and return a bool. If the return value is
+   * true, the block is kept, otherwise it is deleted.
+   * @param pos The current position of the block
+   * @param uid The unique id of the block
+   * @param newPos The new position of the block
+   * @param updateFunc The update function
+   * @param out Output the updated block
+   * @return PositionType The new position of the block
+   */
   template <class Func>
   PositionType Update(PositionType pos, const UidType& uid, PositionType newPos,
                       const Func& updateFunc, T& out) {
@@ -222,6 +290,21 @@ struct ORAM {
     }
   }
 
+  /**
+   * @brief Update a block in the ORAM and assign it to a new position.
+   * Possibly change the uid.
+   *
+   * @tparam Func The type of the update function. The update function should
+   * take a reference to the block and return a bool. If the return value is
+   * true, the block is kept, otherwise it is deleted.
+   * @param pos The current position of the block
+   * @param uid The unique id of the block
+   * @param newPos The new position of the block
+   * @param updateFunc The update function
+   * @param out Output the updated block
+   * @param updatedUid The new uid of the block
+   * @return PositionType The random new position of the block
+   */
   template <class Func>
   PositionType Update(PositionType pos, const UidType& uid, PositionType newPos,
                       const Func& updateFunc, T& out,
@@ -234,6 +317,15 @@ struct ORAM {
     }
   }
 
+  /**
+   * @brief Read a batch of blocks and remove them from the ORAM.
+   *
+   * @param batchSize The number of blocks
+   * @param pos The positions of the blocks
+   * @param uid The uids of the blocks
+   * @param out The output blocks
+   *
+   */
   void BatchReadAndRemove(uint64_t batchSize, PositionType* pos,
                           const UidType* uid, T* out) {
     if (isLinear) {
@@ -243,7 +335,18 @@ struct ORAM {
     }
   }
 
-  void BatchWriteBack(uint64_t batchSize, UidType* uid,
+  /**
+   * @brief Write back a batch of blocks to the ORAM. For duplicate blocks,
+   * ignore all but the first block.
+   *
+   * @param batchSize The number of blocks
+   * @param uid The uids of the blocks. Requires uid to be sorted.
+   * @param newPos The new positions of the blocks
+   * @param in The new blocks
+   * @param writeBackFlags The write back flags. If writeBackFlags[i] is true,
+   * the block is written back, otherwise it is not written back.
+   */
+  void BatchWriteBack(uint64_t batchSize, const UidType* uid,
                       const PositionType* newPos, const T* in,
                       const std::vector<bool>& writeBackFlags) {
     if (isLinear) {
@@ -253,6 +356,21 @@ struct ORAM {
     }
   }
 
+  /**
+   * @brief Update a batch of blocks in the ORAM and assign them to new
+   * positions
+   *
+   * @tparam Func The type of the update function
+   * @param batchSize The number of blocks
+   * @param pos The positions of the blocks. May be modified.
+   * @param uid The uids of the blocks. Requires uid to be sorted.
+   * @param newPos The new positions of the blocks
+   * @param updateFunc The update function. The update function should take a
+   * integer batchSize and a pointer to an array of batchSize blocks, and return
+   * a std::vector<bool> of batchSize, indicating whether each block should be
+   * written back.
+   * @param out Pointer to an array of output blocks
+   */
   template <class Func>
   void BatchUpdate(uint64_t batchSize, PositionType* pos, const UidType* uid,
                    const PositionType* newPos, const Func& updateFunc, T* out) {
@@ -263,6 +381,20 @@ struct ORAM {
     }
   }
 
+  /**
+   * @brief Update a batch of blocks in the ORAM and assign them to new
+   * positions
+   *
+   * @tparam Func The type of the update function
+   * @param batchSize The number of blocks
+   * @param pos The positions of the blocks. May be modified.
+   * @param uid The uids of the blocks. Requires uid to be sorted.
+   * @param newPos The new positions of the blocks
+   * @param updateFunc The update function. The update function should take a
+   * integer batchSize and a pointer to an array of batchSize blocks, and return
+   * a std::vector<bool> of batchSize, indicating whether each block should be
+   * written back.
+   */
   template <class Func>
   void BatchUpdate(uint64_t batchSize, PositionType* pos, const UidType* uid,
                    const PositionType* newPos, const Func& updateFunc) {
@@ -273,6 +405,21 @@ struct ORAM {
     }
   }
 
+  /**
+   * @brief Update a batch of blocks in the ORAM and assign them to random new
+   * positions
+   *
+   * @tparam Func The type of the update function
+   * @param batchSize The number of blocks
+   * @param pos The positions of the blocks. May be modified.
+   * @param uid The uids of the blocks. Requires uid to be sorted.
+   * @param updateFunc The update function. The update function should take a
+   * integer batchSize and a pointer to an array of batchSize blocks, and return
+   * a std::vector<bool> of batchSize, indicating whether each block should be
+   * written back.
+   * @return const std::vector<PositionType> The random new positions of the
+   * blocks.
+   */
   template <class Func>
   std::vector<PositionType> BatchUpdate(uint64_t batchSize, PositionType* pos,
                                         const UidType* uid,
@@ -294,4 +441,4 @@ struct ORAM {
   }
 };
 
-}  // namespace ODSL
+}  // namespace ODSL::AdaptiveORAM

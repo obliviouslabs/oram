@@ -99,7 +99,7 @@ void ecall_omap_init(uint64_t N, uint64_t initSize) {
           bufferOffset += sizeof(val_type);
           return res;
         });
-    omap.InitFromReaderInPlace(reader);
+    omap.InitFromReader(reader);
   } catch (std::exception& e) {
     printf("exception: %s\n", e.what());
     abort();

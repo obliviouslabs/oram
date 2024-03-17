@@ -500,7 +500,7 @@ void testOMap() {
   uint64_t start, end;
   printf("init omap\n");
   ocall_measure_time(&start);
-  omap.InitFromReaderInPlace(reader);
+  omap.InitFromReader(reader);
   ocall_measure_time(&end);
   uint64_t timediff = end - start;
   printf("oram init time %f s\n", timediff * 1e-9);
@@ -601,7 +601,7 @@ void testOMapPerf() {
   uint64_t start, end;
   printf("init omap of size %lu\n", mapSize);
   ocall_measure_time(&start);
-  omap.InitFromReaderInPlace(reader);
+  omap.InitFromReader(reader);
   ocall_measure_time(&end);
   uint64_t timediff = end - start;
   printf("oram init time %f s\n", timediff * 1e-9);
@@ -661,7 +661,7 @@ void testCuckooOMapPerf(size_t mapSize = 5e6) {
   uint64_t start, end;
   printf("mapSize = %u, threadCount = %d, batchSize = %u\n", mapSize, 1, 1);
   ocall_measure_time(&start);
-  omap.InitFromReaderInPlace(reader);
+  omap.InitFromReader(reader);
   ocall_measure_time(&end);
   uint64_t timediff = end - start;
   printf("oram init time %f s\n", timediff * 1e-9);
@@ -716,7 +716,7 @@ void testCuckooOMapPerfSignal(size_t mapSize = 5e6) {
   uint64_t start, end;
   printf("mapSize = %u, threadCount = %d, batchSize = %u\n", mapSize, 1, 1);
   ocall_measure_time(&start);
-  omap.InitFromReaderInPlace(reader);
+  omap.InitFromReader(reader);
   ocall_measure_time(&end);
   uint64_t timediff = end - start;
   printf("oram init time %f s\n", timediff * 1e-9);
@@ -772,7 +772,7 @@ void testRecursiveORAMPerf() {
   uint64_t start, end;
   printf("init recursive oram of size %lu\n", mapSize);
   ocall_measure_time(&start);
-  roram.InitFromReaderInPlace(reader);
+  roram.InitFromReader(reader);
   ocall_measure_time(&end);
   uint64_t timediff = end - start;
   printf("oram init time %f s\n", timediff * 1e-9);
@@ -805,7 +805,7 @@ void testParOMapPerf(size_t mapSize = 5e6,
   uint64_t start, end;
   // printf("init omap of size %lu\n", mapSize);
   ocall_measure_time(&start);
-  // omap.InitFromReaderInPlace(reader);
+  // omap.InitFromReader(reader);
   omap.Init();
   ocall_measure_time(&end);
   uint64_t initTimediff = end - start;
@@ -857,7 +857,7 @@ void testParOMapPerfDeferWriteBack(size_t mapSize = 5e6,
   uint64_t start, end;
   // printf("init omap of size %lu\n", mapSize);
   ocall_measure_time(&start);
-  // omap.InitFromReaderInPlace(reader);
+  // omap.InitFromReader(reader);
   omap.Init();
   ocall_measure_time(&end);
   uint64_t initTimediff = end - start;
@@ -909,7 +909,7 @@ void testParOMapPerfSignal(size_t mapSize = 5e6,
   uint64_t start, end;
   // printf("init omap of size %lu\n", mapSize);
   ocall_measure_time(&start);
-  // omap.InitFromReaderInPlace(reader);
+  // omap.InitFromReader(reader);
   omap.Init();
   ocall_measure_time(&end);
   uint64_t initTimediff = end - start;
