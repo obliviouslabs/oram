@@ -458,6 +458,55 @@ TEST(ORAM, testInitWithReader) {
   }
 }
 
+template <bool useCompact>
+void testBatchReadWrite() {
+  for (uint64_t size = 1; size < 100; ++size) {
+    for (uint64_t batchSize = 1; batchSize < 200; ++batchSize) {
+      ODSL::LinearORAM::LinearORAM<int64_t> oram(size);
+      std::vector<int64_t> ref(size);
+      for (uint64_t i = 0; i < size; i++) {
+        oram.Write(i, i * 3);
+        ref[i] = i * 3;
+      }
+      std::vector<uint64_t> addrs(batchSize);
+      std::vector<int64_t> vals(batchSize);
+      for (int r = 0; r < 10; ++r) {
+        for (uint64_t& addr : addrs) {
+          addr = UniformRandom(size - 1);
+        }
+        std::sort(addrs.begin(), addrs.end());
+        if (r % 2 == 0) {
+          for (ssize_t i = addrs.size() - 1; i >= 0; --i) {
+            vals[i] = UniformRandom();
+            ref[addrs[i]] = vals[i];
+          }
+          if constexpr (useCompact) {
+            oram.BatchWriteBackViaCompaction(
+                batchSize, &addrs[0], &vals[0],
+                std::vector<bool>(batchSize, true));
+          } else {
+            oram.BatchWriteBackNaive(batchSize, &addrs[0], &vals[0],
+                                     std::vector<bool>(batchSize, true));
+          }
+        } else {
+          if constexpr (useCompact) {
+            oram.BatchReadViaCompaction(batchSize, &addrs[0], &vals[0]);
+          } else {
+            oram.BatchReadNaive(batchSize, &addrs[0], &vals[0]);
+          }
+          for (size_t i = 0; i < addrs.size(); ++i) {
+            ASSERT_EQ(vals[i], ref[addrs[i]]);
+          }
+        }
+      }
+    }
+  }
+}
+
+TEST(LinearORAM, testBatchReadWriteNaive) { testBatchReadWrite<false>(); }
+
+TEST(LinearORAM, testBatchReadWriteCompact) { testBatchReadWrite<true>(); }
+
 TEST(RecursiveORAM, testInitDefault) {
   uint64_t size = 12345;
   ODSL::RecursiveORAM<TestElement> oram(size);

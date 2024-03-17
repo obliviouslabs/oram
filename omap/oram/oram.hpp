@@ -58,7 +58,6 @@ struct ORAM {
     }
   }
 
-  // TODO rename to capacity
   PositionType size() const {
     if (isLinear) {
       Assert(linearOram);
@@ -238,7 +237,7 @@ struct ORAM {
   void BatchReadAndRemove(uint64_t batchSize, PositionType* pos,
                           const UidType* uid, T* out) {
     if (isLinear) {
-      linearOram->BatchReadAndRemove(batchSize, uid, out);
+      linearOram->BatchRead(batchSize, uid, out);
     } else {
       treeOram->BatchReadAndRemove(batchSize, pos, uid, out);
     }
