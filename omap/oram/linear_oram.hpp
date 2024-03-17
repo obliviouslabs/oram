@@ -9,27 +9,23 @@
 
 /**
  * @brief A simple linear oram efficient at small size.
+ * Requires uid < size.
  *
  */
 namespace ODSL::LinearORAM {
-template <typename T, typename PositionType = uint64_t,
-          typename UidType = uint64_t>
+template <typename T, typename UidType = uint64_t>
 struct LinearORAM {
-  using UidBlock_ = UidBlock<T, UidType>;
-  StdVector<UidBlock_> data;
-  PositionType _size;
+  std::vector<T> data;
+  UidType _size;
 
   LinearORAM() : _size(0), data(0) {}
-  LinearORAM(PositionType size) : _size(size), data(size) {}
+  LinearORAM(UidType size) : _size(size), data(size) {}
 
   template <typename Reader>
   void InitFromReader(Reader reader) {
     UidType initSize = reader.size();
     for (UidType i = 0; i < initSize; i++) {
-      data[i] = UidBlock_(reader.read(), i);
-    }
-    for (UidType i = initSize; i < _size; i++) {
-      data[i].uid = DUMMY<UidType>();
+      data[i] = reader.read();
     }
   }
 
@@ -45,64 +41,46 @@ struct LinearORAM {
     data.resize(size);
   }
 
-  static size_t GetMemoryUsage(size_t size) { return sizeof(UidBlock_) * size; }
+  static size_t GetMemoryUsage(size_t size) { return sizeof(T) * size; }
 
   size_t GetMemoryUsage() const { return GetMemoryUsage(_size); }
 
-  PositionType Read(PositionType pos, const UidType& uid, T& out) {
-    for (UidBlock_& block : data) {
-      obliMove(block.uid == uid, out, block.data);
+  void Read(const UidType& uid, T& out) {
+    for (UidType i = 0; i < _size; i++) {
+      obliMove(i == uid, out, data[i]);
     }
-    return pos;
   }
 
-  PositionType Write(const UidType& uid, const T& in) {
-    bool inserted = false;
-    for (UidBlock_& block : data) {
-      bool emptyFlag = block.uid == DUMMY<UidType>();
-      UidBlock_ newBlock(in, uid);
-      obliMove(emptyFlag & !inserted, block, newBlock);
-      inserted |= emptyFlag;
+  void Write(const UidType& uid, const T& in) {
+    for (UidType i = 0; i < _size; i++) {
+      obliMove(i == uid, data[i], in);
     }
-    return 0;
   }
 
   template <class Func>
-  PositionType Update(PositionType pos, const UidType& uid,
-                      const Func& updateFunc) {
+  void Update(const UidType& uid, const Func& updateFunc) {
     T out;
-    return Update(pos, uid, updateFunc, out);
+    Update(uid, updateFunc, out);
   }
 
   template <class Func>
-  PositionType Update(PositionType pos, const UidType& uid,
-                      const Func& updateFunc, T& out) {
-    return Update(pos, uid, updateFunc, out, uid);
+  void Update(const UidType& uid, const Func& updateFunc, T& out) {
+    Update(uid, updateFunc, out, uid);
   }
 
   template <class Func>
-  PositionType Update(PositionType pos, const UidType& uid,
-                      const Func& updateFunc, T& out,
-                      const UidType& updatedUid) {
-    for (const UidBlock_& block : data) {
-      bool match = block.uid == uid;
-      obliMove(match, out, block.data);
-    }
+  void Update(const UidType& uid, const Func& updateFunc, T& out,
+              const UidType& updatedUid) {
+    Read(uid, out);
     bool keepFlag = updateFunc(out);
     UidType newUid = DUMMY<UidType>();
     obliMove(keepFlag, newUid, updatedUid);
-    UidBlock_ newBlock(out, newUid);
-    for (UidBlock_& block : data) {
-      bool match = block.uid == uid;
-      obliMove(match, block, newBlock);
-    }
-    return pos;
+    Write(newUid, out);
   }
 
-  void BatchReadAndRemove(uint64_t batchSize, const UidType* uid,
-                          T* out) {
+  void BatchReadAndRemove(uint64_t batchSize, const UidType* uid, T* out) {
     for (uint64_t i = 0; i < batchSize; i++) {
-      Read(0, uid[i], out[i]);
+      Read(uid[i], out[i]);
     }
     // don't actually remove since we will write back
   }
@@ -110,23 +88,16 @@ struct LinearORAM {
   void BatchWriteBack(uint64_t batchSize, const UidType* uid, const T* in,
                       const std::vector<bool>& keepFlag) {
     for (size_t i = 0; i < batchSize; ++i) {
-      UidType searchUid = uid[i];
-      if (i != 0) {
-        obliMove(uid[i] == uid[i - 1], searchUid, DUMMY<UidType>());
-        // don't update if same uid
-      }
-      UidBlock_ blockToWrite(in[i], searchUid);
-      obliMove(!keepFlag[i], blockToWrite.uid, DUMMY<UidType>());
-      for (UidBlock_& block : data) {
-        bool match = block.uid == searchUid;
-        obliMove(match, block, blockToWrite);
-      }
+      UidType newUid = uid[i];
+      bool isDup = i > 0 && uid[i] == uid[i - 1];
+      obliMove(!keepFlag[i] | isDup, newUid, DUMMY<UidType>());
+      Write(newUid, in[i]);
     }
   }
 
   template <class Func>
   void BatchUpdate(uint64_t batchSize, const UidType* uid,
-                          const Func& updateFunc, T* out) {
+                   const Func& updateFunc, T* out) {
     BatchReadAndRemove(batchSize, uid, out);
 
     std::vector<bool> keepFlag = updateFunc(batchSize, out);
@@ -137,7 +108,7 @@ struct LinearORAM {
 
   template <class Func>
   void BatchUpdate(uint64_t batchSize, const UidType* uid,
-                          const Func& updateFunc) {
+                   const Func& updateFunc) {
     std::vector<T> out(batchSize);
     BatchUpdate(batchSize, uid, updateFunc, &out[0]);
   }

@@ -13,7 +13,7 @@ namespace ODSL {
 template <typename T, typename PositionType = uint64_t,
           typename UidType = uint64_t>
 struct ORAM {
-  using LinearORAM_ = LinearORAM::LinearORAM<T, PositionType, UidType>;
+  using LinearORAM_ = LinearORAM::LinearORAM<T, UidType>;
   using ORAM_ = CircuitORAM::ORAM<T, 2, 20, PositionType, UidType, 4096, 2>;
   LinearORAM_* linearOram = NULL;
   ORAM_* treeOram = NULL;
@@ -114,7 +114,8 @@ struct ORAM {
    */
   PositionType Read(PositionType pos, const UidType& uid, T& out) {
     if (isLinear) {
-      return linearOram->Read(pos, uid, out);
+      linearOram->Read(uid, out);
+      return 0;
     } else {
       return treeOram->Read(pos, uid, out);
     }
@@ -129,7 +130,8 @@ struct ORAM {
    */
   PositionType Write(const UidType& uid, const T& in) {
     if (isLinear) {
-      return linearOram->Write(uid, in);
+      linearOram->Write(uid, in);
+      return 0;
     } else {
       return treeOram->Write(uid, in);
     }
@@ -148,7 +150,8 @@ struct ORAM {
   PositionType Update(PositionType pos, const UidType& uid,
                       const Func& updateFunc) {
     if (isLinear) {
-      return linearOram->Update(pos, uid, updateFunc);
+      linearOram->Update(uid, updateFunc);
+      return 0;
     } else {
       return treeOram->Update(pos, uid, updateFunc);
     }
@@ -159,7 +162,8 @@ struct ORAM {
   PositionType Update(PositionType pos, const UidType& uid,
                       const Func& updateFunc, T& out) {
     if (isLinear) {
-      return linearOram->Update(pos, uid, updateFunc, out);
+      linearOram->Update(uid, updateFunc, out);
+      return 0;
     } else {
       return treeOram->Update(pos, uid, updateFunc, out);
     }
@@ -171,7 +175,8 @@ struct ORAM {
                       const Func& updateFunc, T& out,
                       const UidType& updatedUid) {
     if (isLinear) {
-      return linearOram->Update(pos, uid, updateFunc, out, updatedUid);
+      linearOram->Update(uid, updateFunc, out, updatedUid);
+      return 0;
     } else {
       return treeOram->Update(pos, uid, updateFunc, out, updatedUid);
     }
@@ -180,7 +185,8 @@ struct ORAM {
   PositionType Read(PositionType pos, const UidType& uid, T& out,
                     PositionType newPos) {
     if (isLinear) {
-      return linearOram->Read(pos, uid, out);
+      linearOram->Read(uid, out);
+      return 0;
     } else {
       return treeOram->Read(pos, uid, out, newPos);
     }
@@ -188,7 +194,8 @@ struct ORAM {
 
   PositionType Write(const UidType& uid, const T& in, PositionType newPos) {
     if (isLinear) {
-      return linearOram->Write(uid, in);
+      linearOram->Write(uid, in);
+      return 0;
     } else {
       return treeOram->Write(uid, in, newPos);
     }
@@ -198,7 +205,8 @@ struct ORAM {
   PositionType Update(PositionType pos, const UidType& uid, PositionType newPos,
                       const Func& updateFunc) {
     if (isLinear) {
-      return linearOram->Update(pos, uid, updateFunc);
+      linearOram->Update(uid, updateFunc);
+      return 0;
     } else {
       return treeOram->Update(pos, uid, newPos, updateFunc);
     }
@@ -208,7 +216,8 @@ struct ORAM {
   PositionType Update(PositionType pos, const UidType& uid, PositionType newPos,
                       const Func& updateFunc, T& out) {
     if (isLinear) {
-      return linearOram->Update(pos, uid, updateFunc, out);
+      linearOram->Update(uid, updateFunc, out);
+      return 0;
     } else {
       return treeOram->Update(pos, uid, newPos, updateFunc, out);
     }
@@ -219,7 +228,8 @@ struct ORAM {
                       const Func& updateFunc, T& out,
                       const UidType& updatedUid) {
     if (isLinear) {
-      return linearOram->Update(pos, uid, updateFunc, out, updatedUid);
+      linearOram->Update(uid, updateFunc, out, updatedUid);
+      return 0;
     } else {
       return treeOram->Update(pos, uid, newPos, updateFunc, out, updatedUid);
     }
