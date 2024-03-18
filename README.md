@@ -59,13 +59,13 @@ cd applications/sorting
 
 ## Folder structure high level details
 
-osort - C++ osort library code
+omap - C++ oblivious map library code
 tests - C++ tests modules
-applications - Enclaves example of osort
+applications - Enclaves example of omap
 tools - tools used to generate graphs or test sets
 tools/docker - dockerfiles used for reproducible builds
 
-### OSort folder structure
+### omap folder structure
 
 common - common c++ utilies, cpu abstractions, cryptography abstractions and tracing code
 external_memory - external memory abstraction and sorting algorithms

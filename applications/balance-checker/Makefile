@@ -42,7 +42,6 @@ ALGO ?= KWAYBUTTERFLYOSORT
 MIN_SIZE ?= 524288
 MAX_SIZE ?= 419430400
 STEP_RATIO ?= 1.2
-IO_ROUND ?= 1
 ENCLAVE_SIZE ?= 128
 DISK_IO ?= 0
 TCS_NUM ?= 1
@@ -93,7 +92,7 @@ else
 endif
 
 App_Cpp_Files := App/App.cpp $(wildcard App/TrustedLibrary/*.cpp)
-App_Include_Paths := -IApp -I$(SGX_SDK)/include -I../../osort/
+App_Include_Paths := -IApp -I$(SGX_SDK)/include -I../../omap/
 
 App_C_Flags := -fPIC -Wno-attributes -Wno-deprecated-declarations $(App_Include_Paths)
 
@@ -143,9 +142,9 @@ else
 endif
 Crypto_Library_Name := sgx_tcrypto
 
-CLIENT_SOURCES = client.cpp ../../osort/common/encutils.cpp
+CLIENT_SOURCES = client.cpp ../../omap/common/encutils.cpp
 CLIENT_TARGET = client
-CLIENT_CXXFLAGS = -Wno-deprecated-declarations -std=c++20 -I../../osort/
+CLIENT_CXXFLAGS = -Wno-deprecated-declarations -std=c++20 -I../../omap/
 CLIENT_LDFLAGS = -lssl -lcrypto
 
 BEARSSL_SOURCES := \
@@ -164,7 +163,7 @@ BEARSSL_SOURCES := \
 
 Enclave_C_Files := $(BEARSSL_SOURCES) 
 Enclave_Cpp_Files := Enclave/Enclave.cpp $(wildcard Enclave/TrustedLibrary/*.cpp) 
-Enclave_Include_Paths := -IEnclave -I$(SGX_SDK)/include -I$(SGX_SDK)/include/libcxx -I$(SGX_SDK)/include/tlibc -I../../osort -IEnclave/bearssl/include -IEnclave/bearssl/src/bearssl
+Enclave_Include_Paths := -IEnclave -I$(SGX_SDK)/include -I$(SGX_SDK)/include/libcxx -I$(SGX_SDK)/include/tlibc -I../../omap -IEnclave/bearssl/include -IEnclave/bearssl/src/bearssl
 
 Enclave_Flags := -fvisibility=hidden -fpie -fstack-protector -fno-builtin-printf -march=native $(Enclave_Include_Paths)
 
@@ -177,7 +176,7 @@ else
 endif
 
 Enclave_C_Flags := $(Enclave_Flags) -std=c17 
-Enclave_Cpp_Flags := $(Enclave_Flags) -std=c++20 -nostdinc++ -DNOOPENSSL -DENCLAVE_MODE -DELEMENT_SIZE=${ELEMENT_SIZE} -DALGO=${ALGO} -DMIN_SIZE=${MIN_SIZE} -DMAX_SIZE=${MAX_SIZE} -DSTEP_RATIO=${STEP_RATIO} -DENCLAVE_SIZE=${ENCLAVE_SIZE} -DIO_ROUND=${IO_ROUND} -DTCS_NUM=${TCS_NUM}
+Enclave_Cpp_Flags := $(Enclave_Flags) -std=c++20 -nostdinc++ -DNOOPENSSL -DENCLAVE_MODE -DELEMENT_SIZE=${ELEMENT_SIZE} -DALGO=${ALGO} -DMIN_SIZE=${MIN_SIZE} -DMAX_SIZE=${MAX_SIZE} -DSTEP_RATIO=${STEP_RATIO} -DENCLAVE_SIZE=${ENCLAVE_SIZE} -DTCS_NUM=${TCS_NUM}
 ifeq ($(DISK_IO), 1)
 	Enclave_Cpp_Flags += -DDISK_IO
 endif

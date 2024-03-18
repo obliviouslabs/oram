@@ -9,21 +9,11 @@ SGX_MODE=SIM # HW or SIM
 MIN_ENCLAVE_SIZE=8192 # enclave size in MB
 MAX_ENCLAVE_SIZE=8192
 TCS_NUM=1
-IO_ROUNDs=(1) # number of rounds encryption/decryption is performed, used to get breakdown
 CORE_ID=0 # the cpu core id to run the program
 DISK_IO=0 # 0: no disk IO, 1: disk IO
 DB_PATH=./db_rcc
 
-for IO_ROUND in ${IO_ROUNDs[@]}; do
-if [ $IO_ROUND = 0 ]
-then
-    IO_TAG=_MOCK_IO
-fi
 
-if [ $IO_ROUND -gt 1 ]
-then
-    IO_TAG=_${IO_ROUND}IO
-fi
 
 if [ $DISK_IO = 1 ]
 then
@@ -35,8 +25,7 @@ then
     ENCLAVE_SIZE_TAG=_${MIN_ENCLAVE_SIZE}_${MAX_ENCLAVE_SIZE}
 fi
 
-
-FILENAME=OMap${IO_TAG}${DISK_TAG}${ENCLAVE_SIZE_TAG}.out
+FILENAME=OMap${DISK_TAG}${ENCLAVE_SIZE_TAG}.out
 if [ -z "$1" ]; then
 rm -f $FILENAME
 echo "output to "${FILENAME}
@@ -49,14 +38,13 @@ hex_encsize=$(printf '%x\n' $heapsizeB)
 sed -i "/.*<Heap.*/c\  <HeapMaxSize>0x"${hex_encsize}"</HeapMaxSize>" ./Enclave/Enclave.config.xml
 
 make clean
-make SGX_MODE=$SGX_MODE SGX_PRERELEASE=0 IO_ROUND=$IO_ROUND DISK_IO=$DISK_IO ENCLAVE_SIZE=$encsize
+make SGX_MODE=$SGX_MODE SGX_PRERELEASE=0 DISK_IO=$DISK_IO ENCLAVE_SIZE=$encsize
 if [[ $1 = 1 ]]; then
     taskset -c ${CORE_ID} ./omap.elf $DB_PATH
     sleep 1
 else
     taskset -c ${CORE_ID} stdbuf -oL nohup ./omap.elf $DB_PATH &>> $FILENAME < /dev/null
 fi
-done
 done
 
 sed -i '/.*<Heap.*/c\  <HeapMaxSize>0x7A00000</HeapMaxSize>' ./Enclave/Enclave.config.xml
