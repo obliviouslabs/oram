@@ -21,7 +21,7 @@ template <class PathVec, typename UidType, typename T>
 void ReadElementAndRemoveFromPath(PathVec& path, const UidType& uid, T& out) {
   using Block_ = PathVec::value_type;
   for (Block_& b : path) {
-    b.readAndRemove(uid, out);
+    b.ReadAndRemove(uid, out);
   }
 }
 
@@ -29,7 +29,7 @@ template <class Iterator, typename UidType, typename T>
 void ReadElementAndRemoveFromPath(Iterator begin, Iterator end,
                                   const UidType& uid, T& out) {
   for (auto it = begin; it != end; ++it) {
-    it->readAndRemove(uid, out);
+    it->ReadAndRemove(uid, out);
   }
 }
 
@@ -40,7 +40,7 @@ bool WriteNewBlockToPath(PathVec& path, const Block_& block) {
   bool cond = true;
   // fill the first slot that's empty
   for (int i = 0; i < endIdx; i++) {
-    cond &= !path[i].insert(cond, block);
+    cond &= !path[i].Insert(cond, block);
   }
   return !cond;
 }
@@ -51,7 +51,7 @@ bool WriteNewBlockToTreeTop(PathVec& path, const Block_& block, int topSize) {
   bool cond = true;
   // fill the first slot that's empty
   for (int i = 0; i < topSize; i++) {
-    cond &= !path[i].insert(cond, block);
+    cond &= !path[i].Insert(cond, block);
   }
   return !cond;
 }

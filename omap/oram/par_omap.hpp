@@ -8,7 +8,6 @@
 namespace ODSL {
 template <typename K, typename V, typename PositionType = uint64_t>
 struct ParOMap {
-  // std::vector<OMap<K, V, 9, PositionType>> shards;
   using BaseMap = OHashMap<K, V, true, PositionType, true>;
   std::vector<BaseMap> shards;
   uint64_t shardSize = 0;
@@ -187,7 +186,7 @@ struct ParOMap {
 #ifndef NDEBUG
       uint64_t realCount = 0;
       for (uint64_t i = 0; i < batchSize; ++i) {
-        if (!batch[i].isDummy()) {
+        if (!batch[i].IsDummy()) {
           uint64_t hash = secure_hash_with_salt((uint8_t*)&batch[i].v.key,
                                                 sizeof(K), randSalt);
           uint64_t shardIdx = getShardByHash(hash);
@@ -204,8 +203,8 @@ struct ParOMap {
           const Element& elem = batch[i * perBatchShardSize + j];
           const KVPair& kvPair = elem.v;
           // insert dummies like normal elements
-          nonOMaps[i].template insert<true>(kvPair.key, kvPair.value,
-                                            elem.isDummy());
+          nonOMaps[i].template Insert<true>(kvPair.key, kvPair.value,
+                                            elem.IsDummy());
         }
       }
     }
@@ -412,7 +411,7 @@ struct ParOMap {
 
 #pragma omp parallel for schedule(static)
     for (uint32_t i = 0; i < shardCount; ++i) {
-      shards[i].findBatchDeferWriteBack(keyVec.begin() + i * shardSize,
+      shards[i].FindBatchDeferWriteBack(keyVec.begin() + i * shardSize,
                                         keyVec.begin() + (i + 1) * shardSize,
                                         resultVec.begin() + i * shardSize);
     }
@@ -444,7 +443,7 @@ struct ParOMap {
     uint64_t shardCount = shards.size();
 #pragma omp parallel for num_threads(shardCount * 2)
     for (uint64_t i = 0; i < shardCount * 2; ++i) {
-      shards[i / 2].writeBackTable(i % 2);
+      shards[i / 2].WriteBackTable(i % 2);
     }
   }
 
@@ -543,7 +542,7 @@ struct ParOMap {
     for (uint32_t i = 0; i < shardCount; ++i) {
       uint32_t numReal = shardLoads[i];
       for (uint32_t j = 0; j < shardSize; ++j) {
-        foundVec[i * shardSize + j] = shards[i].insertOblivious(
+        foundVec[i * shardSize + j] = shards[i].InsertOblivious(
             kvVec[i * shardSize + j].key, kvVec[i * shardSize + j].value,
             j >= numReal);
       }
@@ -638,7 +637,7 @@ struct ParOMap {
       uint32_t numReal = shardLoads[i];
       for (uint32_t j = 0; j < shardSize; ++j) {
         foundVec[i * shardSize + j] =
-            shards[i].eraseOblivious(keyVec[i * shardSize + j], j >= numReal);
+            shards[i].EraseOblivious(keyVec[i * shardSize + j], j >= numReal);
       }
     }
 

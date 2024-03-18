@@ -34,7 +34,7 @@ struct TaggedT {
 
   inline const T& getData() const { return v; }
 
-  inline bool isDummy() const { return tag >> 63; }
+  inline bool IsDummy() const { return tag >> 63; }
 
   inline void setDummy() { tag |= 0x8000'0000'0000'0000UL; }
 

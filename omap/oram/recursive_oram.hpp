@@ -98,7 +98,7 @@ struct RecursiveORAM {
    * belongs to
    */
   template <typename Reader>
-  PositionType InitFromReaderHelper(Reader& reader, int level = 0) {
+  PositionType initFromReaderHelper(Reader& reader, int level = 0) {
     if (level == oramSizes.size() - 1) {
       LeafNode leafNode;
       for (short i = 0; i < chunk_size; ++i) {
@@ -113,7 +113,7 @@ struct RecursiveORAM {
     }
     InternalNode internalNode;
     for (short i = 0; i < fan_out; ++i) {
-      internalNode.children[i] = InitFromReaderHelper(reader, level + 1);
+      internalNode.children[i] = initFromReaderHelper(reader, level + 1);
       if (reader.eof()) {
         break;
       }
@@ -221,7 +221,7 @@ struct RecursiveORAM {
       throw std::runtime_error("Reader size does not match oram size");
     }
 
-    PositionType rootPos = InitFromReaderHelper(reader);
+    PositionType rootPos = initFromReaderHelper(reader);
     Assert(rootPos == 0);
   }
 

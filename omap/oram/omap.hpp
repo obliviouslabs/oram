@@ -314,6 +314,37 @@ struct OHashMap {
   }
 
   /**
+   * @brief Helper function that searches the stash for a key. Depending on
+   * whether the hash map is oblivious, the function may reveal the number of
+   * comparisons.
+   *
+   * @param key the key to search
+   * @param value the value to return
+   * @param stash the stash to search
+   * @return true if the key is found, false otherwise
+   */
+  static bool searchStash(const K& key, V& value,
+                          const std::vector<KVEntry>& stash) {
+    if constexpr (isOblivious) {
+      bool found = false;
+      for (const auto& entry : stash) {
+        bool match = entry.valid & entry.key == key;
+        obliMove(match, value, entry.value);
+        found |= match;
+      }
+      return found;
+    } else {
+      for (const auto& entry : stash) {
+        if (entry.valid && entry.key == key) {
+          value = entry.value;
+          return true;
+        }
+      }
+      return false;
+    }
+  }
+
+  /**
    * @brief A helper function that replaces an entry in a search range if it
    * exists. The function is oblivious.
    *
@@ -434,6 +465,53 @@ struct OHashMap {
         }
       }
       return false;
+    }
+  }
+
+  /**
+   * @brief Find the values of a batch of keys obliviously in one table, and
+   * defer the writeback procedure of the recursive ORAM. Requires the hash map
+   * to be oblivious. The input may contain duplicate keys and may be arranged
+   * in any order.
+   *
+   * @tparam KeyIter the type of the key iterator
+   * @tparam ValResIter the type of the value result iterator
+   * @param tableNum the table to search, 0 or 1
+   * @param keyBegin the begin iterator of the keys
+   * @param keyEnd the end iterator of the keys
+   * @param valResBegin the begin iterator of the value results
+   * @param hashIndices the indices of the keys in the hash table
+   */
+  template <class KeyIter, class ValResIter>
+  void findTableBatchDeferWriteBack(int tableNum, const KeyIter keyBegin,
+                                    const KeyIter keyEnd,
+                                    ValResIter valResBegin,
+                                    std::vector<PositionType>& hashIndices) {
+    static_assert(isOblivious);
+
+    Assert(tableNum == 0 || tableNum == 1);
+
+    size_t keySize = std::distance(keyBegin, keyEnd);
+    Assert(hashIndices.size() == keySize);
+    std::vector<PositionType> recoveryVec(keySize);
+    for (PositionType i = 0; i < keySize; ++i) {
+      recoveryVec[i] = i;
+    }
+    EM::Algorithm::BitonicSortSepPayload(hashIndices.begin(), hashIndices.end(),
+                                         recoveryVec.begin());
+    std::vector<BucketType> buckets(keySize);
+
+    if (tableNum == 0) {
+      table0.BatchReadDeferWriteBack(hashIndices, buckets);
+    } else {
+      table1.BatchReadDeferWriteBack(hashIndices, buckets);
+    }
+
+    EM::Algorithm::BitonicSortSepPayload(recoveryVec.begin(), recoveryVec.end(),
+                                         buckets.begin());
+    for (size_t i = 0; i < keySize; ++i) {
+      (valResBegin + i)->found =
+          searchBucket(*(keyBegin + i), (valResBegin + i)->value, buckets[i]);
     }
   }
 
@@ -576,7 +654,7 @@ struct OHashMap {
         // valid is public but dummy is not
         // since we deleted all dummies, it's likely that we don't need to put
         // these entries in the stash
-        insertOblivious(entry.key, entry.value, entry.dummy);
+        InsertOblivious(entry.key, entry.value, entry.dummy);
       }
     }
   }
@@ -597,7 +675,7 @@ struct OHashMap {
     if constexpr (!isOblivious) {
       while (!reader.eof()) {
         std::pair<K, V> entry = reader.read();
-        insert(entry.first, entry.second);
+        Insert(entry.first, entry.second);
       }
     } else {
       additionalCacheBytes = std::max(
@@ -643,7 +721,7 @@ struct OHashMap {
    * @return true if the key already exists, false otherwise
    */
   template <bool hideDummy = false>
-  bool insert(const K& key, const V& value, bool isDummy = false) {
+  bool Insert(const K& key, const V& value, bool isDummy = false) {
     static_assert(!(isOblivious && hideDummy),
                   "hideDummy is only useful for non oblivious");
     if constexpr (!hideDummy) {
@@ -743,7 +821,7 @@ struct OHashMap {
    * @param isDummy whether the insertion is dummy
    * @return true if the key already exists, false otherwise
    */
-  bool insertOblivious(const K& key, const V& value, bool isDummy = false) {
+  bool InsertOblivious(const K& key, const V& value, bool isDummy = false) {
     PositionType idx0, idx1;
     indexer.getHashIndices(key, idx0, idx1);
     obliMove(isDummy, idx0, (PositionType)UniformRandom(tableSize - 1));
@@ -793,37 +871,6 @@ struct OHashMap {
   }
 
   /**
-   * @brief Helper function that searches the stash for a key. Depending on
-   * whether the hash map is oblivious, the function may reveal the number of
-   * comparisons.
-   *
-   * @param key the key to search
-   * @param value the value to return
-   * @param stash the stash to search
-   * @return true if the key is found, false otherwise
-   */
-  static bool searchStash(const K& key, V& value,
-                          const std::vector<KVEntry>& stash) {
-    if constexpr (isOblivious) {
-      bool found = false;
-      for (const auto& entry : stash) {
-        bool match = entry.valid & entry.key == key;
-        obliMove(match, value, entry.value);
-        found |= match;
-      }
-      return found;
-    } else {
-      for (const auto& entry : stash) {
-        if (entry.valid && entry.key == key) {
-          value = entry.value;
-          return true;
-        }
-      }
-      return false;
-    }
-  }
-
-  /**
    * @brief Find the value of a key. Depending on whether the hash map is
    * oblivious, the function may reveal the number of comparisons.
    *
@@ -832,7 +879,7 @@ struct OHashMap {
    * @param isDummy whether the search is dummy
    * @return true if the key is found, false otherwise
    */
-  bool find(const K& key, V& value, bool isDummy = false) {
+  bool Find(const K& key, V& value, bool isDummy = false) {
     if constexpr (!isOblivious) {
       if (isDummy) {
         return false;
@@ -872,98 +919,6 @@ struct OHashMap {
   }
 
   /**
-   * @brief Find the value of a key in table 0 obliviously.
-   *
-   * @param key the key to search
-   * @param value the value to return
-   * @param isDummy whether the search is dummy
-   * @return true if the key is found, false otherwise
-   */
-  bool findTable0(const K& key, V& value, bool isDummy = false) {
-    static_assert(isOblivious);
-    bool found = false;
-
-    PositionType idx0 = indexer.getHashIdx0(key);
-
-    obliMove(isDummy, idx0, (PositionType)UniformRandom(tableSize - 1));
-
-    BucketType bucket;
-    readHelper(idx0, table0, bucket);
-    found = searchBucket(key, value, bucket);
-    found |= searchStash(key, value, stash);
-
-    return found & !isDummy;
-  }
-
-  /**
-   * @brief Find the value of a key in table 1 obliviously.
-   *
-   * @param key the key to search
-   * @param value the value to return
-   * @param isDummy whether the search is dummy
-   * @return true if the key is found, false otherwise
-   */
-  bool findTable1(const K& key, V& value, bool isDummy = false) {
-    static_assert(isOblivious);
-    bool found = false;
-
-    PositionType idx1 = indexer.getHashIdx1(key);
-    obliMove(isDummy, idx1, (PositionType)UniformRandom(tableSize - 1));
-    BucketType bucket;
-    readHelper(idx1, table1, bucket);
-    found = searchBucket(key, value, bucket);
-
-    return found & !isDummy;
-  }
-
-  /**
-   * @brief Find the values of a batch of keys obliviously in one table, and
-   * defer the writeback procedure of the recursive ORAM. Requires the hash map
-   * to be oblivious. The input may contain duplicate keys and may be arranged
-   * in any order.
-   *
-   * @tparam KeyIter the type of the key iterator
-   * @tparam ValResIter the type of the value result iterator
-   * @param tableNum the table to search, 0 or 1
-   * @param keyBegin the begin iterator of the keys
-   * @param keyEnd the end iterator of the keys
-   * @param valResBegin the begin iterator of the value results
-   * @param hashIndices the indices of the keys in the hash table
-   */
-  template <class KeyIter, class ValResIter>
-  void findTableBatchDeferWriteBack(int tableNum, const KeyIter keyBegin,
-                                    const KeyIter keyEnd,
-                                    ValResIter valResBegin,
-                                    std::vector<PositionType>& hashIndices) {
-    static_assert(isOblivious);
-
-    Assert(tableNum == 0 || tableNum == 1);
-
-    size_t keySize = std::distance(keyBegin, keyEnd);
-    Assert(hashIndices.size() == keySize);
-    std::vector<PositionType> recoveryVec(keySize);
-    for (PositionType i = 0; i < keySize; ++i) {
-      recoveryVec[i] = i;
-    }
-    EM::Algorithm::BitonicSortSepPayload(hashIndices.begin(), hashIndices.end(),
-                                         recoveryVec.begin());
-    std::vector<BucketType> buckets(keySize);
-
-    if (tableNum == 0) {
-      table0.BatchReadDeferWriteBack(hashIndices, buckets);
-    } else {
-      table1.BatchReadDeferWriteBack(hashIndices, buckets);
-    }
-
-    EM::Algorithm::BitonicSortSepPayload(recoveryVec.begin(), recoveryVec.end(),
-                                         buckets.begin());
-    for (size_t i = 0; i < keySize; ++i) {
-      (valResBegin + i)->found =
-          searchBucket(*(keyBegin + i), (valResBegin + i)->value, buckets[i]);
-    }
-  }
-
-  /**
    * @brief Find the values of a batch of keys obliviously in the two tables in
    * parallel. Defer the recursive ORAM writeback procedure. The input may have
    * duplicate keys and may be arranged in any order.
@@ -975,7 +930,7 @@ struct OHashMap {
    * @param valResBegin
    */
   template <class KeyIter, class ValResIter>
-  void findBatchDeferWriteBack(const KeyIter keyBegin, const KeyIter keyEnd,
+  void FindBatchDeferWriteBack(const KeyIter keyBegin, const KeyIter keyEnd,
                                ValResIter valResBegin) {
     size_t keySize = std::distance(keyBegin, keyEnd);
     std::vector<std::vector<ValResult>> valResTables(
@@ -1006,7 +961,7 @@ struct OHashMap {
    *
    * @param tableNum the table number to write back, 0 or 1
    */
-  void writeBackTable(int tableNum) {
+  void WriteBackTable(int tableNum) {
     static_assert(isOblivious);
     Assert(tableNum == 0 || tableNum == 1);
     if (tableNum == 0) {
@@ -1023,7 +978,7 @@ struct OHashMap {
    * @param isDummy whether the erase is dummy operation
    * @return true if the key is found, false otherwise
    */
-  bool erase(const K& key, bool isDummy = false) {
+  bool Erase(const K& key, bool isDummy = false) {
     if (isDummy) {
       return false;
     }
@@ -1067,7 +1022,7 @@ struct OHashMap {
    * @param isDummy whether the erase is dummy operation
    * @return true if the key is found, false otherwise
    */
-  bool eraseOblivious(const K& key, bool isDummy = false) {
+  bool EraseOblivious(const K& key, bool isDummy = false) {
     if (isDummy) {
       return false;
     }

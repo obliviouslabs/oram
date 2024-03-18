@@ -79,7 +79,7 @@ struct ORAM {
    * @param out pointer to array of the output
    */
   void BatchRead(uint64_t batchSize, const UidType* uid, T* out) {
-    if (std::min(batchSize, _size) > 40) {
+    if (std::min(batchSize, (uint64_t)_size) > 40) {
       BatchReadViaCompaction(batchSize, uid, out);
     } else {
       BatchReadNaive(batchSize, uid, out);
@@ -169,7 +169,7 @@ struct ORAM {
    */
   void BatchWriteBack(uint64_t batchSize, const UidType* uid, const T* in,
                       const std::vector<bool>& keepFlag) {
-    if (std::min(batchSize, _size) > 40) {
+    if (std::min(batchSize, (uint64_t)_size) > 40) {
       BatchWriteBackViaCompaction(batchSize, uid, in, keepFlag);
     } else {
       BatchWriteBackNaive(batchSize, uid, in, keepFlag);

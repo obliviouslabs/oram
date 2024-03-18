@@ -356,14 +356,15 @@ void MergeSplitInPlace(Iterator begin, Iterator end, Indicator indicator) {
 
   for (auto it = begin; it != end; ++it) {
     bool isMarked = it->isMarked(indicator);
-    bool isDummy = it->isDummy();
+    bool isDummy = it->IsDummy();
     bool changeMark = isDummy & (!!diff) & (isMarked == dir);
     it->condChangeMark(changeMark, indicator);
     diff -= (uint64_t)changeMark;
   }
 
   if (diff) {
-    throw std::runtime_error("MergeSplit fails. Consider padding more filler elements.");
+    throw std::runtime_error(
+        "MergeSplit fails. Consider padding more filler elements.");
   }
 
   const auto isMarked = [indicator = indicator](const auto& element) {
@@ -417,7 +418,7 @@ void MergeSplitTwoWay(Iterator beginLeft, Iterator beginRight, size_t Z,
       end = endRight;
     }
     bool isMarked = it->isMarked(indicator);
-    bool isDummy = it->isDummy();
+    bool isDummy = it->IsDummy();
     bool changeMark = isDummy & (!!diff) & (isMarked == dir);
     it->condChangeMark(changeMark, indicator);
     diff -= (uint64_t)changeMark;
@@ -427,7 +428,6 @@ void MergeSplitTwoWay(Iterator beginLeft, Iterator beginRight, size_t Z,
     throw std::runtime_error(
         "MergeSplit fails. Consider padding more filler elements.");
   }
-  
 
   const auto isMarked = [indicator = indicator](const auto& element) {
     return element.isMarked(indicator);
@@ -480,7 +480,7 @@ void MergeSplitKWay(const Iterator* begins, const size_t k, const size_t Z,
     auto begin = begins[i];
     for (auto it = begin; it != begin + Z; ++it, ++marksIt, ++tempIt) {
       std::memcpy(tempIt, &(*it), sizeof(T));
-      uint8_t isDummy = tempIt->isDummy();
+      uint8_t isDummy = tempIt->IsDummy();
       uint8_t mark;
       if constexpr (std::is_same<PivotIterator, void*>::value) {
         mark = tempIt->getMarkAndUpdate(k);
@@ -499,12 +499,11 @@ void MergeSplitKWay(const Iterator* begins, const size_t k, const size_t Z,
     }
   }
 
-
   if (mm256_contain_le_zero(remainCounts)) {
     throw std::runtime_error(
         "MergeSplit fails. Consider padding more filler elements.");
   }
-  
+
   int currMark = 0;
   uint32_t currRemain = mm256_extract_epi32_var_indx(remainCounts, 0);
   // assume that there's at least one dummy for each mark

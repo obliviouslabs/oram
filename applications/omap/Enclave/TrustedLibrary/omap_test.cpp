@@ -187,7 +187,7 @@ void testOmpSpeedup() {
     HeapTree<uint64_t> tree;
     uint64_t size = 2048;
     tree.Init(size);
-    std::vector<uint64_t> path(tree.totalLevel);
+    std::vector<uint64_t> path(tree.GetDepth());
     for (int r = 0; r < 1e7; ++r) {
       tree.ReadPath(r % size, path.begin());
       tree.WritePath(r % size, path.begin());
@@ -204,7 +204,7 @@ void testOmpSpeedup() {
     HeapTree<uint64_t> tree;
     uint64_t size = 2048;
     tree.Init(size);
-    std::vector<uint64_t> path(tree.totalLevel);
+    std::vector<uint64_t> path(tree.GetDepth());
     for (int r = 0; r < 1e7; ++r) {
       tree.ReadPath(r % size, path.begin());
       tree.WritePath(r % size, path.begin());
@@ -348,7 +348,7 @@ void testOmpSpeedup() {
     oram.SetSize(size);
     uint64_t out;
     for (int r = 0; r < 1e5; ++r) {
-      oram.Update(UniformRandom() % size, 0, [](TestElement& val) {
+      oram.Update(0, [](TestElement& val) {
         val.key++;
         return true;
       });
@@ -367,7 +367,7 @@ void testOmpSpeedup() {
     oram.SetSize(size);
     uint64_t out;
     for (int r = 0; r < 1e5; ++r) {
-      oram.Update(UniformRandom() % size, 0, [](TestElement& val) {
+      oram.Update(0, [](TestElement& val) {
         val.key++;
         return true;
       });
@@ -509,7 +509,7 @@ void testOMap() {
   for (size_t r = 0; r < round; ++r) {
     uint64_t i = UniformRandom(mapSize);
     int64_t val = UniformRandom(mapSize * 3);
-    bool res = omap.insertOblivious(i, val);
+    bool res = omap.InsertOblivious(i, val);
     if (map.find(i) != map.end()) {
       if (!res) {
         printf("insert failed at round %lu, does not replace element\n", r);
@@ -532,7 +532,7 @@ void testOMap() {
   for (size_t r = 0; r < round; ++r) {
     uint64_t i = UniformRandom(mapSize);
     int64_t val;
-    bool res = omap.find(i, val);
+    bool res = omap.Find(i, val);
     if (map.find(i) != map.end()) {
       if (!res) {
         printf("find failed at round %lu, does not find element\n", r);
@@ -610,7 +610,7 @@ void testOMapPerf() {
   for (size_t r = 0; r < round; ++r) {
     ETH_Addr addr;
     ERC20_Balance balance;
-    bool res = omap.insert(addr, balance);
+    bool res = omap.Insert(addr, balance);
   }
   ocall_measure_time(&end);
   timediff = end - start;
@@ -620,7 +620,7 @@ void testOMapPerf() {
   for (size_t r = 0; r < round; ++r) {
     ETH_Addr addr;
     ERC20_Balance balance;
-    omap.find(addr, balance);
+    omap.Find(addr, balance);
   }
   ocall_measure_time(&end);
   timediff = end - start;
@@ -631,7 +631,7 @@ void testOMapPerf() {
   for (size_t r = 0; r < round; ++r) {
     ETH_Addr addr;
     ERC20_Balance balance;
-    omap.find(addr, balance);
+    omap.Find(addr, balance);
   }
   ocall_measure_time(&end);
   timediff = end - start;
@@ -641,7 +641,7 @@ void testOMapPerf() {
   ocall_measure_time(&start);
   for (size_t r = 0; r < round; ++r) {
     ETH_Addr addr;
-    omap.erase(addr);
+    omap.Erase(addr);
   }
   ocall_measure_time(&end);
   timediff = end - start;
@@ -671,7 +671,7 @@ void testOHashMapPerf(size_t mapSize = 5e6) {
     ETH_Addr addr;
     addr.part[0] = r;
     ERC20_Balance balance;
-    bool res = omap.insert(addr, balance);
+    bool res = omap.Insert(addr, balance);
   }
   ocall_measure_time(&end);
   timediff = end - start;
@@ -682,7 +682,7 @@ void testOHashMapPerf(size_t mapSize = 5e6) {
     ETH_Addr addr;
     addr.part[0] = r;
     ERC20_Balance balance;
-    omap.find(addr, balance);
+    omap.Find(addr, balance);
   }
   ocall_measure_time(&end);
   timediff = end - start;
@@ -691,7 +691,7 @@ void testOHashMapPerf(size_t mapSize = 5e6) {
   ocall_measure_time(&start);
   for (size_t r = 0; r < round; ++r) {
     ETH_Addr addr;
-    omap.erase(addr);
+    omap.Erase(addr);
   }
   ocall_measure_time(&end);
   timediff = end - start;
@@ -726,7 +726,7 @@ void testOHashMapPerfSignal(size_t mapSize = 5e6) {
     uint64_t addr;
     addr = r;
     Bytes<240> balance;
-    bool res = omap.insert(addr, balance);
+    bool res = omap.Insert(addr, balance);
   }
   ocall_measure_time(&end);
   timediff = end - start;
@@ -737,7 +737,7 @@ void testOHashMapPerfSignal(size_t mapSize = 5e6) {
     uint64_t addr;
     addr = r;
     Bytes<240> balance;
-    omap.find(addr, balance);
+    omap.Find(addr, balance);
   }
   ocall_measure_time(&end);
   timediff = end - start;
@@ -747,7 +747,7 @@ void testOHashMapPerfSignal(size_t mapSize = 5e6) {
   for (size_t r = 0; r < round; ++r) {
     uint64_t addr;
     addr = r;
-    omap.erase(addr);
+    omap.Erase(addr);
   }
   ocall_measure_time(&end);
   timediff = end - start;

@@ -45,10 +45,10 @@ struct ORAM {
    * @param pos The position of the path
    * @param pathLen Only evict the first pathLen blocks in the path
    */
-  static void EvictPath(std::vector<Block_>& path, PositionType pos,
+  static void evictPath(std::vector<Block_>& path, PositionType pos,
                         int pathLen) {
     int depth = (pathLen - stashSize) / Z;
-    return EvictPath(path, pos, depth, stashSize);
+    return evictPath(path, pos, depth, stashSize);
   }
 
   /**
@@ -57,9 +57,9 @@ struct ORAM {
    * @param path The path to evict
    * @param pos The position of the path
    */
-  static void EvictPath(std::vector<Block_>& path, PositionType pos) {
+  static void evictPath(std::vector<Block_>& path, PositionType pos) {
     int depth = (path.size() - stashSize) / Z;
-    return EvictPath(path, pos, depth, stashSize);
+    return evictPath(path, pos, depth, stashSize);
   }
 
   /**
@@ -71,7 +71,7 @@ struct ORAM {
    * stash
    * @param actualStashSize The actual size of the stash in the path
    */
-  static void EvictPath(std::vector<Block_>& path, PositionType pos, int depth,
+  static void evictPath(std::vector<Block_>& path, PositionType pos, int depth,
                         int actualStashSize) {
     // allocate metadata on stack to avoid contention of heap allocation
     int deepest[64];
@@ -90,7 +90,7 @@ struct ORAM {
         int idx = actualStashSize + i * Z + j;
         int deepestLevel = commonSuffixLength(path[idx].position, pos);
         bool deeperFlag =
-            !path[idx].isDummy() & (deepestLevel > bucketDeepestLevel);
+            !path[idx].IsDummy() & (deepestLevel > bucketDeepestLevel);
         obliMove(deeperFlag, bucketDeepestLevel, deepestLevel);
         obliMove(deeperFlag, deepestIdx[i], idx);
       }
@@ -108,7 +108,7 @@ struct ORAM {
       bool hasEmpty = false;
       for (int j = 0; j < Z; ++j) {
         int idx = actualStashSize + i * Z + j;
-        hasEmpty |= path[idx].isDummy();
+        hasEmpty |= path[idx].IsDummy();
       }
       bool changeFlag =
           (((dest == -1) & hasEmpty) | (target[i] != -1)) & (deepest[i] != -1);
@@ -123,7 +123,7 @@ struct ORAM {
 
     for (int i = 0; i < depth; ++i) {
       Block_ toWrite = hold;
-      bool placeFlag = !hold.isDummy() & (i == dest);
+      bool placeFlag = !hold.IsDummy() & (i == dest);
       obliMove(!placeFlag, toWrite.uid, DUMMY<UidType>());
       obliMove(placeFlag, hold.uid, DUMMY<UidType>());
       obliMove(placeFlag, dest, -1);
@@ -139,10 +139,10 @@ struct ORAM {
       if (i == 0) {
         continue;  // no need to write to stash
       }
-      bool needWriteFlag = !toWrite.isDummy();
+      bool needWriteFlag = !toWrite.IsDummy();
       for (int j = 0; j < Z; ++j) {
         int idx = actualStashSize + i * Z + j;
-        bool writeFlag = needWriteFlag & path[idx].isDummy();
+        bool writeFlag = needWriteFlag & path[idx].IsDummy();
         obliMove(writeFlag, path[idx], toWrite);
         needWriteFlag &= !writeFlag;
       }
@@ -154,10 +154,10 @@ struct ORAM {
    *
    * @param pos The position of the path to evict
    */
-  void Evict(PositionType pos) {
-    int len = ReadPath(pos, path);
-    EvictPath(path, pos, len);
-    WriteBackPath(path, pos);
+  void evict(PositionType pos) {
+    int len = readPath(pos, path);
+    evictPath(path, pos, len);
+    writeBackPath(path, pos);
   }
 
   /**
@@ -166,9 +166,9 @@ struct ORAM {
    * @tparam _evict_freq The number of evictions to perform
    */
   template <const int _evict_freq = evict_freq>
-  void Evict() {
+  void evict() {
     for (int i = 0; i < _evict_freq; ++i) {
-      Evict((evictCounter++) % size());
+      evict((evictCounter++) % size());
     }
   }
 
@@ -189,9 +189,9 @@ struct ORAM {
                                   int pathLen, int retry = 10) {
     while (true) {
       bool success = WriteNewBlockToTreeTop(path, newBlock, stashSize + Z);
-      EvictPath(path, pos, pathLen);
-      WriteBackPath(path, pos);
-      Evict<_evict_freq>();
+      evictPath(path, pos, pathLen);
+      writeBackPath(path, pos);
+      evict<_evict_freq>();
       if (success) {
         break;
       }
@@ -200,7 +200,7 @@ struct ORAM {
       }
       --retry;
       pos = (evictCounter++) % size();
-      pathLen = ReadPath(pos, path);
+      pathLen = readPath(pos, path);
     }
   }
 
@@ -211,7 +211,7 @@ struct ORAM {
    * @param path The buffer to store the path
    * @return int The length of the path
    */
-  int ReadPath(PositionType pos, std::vector<Block_>& path) {
+  int readPath(PositionType pos, std::vector<Block_>& path) {
     Assert(path.size() == stashSize + Z * depth);
 
     memcpy(&path[0], stash->blocks, stashSize * sizeof(Block_));
@@ -226,7 +226,7 @@ struct ORAM {
    * @param path The path to write back
    * @param pos The position of the path
    */
-  void WriteBackPath(const std::vector<Block_>& path, PositionType pos) {
+  void writeBackPath(const std::vector<Block_>& path, PositionType pos) {
     memcpy(stash->blocks, &path[0], stashSize * sizeof(Block_));
     tree.WritePath(pos, (Bucket_*)(&path[stashSize]));
   }
@@ -237,7 +237,7 @@ struct ORAM {
    * @param batchSize The number of random positions to generate
    * @return const std::vector<PositionType> The vector of random positions
    */
-  const std::vector<PositionType> GetRandNewPoses(uint64_t batchSize) {
+  const std::vector<PositionType> getRandNewPoses(uint64_t batchSize) {
     std::vector<PositionType> newPos(batchSize);
     for (int i = 0; i < batchSize; ++i) {
       newPos[i] = UniformRandom(size() - 1);
@@ -318,7 +318,7 @@ struct ORAM {
    *
    * @return Stash& Returns the stash
    */
-  const Stash& getStash() { return *stash; }
+  const Stash& GetStash() { return *stash; }
 
   /**
    * @brief Set the size of the ORAM, and allocate the cache.
@@ -417,7 +417,7 @@ struct ORAM {
    */
   PositionType Read(PositionType pos, const UidType& uid, T& out,
                     PositionType newPos) {
-    int len = ReadPath(pos, path);
+    int len = readPath(pos, path);
 
     ReadElementAndRemoveFromPath(path.begin(), path.begin() + len, uid, out);
 
@@ -451,7 +451,7 @@ struct ORAM {
   template <const int _evict_freq = evict_freq>
   PositionType Write(const UidType& uid, const T& in, PositionType newPos) {
     PositionType pos = (evictCounter++) % size();
-    int len = ReadPath(pos, path);
+    int len = readPath(pos, path);
     Block_ newBlock(in, newPos, uid);
     writeBlockWithRetry<_evict_freq>(newBlock, pos, len);
     return newPos;
@@ -587,7 +587,7 @@ struct ORAM {
   PositionType Update(PositionType pos, const UidType& uid, PositionType newPos,
                       const Func& updateFunc, T& out,
                       const UidType& updatedUid) {
-    int len = ReadPath(pos, path);
+    int len = readPath(pos, path);
     ReadElementAndRemoveFromPath(path.begin(), path.begin() + len, uid, out);
     bool keepFlag = updateFunc(out);
     UidType newUid = DUMMY<UidType>();
@@ -726,7 +726,7 @@ struct ORAM {
   std::vector<PositionType> BatchUpdate(uint64_t batchSize, PositionType* pos,
                                         const UidType* uid,
                                         const Func& updateFunc) {
-    const std::vector<PositionType>& newPoses = GetRandNewPoses(batchSize);
+    const std::vector<PositionType>& newPoses = getRandNewPoses(batchSize);
     BatchUpdate(batchSize, pos, uid, &newPoses[0], updateFunc);
     return duplicateNewPoses(batchSize, &newPoses[0], uid);
   }

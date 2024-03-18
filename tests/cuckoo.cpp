@@ -18,16 +18,16 @@ void testOHashMap() {
         int key = rand() % keySpace;
         int value = rand();
         if constexpr (isOblivious) {
-          map.insertOblivious(key, value);
+          map.InsertOblivious(key, value);
         } else {
-          map.insert(key, value);
+          map.Insert(key, value);
         }
         std_map[key] = value;
       }
 
       int key = rand() % keySpace;
       int value;
-      bool foundFlag = map.find(key, value);
+      bool foundFlag = map.Find(key, value);
       auto it = std_map.find(key);
       if (it != std_map.end()) {
         ASSERT_TRUE(foundFlag);
@@ -60,16 +60,16 @@ void testOHashMapInitFromReader() {
         int key = rand() % keySpace;
         int value = rand();
         if constexpr (isOblivious) {
-          map.insertOblivious(key, value);
+          map.InsertOblivious(key, value);
         } else {
-          map.insert(key, value);
+          map.Insert(key, value);
         }
         std_map[key] = value;
       }
 
       int key = rand() % keySpace;
       int value;
-      bool foundFlag = map.find(key, value);
+      bool foundFlag = map.Find(key, value);
       auto it = std_map.find(key);
       if (it != std_map.end()) {
         ASSERT_TRUE(foundFlag);
@@ -95,9 +95,9 @@ void testOHashMapInitFromNonObliviousWithDummy() {
     }
     for (auto it = std_map.begin(); it != std_map.end(); ++it) {
       if (rand() % 5 == 0 && nonOMap.GetLoad() < mapSize) {
-        nonOMap.insert<true>(it->first, it->second, true);
+        nonOMap.Insert<true>(it->first, it->second, true);
       }
-      nonOMap.insert<true>(it->first, it->second);
+      nonOMap.Insert<true>(it->first, it->second);
     }
     map.InitFromNonOblivious(nonOMap);
     // printf("init done\n");
@@ -105,13 +105,13 @@ void testOHashMapInitFromNonObliviousWithDummy() {
       if (std_map.size() < mapSize) {
         int key = rand() % keySpace;
         int value = rand();
-        map.insertOblivious(key, value);
+        map.InsertOblivious(key, value);
         std_map[key] = value;
       }
 
       int key = rand() % keySpace;
       int value;
-      bool foundFlag = map.find(key, value);
+      bool foundFlag = map.Find(key, value);
       auto it = std_map.find(key);
       if (it != std_map.end()) {
         ASSERT_TRUE(foundFlag);
@@ -154,15 +154,15 @@ void testOHashMapFindBatch() {
         //   vals[i] = rand();
         // }
         for (int i = 0; i < batchSize && std_map.size() < mapSize; ++i) {
-          map.find(keys[i], vals[i].value);
+          map.Find(keys[i], vals[i].value);
           // std_map[keys[i]] = vals[i];
         }
       }
       std::vector<uint8_t> findExistFlag;
-      map.findBatchDeferWriteBack(keys.begin(), keys.end(), vals.begin());
+      map.FindBatchDeferWriteBack(keys.begin(), keys.end(), vals.begin());
 #pragma omp parallel for num_threads(2)
       for (int i = 0; i < 2; ++i) {
-        map.writeBackTable(i);
+        map.WriteBackTable(i);
       }
       for (size_t i = 0; i < keys.size(); ++i) {
         auto it = std_map.find(keys[i]);

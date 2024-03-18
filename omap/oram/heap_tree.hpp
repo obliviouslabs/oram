@@ -66,6 +66,8 @@ struct HeapTree {
     Init(_size, _cacheLevel);
   }
 
+  int GetDepth() const { return totalLevel; }
+
   /**
    * @brief Initialize the tree with a default value
    *

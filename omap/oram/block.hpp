@@ -32,23 +32,23 @@ struct Block {
   static_assert(std::is_trivially_copyable_v<T>,
                 "T must be trivially copyable");
 
-  INLINE bool readAndRemove(const UidType& uid, T& out) {
+  INLINE bool ReadAndRemove(const UidType& uid, T& out) {
     bool match = this->uid == uid;
     obliMove(match, this->uid, DUMMY<UidType>());
     obliMove(match, out, data);
     return match;
   }
 
-  INLINE bool insert(bool cond, const Block& data) {
-    return obliMove(cond & isDummy(), *this, data);
+  INLINE bool Insert(bool cond, const Block& data) {
+    return obliMove(cond & IsDummy(), *this, data);
   }
 
-  INLINE bool isDummy() const { return uid == DUMMY<UidType>(); }
+  INLINE bool IsDummy() const { return uid == DUMMY<UidType>(); }
 
 #ifndef ENCLAVE_MODE
   friend std::ostream& operator<<(std::ostream& os, const Block& block) {
     os << "Block{data: " << block.data << ", position: " << block.position
-       << ", uid: " << (block.isDummy() ? -1 : block.uid) << "}";
+       << ", uid: " << (block.IsDummy() ? -1 : block.uid) << "}";
     return os;
   }
 #endif
@@ -75,7 +75,7 @@ struct UidBlock {
   // define less
   bool operator<(const UidBlock& other) const { return uid < other.uid; }
 
-  INLINE bool isDummy() const { return uid == DUMMY<UidType>(); }
+  INLINE bool IsDummy() const { return uid == DUMMY<UidType>(); }
 };
 
 };  // namespace ODSL
