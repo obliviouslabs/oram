@@ -311,7 +311,7 @@ struct ORAM {
    * @param size Capacity of the ORAM
    * @param cacheBytes The maximum size of the tree-top cache in bytes.
    */
-  ORAM(PositionType size, size_t cacheBytes) { SetSize(size, cacheBytes); }
+  ORAM(PositionType size, uint64_t cacheBytes) { SetSize(size, cacheBytes); }
 
   /**
    * @brief Get the Stash object
@@ -326,7 +326,7 @@ struct ORAM {
    * @param size Capacity of the ORAM
    * @param cacheBytes The maximum size of the tree-top cache in bytes.
    */
-  void SetSize(PositionType size, size_t cacheBytes = 1UL << 62) {
+  void SetSize(PositionType size, uint64_t cacheBytes = 1UL << 62) {
     if (_size) {
       throw std::runtime_error("Circuit ORAM double initialization");
     }
@@ -355,10 +355,10 @@ struct ORAM {
    *
    * @param size Capacity of the ORAM
    * @param cacheBytes The maximum size of the tree-top cache in bytes.
-   * @return size_t The memory usage in bytes
+   * @return uint64_t The memory usage in bytes
    */
-  static size_t GetMemoryUsage(PositionType size,
-                               size_t cacheBytes = 1UL << 62) {
+  static uint64_t GetMemoryUsage(PositionType size,
+                                 uint64_t cacheBytes = 1UL << 62) {
     return sizeof(Stash) +
            HeapTree_::getMemoryUsage(
                size, GetMaxCacheLevel<T, Z, stashSize, PositionType, UidType>(
@@ -368,9 +368,9 @@ struct ORAM {
   /**
    * @brief Get the memory usage of this ORAM
    *
-   * @return size_t The memory usage in bytes
+   * @return uint64_t The memory usage in bytes
    */
-  size_t GetMemoryUsage() const {
+  uint64_t GetMemoryUsage() const {
     return sizeof(Stash) + tree.GetMemoryUsage();
   }
 
@@ -385,7 +385,7 @@ struct ORAM {
    */
   template <typename Reader, class PosMapWriter>
   void InitFromReader(Reader& reader, PosMapWriter& posMapWriter) {
-    size_t initSize = reader.size();
+    uint64_t initSize = reader.size();
     for (UidType uid = 0; uid != (UidType)initSize; ++uid) {
       PositionType newPos = Write(uid, reader.read());
       posMapWriter.write(UidBlock<PositionType, UidType>(newPos, uid));

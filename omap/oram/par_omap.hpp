@@ -103,8 +103,11 @@ struct ParOMap {
     uint64_t initSize = reader.size();
     uint64_t maxInitSizePerShard = maxQueryPerShard(initSize, shardCount, -60);
     using NonObliviousOHashMap = OHashMap<K, V, false, PositionType>;
-    std::vector<NonObliviousOHashMap> nonOMaps(
-        shardCount, NonObliviousOHashMap(shardSize, 0));
+    std::vector<NonObliviousOHashMap> nonOMaps(shardCount);
+    for (auto& nonOMap : nonOMaps) {
+      nonOMap.SetSize(shardSize, 0);
+    }
+
     using Element = EM::Algorithm::TaggedT<KVPair>;
     const size_t bktSize =
         std::min(8192UL, GetNextPowerOfTwo(maxInitSizePerShard));

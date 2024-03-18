@@ -54,7 +54,7 @@ void testOHashMapInitFromReader() {
     auto it = std_map.begin();
     EM::VirtualVector::VirtualReader<std::pair<int, int>> reader(
         std_map.size(), [&it](uint64_t) { return *it++; });
-    map.InitFromReader(reader);
+    map.InitFromReader(reader, 1UL << 26);
     for (int r = 0; r < 2 * keySpace; ++r) {
       if (std_map.size() < mapSize) {
         int key = rand() % keySpace;
@@ -94,7 +94,7 @@ void testOHashMapInitFromNonObliviousWithDummy() {
       std_map[key] = value;
     }
     for (auto it = std_map.begin(); it != std_map.end(); ++it) {
-      if (rand() % 5 == 0 && nonOMap.load < mapSize) {
+      if (rand() % 5 == 0 && nonOMap.GetLoad() < mapSize) {
         nonOMap.insert<true>(it->first, it->second, true);
       }
       nonOMap.insert<true>(it->first, it->second);

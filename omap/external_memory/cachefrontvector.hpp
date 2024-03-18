@@ -59,6 +59,25 @@ struct Vector {
     }
   }
 
+  static uint64_t transformCacheBytesToCacheSize(uint64_t N,
+                                                 uint64_t cacheBytes) {
+    if (cacheBytes < ExtVec::GetMemoryUsage()) {
+      throw std::runtime_error("Cache size too small");
+    }
+    return std::min(N, (cacheBytes - ExtVec::GetMemoryUsage()) / sizeof(T));
+  }
+
+  void SetSizeByCacheBytes(uint64_t N, uint64_t cacheBytes) {
+    if (this->cacheSize != 0 || extVec != NULL) {
+      throw std::runtime_error("SetSize can only be called on empty vector");
+    }
+    this->cacheSize = transformCacheBytesToCacheSize(N, cacheBytes);
+    intVec.resize(this->cacheSize);
+    if (this->cacheSize < N) {
+      extVec = new ExtVec(N - this->cacheSize);
+    }
+  }
+
   void SetSize(uint64_t N, uint64_t cacheSize, const T& initVal) {
     if (this->cacheSize != 0 || extVec != NULL) {
       throw std::runtime_error("SetSize can only be called on empty vector");
@@ -69,6 +88,19 @@ struct Vector {
       extVec = new ExtVec(N - this->cacheSize, initVal);
     }
   }
+
+  void SetSizeByCacheBytes(uint64_t N, uint64_t cacheBytes, const T& initVal) {
+    if (this->cacheSize != 0 || extVec != NULL) {
+      throw std::runtime_error("SetSize can only be called on empty vector");
+    }
+    this->cacheSize = transformCacheBytesToCacheSize(N, cacheBytes);
+    intVec.resize(this->cacheSize, initVal);
+    if (this->cacheSize < N) {
+      extVec = new ExtVec(N - this->cacheSize, initVal);
+    }
+  }
+
+  static uint64_t GetMinMemoryUsage() { return ExtVec::GetMemoryUsage(); }
 
   static uint64_t GetMemoryUsage(uint64_t N, uint64_t cacheSize) {
     if (cacheSize < N) {

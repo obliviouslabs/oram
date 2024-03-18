@@ -189,6 +189,20 @@ struct RecursiveORAM {
   }
 
   /**
+   * @brief Get the memory usage of this recursive ORAM
+   *
+   * @return uint64_t the heap memory usage in bytes
+   */
+  uint64_t GetMemoryUsage() const {
+    uint64_t memUsage = 0;
+    for (const auto& oram : internalOrams) {
+      memUsage += oram.GetMemoryUsage();
+    }
+    memUsage += leafOram.GetMemoryUsage();
+    return memUsage;
+  }
+
+  /**
    * @brief Initialize the ORAM from a reader. The reader must read the same
    * type as the ORAM data.
    *

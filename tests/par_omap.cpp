@@ -1,5 +1,7 @@
 #include "oram/par_omap.hpp"
+
 #include <unordered_set>
+
 #include "testutils.hpp"
 
 using namespace ODSL;
@@ -44,7 +46,7 @@ TEST(ParOMap, InitInsertFind) {
         ++kvIt;
         return pr;
       });
-  parOMap.InitFromReader(reader, 32UL << 20);
+  parOMap.InitFromReader(reader, 512UL << 20);
   std::cout << "omp max threads: " << omp_get_max_threads() << std::endl;
   for (uint64_t r = 0; r < round; ++r) {
     std::vector<uint64_t> keys(batchSize);
@@ -245,9 +247,7 @@ TEST(ParOMap, InsertFindErase) {
     }
     if (UniformRandom32() % 10 == 0) {
       for (uint64_t i = 0; i < batchSize; ++i) {
-
         keys[i] = UniformRandom() % mapSize;
-
       }
       std::vector<uint8_t> eraseExistFlag =
           parOMap.eraseParBatch(keys.begin(), keys.end());
