@@ -821,7 +821,7 @@ void testParOMapPerf(size_t mapSize = 5e6,
     //   for (int i = 0; i < batchSize; ++i) {
     //     addr[i].part[0] = initSize + r * batchSize + i;
     //   }
-    //   omap.insertParBatch(addr.begin(), addr.end(), balance.begin());
+    //   omap.InsertParBatch(addr.begin(), addr.end(), balance.begin());
     // }
     // ocall_measure_time(&end);
     // uint64_t timediff = end - start;
@@ -833,7 +833,7 @@ void testParOMapPerf(size_t mapSize = 5e6,
       for (int i = 0; i < batchSize; ++i) {
         addr[i].part[0] = initSize + r * batchSize + i;
       }
-      omap.findParBatch(addr.begin(), addr.end(), balance.begin());
+      omap.FindParBatch(addr.begin(), addr.end(), balance.begin());
     }
     ocall_measure_time(&end);
     uint64_t timediff = end - start;
@@ -879,7 +879,7 @@ void testParOMapPerfDeferWriteBack(size_t mapSize = 5e6,
       for (int i = 0; i < batchSize; ++i) {
         addr[i].part[0] = initSize + r * batchSize + i;
       }
-      omap.findParBatchDeferWriteBack(addr.begin(), addr.end(),
+      omap.FindParBatchDeferWriteBack(addr.begin(), addr.end(),
                                       balance.begin());
       ocall_measure_time(&queryEnd);
       queryTimediff += queryEnd - queryStart;
@@ -925,7 +925,7 @@ void testParOMapPerfSignal(size_t mapSize = 5e6,
       for (int i = 0; i < batchSize; ++i) {
         addr[i] = initSize + batchSize * (100000UL + r) + i;
       }
-      omap.findParBatch(addr.begin(), addr.end(), balance.begin());
+      omap.FindParBatch(addr.begin(), addr.end(), balance.begin());
     }
     ocall_measure_time(&end);
     uint64_t timediff = end - start;

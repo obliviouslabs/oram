@@ -5,21 +5,6 @@
 #include "testutils.hpp"
 
 using namespace ODSL;
-TEST(ParOMap, maxQueryPerShard) {
-  uint64_t batchSize = 1000;
-  uint64_t shardCount = 8;
-  double logFailProb = -40;
-  uint64_t maxQuery = ParOMap<uint64_t, uint64_t>::maxQueryPerShard(
-      batchSize, shardCount, logFailProb);
-  std::cout << "maxQuery: " << maxQuery << std::endl;
-}
-
-TEST(ParOMap, Init) {
-  uint64_t mapSize = 1234;
-  uint64_t shardCount = 8;
-  ParOMap<uint64_t, uint64_t> parOMap(mapSize, shardCount);
-  parOMap.Init();
-}
 
 TEST(ParOMap, InitInsertFind) {
   uint64_t mapSize = 4234567;
@@ -30,7 +15,7 @@ TEST(ParOMap, InitInsertFind) {
   if (EM::Backend::g_DefaultBackend) {
     delete EM::Backend::g_DefaultBackend;
   }
-  size_t BackendSize = 1e9;
+  size_t BackendSize = 2e9;
   EM::Backend::g_DefaultBackend =
       new EM::Backend::MemServerBackend(BackendSize);
   std::unordered_map<uint64_t, uint64_t> kvMap;
@@ -46,7 +31,7 @@ TEST(ParOMap, InitInsertFind) {
         ++kvIt;
         return pr;
       });
-  parOMap.InitFromReader(reader, 512UL << 20);
+  parOMap.InitFromReader(reader, 128UL << 20);
   std::cout << "omp max threads: " << omp_get_max_threads() << std::endl;
   for (uint64_t r = 0; r < round; ++r) {
     std::vector<uint64_t> keys(batchSize);
@@ -61,7 +46,7 @@ TEST(ParOMap, InitInsertFind) {
         vals[i] = UniformRandom();
       }
       std::vector<uint8_t> insertExistFlag =
-          parOMap.insertParBatch(keys.begin(), keys.end(), vals.begin());
+          parOMap.InsertParBatch(keys.begin(), keys.end(), vals.begin());
       for (size_t i = 0; i < keys.size(); ++i) {
         if (insertExistFlag[i] != (kvMap.count(keys[i]) > 0)) {
           std::cout << "key = " << keys[i] << std::endl;
@@ -75,7 +60,7 @@ TEST(ParOMap, InitInsertFind) {
     }
     std::vector<uint64_t> foundVals(keys.size());
     std::vector<uint8_t> findExistFlag =
-        parOMap.findParBatch(keys.begin(), keys.end(), foundVals.begin());
+        parOMap.FindParBatch(keys.begin(), keys.end(), foundVals.begin());
     for (size_t i = 0; i < keys.size(); ++i) {
       if (findExistFlag[i] != (kvMap.count(keys[i]) > 0)) {
         std::cout << "key = " << keys[i] << std::endl;
@@ -98,13 +83,13 @@ TEST(ParOMap, InsertAndFindSimple) {
   std::vector<uint64_t> keys = {1, 2, 3, 4, 5, 6, 7, 8};
   std::vector<uint64_t> vals = {10, 20, 30, 40, 50, 60, 70, 80};
   std::vector<uint8_t> insertExistFlag =
-      parOMap.insertParBatch(keys.begin(), keys.end(), vals.begin());
+      parOMap.InsertParBatch(keys.begin(), keys.end(), vals.begin());
   for (size_t i = 0; i < keys.size(); ++i) {
     ASSERT_FALSE(insertExistFlag[i]);
   }
   std::vector<uint64_t> foundVals(keys.size());
   std::vector<uint8_t> findExistFlag =
-      parOMap.findParBatch(keys.begin(), keys.end(), foundVals.begin());
+      parOMap.FindParBatch(keys.begin(), keys.end(), foundVals.begin());
   for (size_t i = 0; i < keys.size(); ++i) {
     ASSERT_TRUE(findExistFlag[i]);
     ASSERT_EQ(foundVals[i], vals[i]);
@@ -133,7 +118,7 @@ TEST(ParOMap, InsertAndFind) {
         vals[i] = UniformRandom();
       }
       std::vector<uint8_t> insertExistFlag =
-          parOMap.insertParBatch(keys.begin(), keys.end(), vals.begin());
+          parOMap.InsertParBatch(keys.begin(), keys.end(), vals.begin());
       for (size_t i = 0; i < keys.size(); ++i) {
         if (insertExistFlag[i] != (kvMap.count(keys[i]) > 0)) {
           std::cout << "key = " << keys[i] << std::endl;
@@ -147,7 +132,7 @@ TEST(ParOMap, InsertAndFind) {
     }
     std::vector<uint64_t> foundVals(keys.size());
     std::vector<uint8_t> findExistFlag =
-        parOMap.findParBatch(keys.begin(), keys.end(), foundVals.begin());
+        parOMap.FindParBatch(keys.begin(), keys.end(), foundVals.begin());
     for (size_t i = 0; i < keys.size(); ++i) {
       if (findExistFlag[i] != (kvMap.count(keys[i]) > 0)) {
         std::cout << "key = " << keys[i] << std::endl;
@@ -184,7 +169,7 @@ TEST(ParOMap, InsertAndDuplicateFind) {
         vals[i] = UniformRandom();
       }
       std::vector<uint8_t> insertExistFlag =
-          parOMap.insertParBatch(keys.begin(), keys.end(), vals.begin());
+          parOMap.InsertParBatch(keys.begin(), keys.end(), vals.begin());
       for (size_t i = 0; i < keys.size(); ++i) {
         if (insertExistFlag[i] != (kvMap.count(keys[i]) > 0)) {
           std::cout << "key = " << keys[i] << std::endl;
@@ -199,7 +184,7 @@ TEST(ParOMap, InsertAndDuplicateFind) {
     }
     std::vector<uint64_t> foundVals(keys.size());
     std::vector<uint8_t> findExistFlag =
-        parOMap.findParBatch(keys.begin(), keys.end(), foundVals.begin());
+        parOMap.FindParBatch(keys.begin(), keys.end(), foundVals.begin());
     for (size_t i = 0; i < keys.size(); ++i) {
       if (findExistFlag[i] != (kvMap.count(keys[i]) > 0)) {
         std::cout << "key = " << keys[i] << std::endl;
@@ -236,7 +221,7 @@ TEST(ParOMap, InsertFindErase) {
         vals[i] = UniformRandom();
       }
       std::vector<uint8_t> insertExistFlag =
-          parOMap.insertParBatch(keys.begin(), keys.end(), vals.begin());
+          parOMap.InsertParBatch(keys.begin(), keys.end(), vals.begin());
       for (size_t i = 0; i < keys.size(); ++i) {
         if (insertExistFlag[i] != (kvMap.count(keys[i]) > 0)) {
           std::cout << "key = " << keys[i] << std::endl;
@@ -250,7 +235,7 @@ TEST(ParOMap, InsertFindErase) {
         keys[i] = UniformRandom() % mapSize;
       }
       std::vector<uint8_t> eraseExistFlag =
-          parOMap.eraseParBatch(keys.begin(), keys.end());
+          parOMap.EraseParBatch(keys.begin(), keys.end());
       for (size_t i = 0; i < keys.size(); ++i) {
         if (eraseExistFlag[i] != (kvMap.count(keys[i]) > 0)) {
           std::cout << "key = " << keys[i] << std::endl;
@@ -266,7 +251,7 @@ TEST(ParOMap, InsertFindErase) {
     }
     std::vector<uint64_t> foundVals(keys.size());
     std::vector<uint8_t> findExistFlag =
-        parOMap.findParBatch(keys.begin(), keys.end(), foundVals.begin());
+        parOMap.FindParBatch(keys.begin(), keys.end(), foundVals.begin());
     for (size_t i = 0; i < keys.size(); ++i) {
       if (findExistFlag[i] != (kvMap.count(keys[i]) > 0)) {
         std::cout << "key = " << keys[i] << std::endl;

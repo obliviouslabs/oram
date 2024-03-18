@@ -2,7 +2,9 @@
 
 #include "oram_common.hpp"
 
-/// @brief This file implements Circuit ORAM
+/// @brief This file implements Circuit ORAM (https://eprint.iacr.org/2014/672),
+/// which turns out to be faster than Path ORAM when full obliviousness is
+/// desired.
 
 namespace ODSL::CircuitORAM {
 /// @brief Circuit ORAM implementation.
