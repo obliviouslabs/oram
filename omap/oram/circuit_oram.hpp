@@ -190,7 +190,8 @@ struct ORAM {
   INLINE void writeBlockWithRetry(const Block_& newBlock, PositionType pos,
                                   int pathLen, int retry = 10) {
     while (true) {
-      bool success = WriteNewBlockToTreeTop(path, newBlock, stashSize + Z);
+      bool success = WriteNewBlockToPath(
+          path.begin(), path.begin() + stashSize + Z, newBlock);
       evictPath(path, pos, pathLen);
       writeBackPath(path, pos);
       evict<_evict_freq>();

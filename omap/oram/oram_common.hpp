@@ -1,8 +1,10 @@
 #pragma once
 
 #include <concepts>
-#include <functional>
 #include <vector>
+
+/// @brief This file defines some methods and concepts common to binary-tree
+/// based ORAMs.
 
 #include "bucket.hpp"
 #include "external_memory/algorithm/bitonic.hpp"
@@ -65,19 +67,30 @@ concept BatchUpdateFunction = requires(Func f, std::vector<T>& t) {
   { f(t) };
 };
 
+/**
+ * @brief Return the length of the common suffix of two positions.
+ *
+ * @tparam PositionType
+ * @param a First position
+ * @param b Second position
+ * @return int The length of the common suffix
+ */
 template <typename PositionType>
 int commonSuffixLength(PositionType a, PositionType b) {
   return std::countr_zero(a ^ b);
 }
 
-template <class PathVec, typename UidType, typename T>
-void ReadElementAndRemoveFromPath(PathVec& path, const UidType& uid, T& out) {
-  using Block_ = PathVec::value_type;
-  for (Block_& b : path) {
-    b.ReadAndRemove(uid, out);
-  }
-}
-
+/**
+ * @brief Read an element from the path and remove it from the path.
+ *
+ * @tparam Iterator
+ * @tparam UidType
+ * @tparam T
+ * @param begin The begin iterator of the path
+ * @param end The end iterator of the path
+ * @param uid The uid of the element to be read
+ * @param out The output of the element
+ */
 template <class Iterator, typename UidType, typename T>
 void ReadElementAndRemoveFromPath(Iterator begin, Iterator end,
                                   const UidType& uid, T& out) {
@@ -86,29 +99,35 @@ void ReadElementAndRemoveFromPath(Iterator begin, Iterator end,
   }
 }
 
-// Write a new block to the path, return false if the path is full
-template <class PathVec, typename Block_>
-bool WriteNewBlockToPath(PathVec& path, const Block_& block) {
-  int endIdx = path.size();
+/**
+ * @brief Write a new block to the path.
+ *
+ * @tparam Iterator
+ * @tparam Block_
+ * @param begin The begin iterator of the path
+ * @param end The end iterator of the path
+ * @param block The block to be written
+ * @return true if the block is written successfully, false otherwise
+ */
+template <class Iterator, typename Block_>
+bool WriteNewBlockToPath(Iterator begin, Iterator end, const Block_& block) {
   bool cond = true;
   // fill the first slot that's empty
-  for (int i = 0; i < endIdx; i++) {
-    cond &= !path[i].Insert(cond, block);
+  for (auto it = begin; it != end; ++it) {
+    cond &= !it->Insert(cond, block);
   }
   return !cond;
 }
 
-// Write a new block to the top of the tree, return false if the top is full
-template <class PathVec, typename Block_>
-bool WriteNewBlockToTreeTop(PathVec& path, const Block_& block, int topSize) {
-  bool cond = true;
-  // fill the first slot that's empty
-  for (int i = 0; i < topSize; i++) {
-    cond &= !path[i].Insert(cond, block);
-  }
-  return !cond;
-}
-
+/**
+ * @brief Calculate the maximum number of levels to cache in the heap tree.
+ *
+ * @tparam T The type of the data stored in the ORAM
+ * @tparam Z The bucket size of the ORAM
+ * @tparam stashSize The size of the ORAM stash
+ * @tparam PositionType The type of the position
+ * @tparam UidType The type of the unique id
+ */
 template <typename T, const int Z, const int stashSize,
           typename PositionType = uint64_t, typename UidType = uint64_t>
 int GetMaxCacheLevel(PositionType size, size_t cacheBytes = 1UL << 62) {
