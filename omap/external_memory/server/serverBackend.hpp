@@ -23,7 +23,7 @@ concept BackendServer = requires(
   { FS(indexType) };
   {
     fs.Allocate(indexType)
-  } -> std::same_as<EM::LargeBlockAllocator::AllocatorSlot>;
+  } -> std::same_as<const EM::LargeBlockAllocator::AllocatorSlot>;
   { fs.Free(cas) };
   { fs.Write(indexType, indexType, cu8p) };
   { fs.Read(indexType, indexType, u8p) };
@@ -148,11 +148,11 @@ struct MemServerBackend : ServerBackend {
     }
 
     ocall_Read_Batch(offsets, sizes, tmp, chunkNum, totalSize);
-    
+
     uint8_t* pos = tmp;
     for (uint64_t i = 0; i < chunkNum; ++i) {
       std::memcpy(addrs[i], pos, sizes[i]);
-      
+
       pos += sizes[i];
       *readChunks.states[i] = DONE_PAGE;
     }
@@ -177,7 +177,7 @@ struct MemServerBackend : ServerBackend {
     writeChunks.offsets[chunkNum] = offset;
     writeChunks.sizes[chunkNum] = sz;
     std::memcpy(writeChunks.tmp + tmpOffset, from, sz);
-    
+
     ++chunkNum;
     tmpOffset += sz;
   }
@@ -197,7 +197,7 @@ struct MemServerBackend : ServerBackend {
       totalSize += sizes[i];
     }
     ocall_Write_Batch(offsets, sizes, tmp, chunkNum, totalSize);
-    
+
     for (uint64_t i = 0; i < chunkNum; ++i) {
       *writeChunks.states[i] = DONE_PAGE;
     }

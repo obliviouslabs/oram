@@ -211,13 +211,12 @@ struct RecursiveORAM {
    * @param reader The reader to read the data from
    */
   template <typename Reader>
+    requires Readable<Reader, T>
   void InitFromReader(Reader& reader) {
     if (hasInited) {
       throw std::runtime_error("RecursiveORAM double initialization");
     }
     hasInited = true;
-    using ReaderT = typename Reader::value_type;
-    static_assert(std::is_same_v<T, ReaderT>, "Reader must reads type T");
     if (reader.size() != _size) {
       throw std::runtime_error("Reader size does not match oram size");
     }

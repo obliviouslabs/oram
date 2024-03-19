@@ -672,6 +672,7 @@ struct OHashMap {
    * bytes
    */
   template <typename Reader>
+    requires Readable<Reader, std::pair<K, V>>
   void InitFromReader(Reader& reader, uint64_t additionalCacheBytes = 0) {
     if constexpr (!isOblivious) {
       while (!reader.eof()) {

@@ -388,13 +388,15 @@ struct ORAM {
   /**
    * @brief Initialize the ORAM from a reader and output the position map.
    *
-   * @tparam Reader
-   * @tparam PosMapWriter
+   * @tparam Reader Type of the reader
+   * @tparam PosMapWriter Type of the position map writer
    * @param reader A sequential reader of the RAM data, starting from index 0.
    * @param posMapWriter A writer of the position map, the data it writes has
    * type UidBlock<PositionType, UidType>.
    */
   template <typename Reader, class PosMapWriter>
+    requires Readable<Reader, T> &&
+             Writable<PosMapWriter, UidBlock<PositionType, UidType>>
   void InitFromReader(Reader& reader, PosMapWriter& posMapWriter) {
     uint64_t initSize = reader.size();
     for (UidType uid = 0; uid != (UidType)initSize; ++uid) {

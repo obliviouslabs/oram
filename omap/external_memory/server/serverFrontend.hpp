@@ -16,9 +16,9 @@ namespace MemoryServer {
 
 template <typename T, typename _BackendType = ::EM::Backend::MemServerBackend,
           bool ENCRYPTED = true, bool AUTH = true, bool LATE_INIT = false>
-// #ifndef ENCLAVE_MODE
-// requires EM::Backend::BackendServer<BackendType>
-// #endif
+#ifndef ENCLAVE_MODE
+  requires EM::Backend::BackendServer<_BackendType>
+#endif
 struct NonCachedServerFrontendInstance {
   // Just forwards reads and writes to the server. Call the allocator during
   // construction and resizes.

@@ -212,6 +212,7 @@ struct ParOMap {
    * @param cacheBytes
    */
   template <class Reader>
+    requires Readable<Reader, std::pair<K, V>>
   void InitFromReader(Reader& reader, uint64_t cacheBytes = DEFAULT_HEAP_SIZE) {
     uint64_t shardCount = shards.size();
     uint64_t initSize = reader.size();

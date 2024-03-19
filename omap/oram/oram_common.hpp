@@ -6,6 +6,7 @@
 #include "bucket.hpp"
 #include "external_memory/algorithm/bitonic.hpp"
 #include "external_memory/algorithm/or_compact_shuffle.hpp"
+#include "external_memory/rw_concepts.hpp"
 #include "external_memory/stdvector.hpp"
 #include "external_memory/virtualvector.hpp"
 #include "heap_tree.hpp"

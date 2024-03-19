@@ -20,6 +20,7 @@ struct ORAM {
   ORAM(UidType size) : _size(size), data(size) {}
 
   template <typename Reader>
+    requires Readable<Reader, T>
   void InitFromReader(Reader reader) {
     UidType initSize = reader.size();
     for (UidType i = 0; i < initSize; i++) {

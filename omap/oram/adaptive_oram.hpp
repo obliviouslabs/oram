@@ -40,13 +40,11 @@ struct ORAM {
 
   /**
    * @brief Initialize the oram from an existing ram array.
-   * Reader must be sorted and has uid [0, reader.size())
-   * Writer will write out the position map for tree oram as (uid, pos) pairs.
    *
-   * @tparam Reader
-   * @tparam Writer
-   * @param reader
-   * @param writer
+   * @tparam Reader The type of the reader
+   * @tparam Writer The type of the writer
+   * @param reader must be sorted and has uid [0, reader.size())
+   * @param writer write out the position map for tree oram as (uid, pos) pairs.
    */
   template <typename Reader, typename Writer>
   void InitFromReader(Reader& reader, Writer& writer) {
