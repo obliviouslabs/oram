@@ -89,12 +89,12 @@ INLINE uint64_t UniformRandom(uint64_t right) {
 // [0,right]
 INLINE uint64_t UniformRandom() { return default_rand.rand64(); }
 
-INLINE uint64_t UniformRandom32(uint32_t right) {
+INLINE uint32_t UniformRandom32(uint32_t right) {
   return UniformRandom32(0, right);
 }
 
 // [0,right]
-INLINE uint64_t UniformRandom32() { return default_rand.rand32(); }
+INLINE uint32_t UniformRandom32() { return default_rand.rand32(); }
 
 INLINE void GetRand16(uint8_t* out) {
   *(uint64_t*)out = UniformRandom();

@@ -181,7 +181,7 @@ struct VirtualReader {
   size_t _size;
   std::function<VT(iterator_type)> virtualize;
   VirtualReader(size_t size, std::function<VT(iterator_type)> virtualize)
-      : virtualize(virtualize), _size(size) {}
+      : _size(size), virtualize(virtualize) {}
 
   VT get() { return virtualize(it); }
 
@@ -205,7 +205,7 @@ struct VirtualWriter {
   std::function<void(iterator_type, const VT&)> devirtualize;
   VirtualWriter(size_t size,
                 std::function<void(iterator_type, const VT&)> devirtualize)
-      : devirtualize(devirtualize), _size(size) {}
+      : _size(size), devirtualize(devirtualize) {}
 
   void write(const VT& element) { devirtualize(it++, element); }
 

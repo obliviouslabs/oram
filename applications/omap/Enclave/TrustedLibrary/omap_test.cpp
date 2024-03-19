@@ -25,7 +25,7 @@ EM::Backend::MemServerBackend* EM::Backend::g_DefaultBackend = nullptr;
   }
 
 void testOmpSpeedup() {
-  size_t maxThread = omp_get_max_threads();
+  int maxThread = omp_get_max_threads();
   uint64_t start, end;
   int64_t timediffOneThread, timediffMultipleThread;
   printf("bitonic sort benchmark\n");
@@ -53,7 +53,7 @@ void testOmpSpeedup() {
   printf("%d thread %f s\n", omp_get_max_threads(),
          (double)timediffMultipleThread * 1e-9);
   printf("speedup for bitonic sort benchmark (memory intensive task) = %f\n",
-         (double)timediffOneThread / timediffMultipleThread);
+         (double)timediffOneThread / (double)timediffMultipleThread);
 
   printf("\nReverse benchmark\n");
   ocall_measure_time(&start);
@@ -80,14 +80,14 @@ void testOmpSpeedup() {
   printf("%d thread %f s\n", omp_get_max_threads(),
          (double)timediffMultipleThread * 1e-9);
   printf("speedup for reverse benchmark (memory intensive task) = %f\n",
-         (double)timediffOneThread / timediffMultipleThread);
+         (double)timediffOneThread / (double)timediffMultipleThread);
 
   printf("\nFloating point benchmark\n");
   ocall_measure_time(&start);
   double totalSum;
   for (int i = 0; i < maxThread; ++i) {
-    double sum = 1.0 + UniformRandom() % 2;
-    for (uint64_t i = 0; i < 1e8; ++i) {
+    double sum = 1.0 + (double)(UniformRandom() % 2);
+    for (uint64_t i = 0; i < (uint64_t)1e8; ++i) {
       sum += 1.0 / sum;
     }
     totalSum += sum;
@@ -100,8 +100,8 @@ void testOmpSpeedup() {
   ocall_measure_time(&start);
 #pragma omp parallel for schedule(static)
   for (int i = 0; i < maxThread; ++i) {
-    double sum = 1.0 + UniformRandom() % 2;
-    for (uint64_t i = 0; i < 1e8; ++i) {
+    double sum = 1.0 + (double)(UniformRandom() % 2);
+    for (uint64_t i = 0; i < (uint64_t)1e8; ++i) {
       sum += 1.0 / sum;
     }
     totalSum += sum;
@@ -112,7 +112,7 @@ void testOmpSpeedup() {
   printf("%d thread %f s\n", omp_get_max_threads(),
          (double)timediffMultipleThread * 1e-9);
   printf("speedup for floating point benchmark (cpu intensive task) = %f\n",
-         (double)timediffOneThread / timediffMultipleThread);
+         (double)timediffOneThread / (double)timediffMultipleThread);
 
   printf("\nHash benchmark\n");
   ocall_measure_time(&start);
@@ -122,8 +122,8 @@ void testOmpSpeedup() {
   Key k;
   uint8_t salt[16];
   for (int i = 0; i < maxThread; ++i) {
-    for (int i = 0; i < 1e5; ++i) {
-      uint64_t hash = secure_hash_with_salt(k, salt);
+    for (int i = 0; i < (int)1e5; ++i) {
+      secure_hash_with_salt(k, salt);
     }
   }
   ocall_measure_time(&end);
@@ -133,8 +133,8 @@ void testOmpSpeedup() {
   ocall_measure_time(&start);
 #pragma omp parallel for schedule(static)
   for (int i = 0; i < maxThread; ++i) {
-    for (int i = 0; i < 1e5; ++i) {
-      uint64_t hash = secure_hash_with_salt(k, salt);
+    for (int i = 0; i < (int)1e5; ++i) {
+      secure_hash_with_salt(k, salt);
     }
   }
   ocall_measure_time(&end);
@@ -142,7 +142,7 @@ void testOmpSpeedup() {
   printf("%d thread %f s\n", omp_get_max_threads(),
          (double)timediffMultipleThread * 1e-9);
   printf("speedup for hash benchmark (cpu intensive task) = %f\n",
-         (double)timediffOneThread / timediffMultipleThread);
+         (double)timediffOneThread / (double)timediffMultipleThread);
 
   printf("\nSgx PRNG benchmark\n");
   ocall_measure_time(&start);
@@ -178,7 +178,7 @@ void testOmpSpeedup() {
   printf("%d thread %f s\n", omp_get_max_threads(),
          (double)timediffMultipleThread * 1e-9);
   printf("speedup for Sgx PRNG benchmark = %f\n",
-         (double)timediffOneThread / timediffMultipleThread);
+         (double)timediffOneThread / (double)timediffMultipleThread);
 
   printf("\nHeapTree benchmark\n");
   ocall_measure_time(&start);
@@ -216,7 +216,7 @@ void testOmpSpeedup() {
          (double)timediffMultipleThread * 1e-9);
   printf("one thread %f s\n", (double)timediffOneThread * 1e-9);
   printf("speedup for heap tree benchmark = %f\n",
-         (double)timediffOneThread / timediffMultipleThread);
+         (double)timediffOneThread / (double)timediffMultipleThread);
 
   printf("\nLambda benchmark\n");
   ocall_measure_time(&start);
@@ -249,7 +249,7 @@ void testOmpSpeedup() {
   printf("%d thread %f s\n", omp_get_max_threads(),
          (double)timediffMultipleThread * 1e-9);
   printf("speedup for lambda benchmark = %f\n",
-         (double)timediffOneThread / timediffMultipleThread);
+         (double)timediffOneThread / (double)timediffMultipleThread);
 
   printf("\nCircuit ORAM update benchmark\n");
   ocall_measure_time(&start);
@@ -258,7 +258,6 @@ void testOmpSpeedup() {
     CircuitORAM::ORAM<TestElement> oram;
     uint64_t size = 65536;
     oram.SetSize(size);
-    uint64_t out;
     for (int r = 0; r < 1e5; ++r) {
       oram.Update(UniformRandom() % size, 0, [](TestElement& val) {
         val.key++;
@@ -277,7 +276,6 @@ void testOmpSpeedup() {
     CircuitORAM::ORAM<TestElement> oram;
     uint64_t size = 65536;
     oram.SetSize(size);
-    uint64_t out;
     for (int r = 0; r < 1e5; ++r) {
       oram.Update(UniformRandom() % size, 0, [](TestElement& val) {
         val.key++;
@@ -291,7 +289,7 @@ void testOmpSpeedup() {
          (double)timediffMultipleThread * 1e-9);
   printf("one thread %f s\n", (double)timediffOneThread * 1e-9);
   printf("speedup for circuit oram benchmark = %f\n",
-         (double)timediffOneThread / timediffMultipleThread);
+         (double)timediffOneThread / (double)timediffMultipleThread);
 
   printf("\nMulti Circuit ORAM update benchmark\n");
   ocall_measure_time(&start);
@@ -302,7 +300,6 @@ void testOmpSpeedup() {
     for (int i = 0; i < 8; ++i) {
       orams[i].SetSize(size);
     }
-    uint64_t out;
     for (int r = 0; r < 1e5; ++r) {
       orams[r % 8].Update(UniformRandom() % size, 0, [](TestElement& val) {
         val.key++;
@@ -323,7 +320,6 @@ void testOmpSpeedup() {
     for (int i = 0; i < 8; ++i) {
       orams[i].SetSize(size);
     }
-    uint64_t out;
     for (int r = 0; r < 1e5; ++r) {
       orams[r % 8].Update(UniformRandom() % size, 0, [](TestElement& val) {
         val.key++;
@@ -337,7 +333,7 @@ void testOmpSpeedup() {
          (double)timediffMultipleThread * 1e-9);
 
   printf("speedup for multiple (round robin) circuit oram benchmark = %f\n",
-         (double)timediffOneThread / timediffMultipleThread);
+         (double)timediffOneThread / (double)timediffMultipleThread);
 
   printf("\nLinear ORAM update benchmark\n");
   ocall_measure_time(&start);
@@ -346,7 +342,6 @@ void testOmpSpeedup() {
     LinearORAM::ORAM<TestElement> oram;
     uint64_t size = 256;
     oram.SetSize(size);
-    uint64_t out;
     for (int r = 0; r < 1e5; ++r) {
       oram.Update(0, [](TestElement& val) {
         val.key++;
@@ -365,7 +360,6 @@ void testOmpSpeedup() {
     LinearORAM::ORAM<TestElement> oram;
     uint64_t size = 256;
     oram.SetSize(size);
-    uint64_t out;
     for (int r = 0; r < 1e5; ++r) {
       oram.Update(0, [](TestElement& val) {
         val.key++;
@@ -379,7 +373,7 @@ void testOmpSpeedup() {
          (double)timediffMultipleThread * 1e-9);
 
   printf("speedup for linear oram benchmark = %f\n",
-         (double)timediffOneThread / timediffMultipleThread);
+         (double)timediffOneThread / (double)timediffMultipleThread);
 
   printf("\nRecursive ORAM find benchmark\n");
 
@@ -421,12 +415,12 @@ void testOmpSpeedup() {
          (double)timediffMultipleThread * 1e-9);
 
   printf("speedup for recursive oram benchmark = %f\n",
-         (double)timediffOneThread / timediffMultipleThread);
+         (double)timediffOneThread / (double)timediffMultipleThread);
 }
 
 void testORAMReadWrite() {
-  for (int memSize : {1, 3, 5, 7, 9, 33, 40, 55, 127, 129, 543, 678, 1023, 1025,
-                      2000, 10000, 50000}) {
+  for (uint64_t memSize : {1, 3, 5, 7, 9, 33, 40, 55, 127, 129, 543, 678, 1023,
+                           1025, 2000, 10000, 50000}) {
     CircuitORAM::ORAM<uint64_t> oram(memSize, 10 MB);
     std::vector<uint64_t> posMap(memSize);
     std::vector<uint64_t> valMap(memSize);
@@ -457,7 +451,7 @@ void testORAMInit() {
   CircuitORAM::ORAM<TestElement> oram(memSize);
   std::vector<uint64_t> valMap(size);
   StdVector<TestElement> vec(size);
-  for (int i = 0; i < size; ++i) {
+  for (uint64_t i = 0; i < size; ++i) {
     valMap[i] = UniformRandom();
     vec[i].key = valMap[i];
   }
@@ -488,7 +482,7 @@ void testOMap() {
   size_t initSize = 1e6;
   OHashMap<uint64_t, int64_t, true> omap(mapSize);
   std::unordered_map<uint64_t, int64_t> map;
-  for (int i = 0; i < initSize; i++) {
+  for (size_t i = 0; i < initSize; i++) {
     map[i] = i * 3;
   }
 
@@ -503,8 +497,8 @@ void testOMap() {
   omap.InitFromReader(reader);
   ocall_measure_time(&end);
   uint64_t timediff = end - start;
-  printf("oram init time %f s\n", timediff * 1e-9);
-  int round = 1e5;
+  printf("oram init time %f s\n", (double)timediff * 1e-9);
+  size_t round = 1e5;
   ocall_measure_time(&start);
   for (size_t r = 0; r < round; ++r) {
     uint64_t i = UniformRandom(mapSize);
@@ -526,7 +520,7 @@ void testOMap() {
   }
   ocall_measure_time(&end);
   timediff = end - start;
-  printf("oram insert time %f us\n", timediff * 1e-3 / round);
+  printf("oram insert time %f us\n", (double)timediff * 1e-3 / (double)round);
 
   ocall_measure_time(&start);
   for (size_t r = 0; r < round; ++r) {
@@ -552,7 +546,7 @@ void testOMap() {
   }
   ocall_measure_time(&end);
   timediff = end - start;
-  printf("oram find time %f us\n", timediff * 1e-3 / round);
+  printf("oram find time %f us\n", (double)timediff * 1e-3 / (double)round);
 }
 
 struct ETH_Addr {
@@ -594,7 +588,7 @@ void testOMapPerf() {
   OHashMap<ETH_Addr, ERC20_Balance, true> omap(mapSize);
 
   std::function<std::pair<ETH_Addr, ERC20_Balance>(uint64_t)> readerFunc =
-      [](uint64_t i) { return std::pair<ETH_Addr, ERC20_Balance>(); };
+      [](uint64_t) { return std::pair<ETH_Addr, ERC20_Balance>(); };
 
   EM::VirtualVector::VirtualReader<std::pair<ETH_Addr, ERC20_Balance>> reader(
       initSize, readerFunc);
@@ -604,17 +598,17 @@ void testOMapPerf() {
   omap.InitFromReader(reader);
   ocall_measure_time(&end);
   uint64_t timediff = end - start;
-  printf("oram init time %f s\n", timediff * 1e-9);
-  int round = 1e5;
+  printf("oram init time %f s\n", (double)timediff * 1e-9);
+  size_t round = 1e5;
   ocall_measure_time(&start);
   for (size_t r = 0; r < round; ++r) {
     ETH_Addr addr;
     ERC20_Balance balance;
-    bool res = omap.Insert(addr, balance);
+    omap.Insert(addr, balance);
   }
   ocall_measure_time(&end);
   timediff = end - start;
-  printf("oram insert time %f us\n", timediff * 1e-3 / round);
+  printf("oram insert time %f us\n", (double)timediff * 1e-3 / (double)round);
 
   ocall_measure_time(&start);
   for (size_t r = 0; r < round; ++r) {
@@ -624,7 +618,7 @@ void testOMapPerf() {
   }
   ocall_measure_time(&end);
   timediff = end - start;
-  printf("oram find time %f us\n", timediff * 1e-3 / round);
+  printf("oram find time %f us\n", (double)timediff * 1e-3 / (double)round);
 
   ocall_measure_time(&start);
 #pragma omp parallel for
@@ -645,16 +639,16 @@ void testOMapPerf() {
   }
   ocall_measure_time(&end);
   timediff = end - start;
-  printf("oram erase time %f us\n", timediff * 1e-3 / round);
+  printf("oram erase time %f us\n", (double)timediff * 1e-3 / (double)round);
 }
 
 void testOHashMapPerf(size_t mapSize = 5e6) {
-  int round = 1e5;
+  size_t round = 1e5;
   size_t initSize = mapSize - round;
-  OHashMap<ETH_Addr, ERC20_Balance, true, uint32_t> omap(mapSize);
+  OHashMap<ETH_Addr, ERC20_Balance, true, uint32_t> omap((uint32_t)mapSize);
 
   std::function<std::pair<ETH_Addr, ERC20_Balance>(uint64_t)> readerFunc =
-      [](uint64_t i) { return std::pair<ETH_Addr, ERC20_Balance>(); };
+      [](uint64_t) { return std::pair<ETH_Addr, ERC20_Balance>(); };
 
   EM::VirtualVector::VirtualReader<std::pair<ETH_Addr, ERC20_Balance>> reader(
       initSize, readerFunc);
@@ -664,38 +658,38 @@ void testOHashMapPerf(size_t mapSize = 5e6) {
   omap.InitFromReader(reader);
   ocall_measure_time(&end);
   uint64_t timediff = end - start;
-  printf("oram init time %f s\n", timediff * 1e-9);
+  printf("oram init time %f s\n", (double)timediff * 1e-9);
 
   ocall_measure_time(&start);
   for (size_t r = 0; r < round; ++r) {
     ETH_Addr addr;
-    addr.part[0] = r;
+    addr.part[0] = (uint32_t)r;
     ERC20_Balance balance;
-    bool res = omap.Insert(addr, balance);
+    omap.Insert(addr, balance);
   }
   ocall_measure_time(&end);
   timediff = end - start;
-  printf("oram insert time %f us\n", timediff * 1e-3 / round);
+  printf("oram insert time %f us\n", (double)timediff * 1e-3 / (double)round);
 
   ocall_measure_time(&start);
   for (size_t r = 0; r < round; ++r) {
     ETH_Addr addr;
-    addr.part[0] = r;
+    addr.part[0] = (uint32_t)r;
     ERC20_Balance balance;
     omap.Find(addr, balance);
   }
   ocall_measure_time(&end);
   timediff = end - start;
-  printf("oram find time %f us\n", timediff * 1e-3 / round);
+  printf("oram find time %f us\n", (double)timediff * 1e-3 / (double)round);
 
   ocall_measure_time(&start);
   for (size_t r = 0; r < round; ++r) {
-    ETH_Addr addr;
+    ETH_Addr addr = {};
     omap.Erase(addr);
   }
   ocall_measure_time(&end);
   timediff = end - start;
-  printf("oram erase time %f us\n", timediff * 1e-3 / round);
+  printf("oram erase time %f us\n", (double)timediff * 1e-3 / (double)round);
 }
 
 template <const size_t size>
@@ -704,12 +698,12 @@ struct Bytes {
 };
 
 void testOHashMapPerfSignal(size_t mapSize = 5e6) {
-  int round = 1e5;
+  size_t round = 1e5;
   size_t initSize = mapSize - round;
-  OHashMap<uint64_t, Bytes<240>, true, uint32_t> omap(mapSize);
+  OHashMap<uint64_t, Bytes<240>, true, uint32_t> omap((uint32_t)mapSize);
 
   std::function<std::pair<uint64_t, Bytes<240>>(uint64_t)> readerFunc =
-      [](uint64_t i) { return std::pair<uint64_t, Bytes<240>>(); };
+      [](uint64_t) { return std::pair<uint64_t, Bytes<240>>(); };
 
   EM::VirtualVector::VirtualReader<std::pair<uint64_t, Bytes<240>>> reader(
       initSize, readerFunc);
@@ -719,18 +713,18 @@ void testOHashMapPerfSignal(size_t mapSize = 5e6) {
   omap.InitFromReader(reader);
   ocall_measure_time(&end);
   uint64_t timediff = end - start;
-  printf("oram init time %f s\n", timediff * 1e-9);
+  printf("oram init time %f s\n", (double)timediff * 1e-9);
 
   ocall_measure_time(&start);
   for (size_t r = 0; r < round; ++r) {
     uint64_t addr;
     addr = r;
-    Bytes<240> balance;
-    bool res = omap.Insert(addr, balance);
+    Bytes<240> balance = {0};
+    omap.Insert(addr, balance);
   }
   ocall_measure_time(&end);
   timediff = end - start;
-  printf("oram insert time %f us\n", timediff * 1e-3 / round);
+  printf("oram insert time %f us\n", (double)timediff * 1e-3 / (double)round);
 
   ocall_measure_time(&start);
   for (size_t r = 0; r < round; ++r) {
@@ -741,7 +735,7 @@ void testOHashMapPerfSignal(size_t mapSize = 5e6) {
   }
   ocall_measure_time(&end);
   timediff = end - start;
-  printf("oram find time %f us\n", timediff * 1e-3 / round);
+  printf("oram find time %f us\n", (double)timediff * 1e-3 / (double)round);
 
   ocall_measure_time(&start);
   for (size_t r = 0; r < round; ++r) {
@@ -751,7 +745,7 @@ void testOHashMapPerfSignal(size_t mapSize = 5e6) {
   }
   ocall_measure_time(&end);
   timediff = end - start;
-  printf("oram erase time %f us\n", timediff * 1e-3 / round);
+  printf("oram erase time %f us\n", (double)timediff * 1e-3 / (double)round);
 }
 
 void testRecursiveORAMPerf() {
@@ -762,9 +756,9 @@ void testRecursiveORAMPerf() {
     ETH_Addr addr;
     ERC20_Balance balance;
   };
-  RecursiveORAM<AddrBalance, uint32_t> roram(mapSize);
+  RecursiveORAM<AddrBalance, uint32_t> roram((uint32_t)mapSize);
 
-  std::function<AddrBalance(uint64_t)> readerFunc = [](uint64_t i) {
+  std::function<AddrBalance(uint64_t)> readerFunc = [](uint64_t) {
     return AddrBalance();
   };
 
@@ -775,8 +769,8 @@ void testRecursiveORAMPerf() {
   roram.InitFromReader(reader);
   ocall_measure_time(&end);
   uint64_t timediff = end - start;
-  printf("oram init time %f s\n", timediff * 1e-9);
-  int round = 1e5;
+  printf("oram init time %f s\n", (double)timediff * 1e-9);
+  size_t round = 1e5;
   ocall_measure_time(&start);
   for (size_t r = 0; r < round; ++r) {
     AddrBalance pr;
@@ -791,12 +785,12 @@ void testRecursiveORAMPerf() {
 
 void testParOMapPerf(size_t mapSize = 5e6,
                      int threadCount = omp_get_max_threads()) {
-  size_t initSize = mapSize - 1e5;
+  size_t initSize = mapSize - 100000;
   ParOMap<ETH_Addr, ERC20_Balance, uint32_t> omap(mapSize, threadCount / 2);
   std::function<std::pair<ETH_Addr, ERC20_Balance>(uint64_t)> readerFunc =
       [](uint64_t i) {
         std::pair<ETH_Addr, ERC20_Balance> pr;
-        pr.first.part[0] = i;
+        pr.first.part[0] = (uint32_t)i;
         return pr;
       };
 
@@ -825,25 +819,26 @@ void testParOMapPerf(size_t mapSize = 5e6,
     // }
     // ocall_measure_time(&end);
     // uint64_t timediff = end - start;
-    // printf("oram insert time %f us\n", timediff * 1e-3 / round);
+    // printf("oram insert time %f us\n", (double)timediff * 1e-3 /
+    // (double)round);
     ocall_measure_time(&start);
     for (size_t r = 0; r < round / batchSize; ++r) {
       std::vector<ETH_Addr> addr(batchSize);
       std::vector<ERC20_Balance> balance(batchSize);
-      for (int i = 0; i < batchSize; ++i) {
+      for (size_t i = 0; i < batchSize; ++i) {
         addr[i].part[0] = initSize + r * batchSize + i;
       }
       omap.FindParBatch(addr.begin(), addr.end(), balance.begin());
     }
     ocall_measure_time(&end);
     uint64_t timediff = end - start;
-    printf("oram find time %f us\n", timediff * 1e-3 / round);
+    printf("oram find time %f us\n", (double)timediff * 1e-3 / (double)round);
   }
 }
 
 void testParOMapPerfDeferWriteBack(size_t mapSize = 5e6,
                                    int threadCount = omp_get_max_threads()) {
-  size_t initSize = mapSize - 1e5;
+  size_t initSize = mapSize - 100000;
   ParOMap<ETH_Addr, ERC20_Balance, uint32_t> omap(mapSize, threadCount / 2);
   std::function<std::pair<ETH_Addr, ERC20_Balance>(uint64_t)> readerFunc =
       [](uint64_t i) {
@@ -887,8 +882,10 @@ void testParOMapPerfDeferWriteBack(size_t mapSize = 5e6,
     }
     ocall_measure_time(&end);
     uint64_t timediff = end - start;
-    printf("oram find time %f us\n", queryTimediff * 1e-3 / round);
-    printf("oram find and evict time %f us\n", timediff * 1e-3 / round);
+    printf("oram find time %f us\n",
+           (double)queryTimediff * 1e-3 / (double)round);
+    printf("oram find and evict time %f us\n",
+           (double)timediff * 1e-3 / (double)round);
   }
 }
 
@@ -929,7 +926,7 @@ void testParOMapPerfSignal(size_t mapSize = 5e6,
     }
     ocall_measure_time(&end);
     uint64_t timediff = end - start;
-    printf("oram find time %f us\n", timediff * 1e-3 / round);
+    printf("oram find time %f us\n", (double)timediff * 1e-3 / (double)round);
   }
 }
 

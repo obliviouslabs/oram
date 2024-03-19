@@ -66,7 +66,7 @@ struct TestElement {
   char payload[ELEMENT_SIZE -
                sizeof(key)];  // a payload that is typically longer
   static consteval inline TestElement DUMMY() {
-    return TestElement{static_cast<uint64_t>(-1)};
+    return TestElement{static_cast<uint64_t>(-1), {}};
   }
   bool operator==(const TestElement& other) const { return key == other.key; }
   bool operator<(const TestElement& other) const { return key < other.key; }

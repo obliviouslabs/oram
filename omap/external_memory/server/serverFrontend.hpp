@@ -106,7 +106,7 @@ struct NonCachedServerFrontendInstance {
   }
 
   ~NonCachedServerFrontendInstance() {
-    if (slot.base == -1) {
+    if (slot.base == (EM::LargeBlockAllocator::Size_t)-1) {
       return;
     }
     // std::cout << "Freed: " << slot.base << "--" << slot.base + slot.size <<
