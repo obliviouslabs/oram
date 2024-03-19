@@ -221,7 +221,7 @@ struct OHashMap {
    * @return true if the entry is replaced, false otherwise
    *
    */
-  template <const bool hideDummy = false, typename EntryIterator>
+  template <const bool hideDummy = false, class EntryIterator>
   static bool replaceIfExist(EntryIterator begin, EntryIterator end,
                              const KVEntry& entryToInsert) {
     for (auto it = begin; it != end; ++it) {
@@ -352,7 +352,7 @@ struct OHashMap {
    * @return true if the entry is replaced, false otherwise
    *
    */
-  template <typename EntryIterator>
+  template <class EntryIterator>
   static bool replaceIfExistOblivious(EntryIterator begin, EntryIterator end,
                                       const KVEntry& entryToInsert) {
     bool updated = !entryToInsert.valid;

@@ -109,7 +109,7 @@ INLINE constexpr uint64_t divRoundUp(size_t x, size_t y) {
 /**
  * Note: this function is not oblivious
  */
-template <typename Iterator>
+template <class Iterator>
 void fisherYatesShuffle(Iterator begin, Iterator end) {
   size_t N = end - begin;
   for (size_t n = N - 1; n; --n) {

@@ -446,7 +446,7 @@ void MergeSplitTwoWay(Iterator beginLeft, Iterator beginRight, size_t Z,
 /// @param temp temporary array for mergesplit
 /// @param marks temporary array for marks
 /// @param pivotBegin is the beginning iterator of the vector of k-1 pivots
-template <typename Iterator, typename PivotIterator = void*,
+template <class Iterator, class PivotIterator = void*,
           typename T = typename std::iterator_traits<Iterator>::value_type>
 void MergeSplitKWay(const Iterator* begins, const size_t k, const size_t Z,
                     T* temp, uint8_t* marks, PivotIterator pivotBegin = NULL) {
@@ -531,7 +531,7 @@ void MergeSplitKWay(const Iterator* begins, const size_t k, const size_t Z,
 /// @param k is the number of ways.
 /// @param Z is the bucket size.
 /// @param pivotBegin is the beginning iterator of the vector of k-1 pivots
-template <typename Iterator, typename PivotIterator = void*>
+template <class Iterator, class PivotIterator = void*>
 void MergeSplitKWay(const Iterator* begins, const size_t k, const size_t Z,
                     PivotIterator pivotBegin = NULL) {
   Assert(k >= 2);

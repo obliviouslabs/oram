@@ -129,7 +129,7 @@ struct HeapTree {
    * @param cacheLevel the number of top levels to cache
    * @return int the number of nodes in the path
    */
-  template <typename Iterator>
+  template <class Iterator>
   static int GetPathIdx(Iterator outputBegin, Iterator outputEnd,
                         PositionType idx, PositionType leafCount,
                         int cacheLevel) {
@@ -207,7 +207,7 @@ struct HeapTree {
    * @param pathBegin The begin iterator to store the path
    * @return int The number of nodes in the path
    */
-  template <typename Iterator>
+  template <class Iterator>
   int ReadPath(PositionType pos, Iterator pathBegin) {
     PositionType pathIdx[64];
 
@@ -229,7 +229,7 @@ struct HeapTree {
    * @param pathBegin The begin iterator to store the path
    * @return int The number of nodes in the path
    */
-  template <typename Iterator>
+  template <class Iterator>
   int WritePath(PositionType pos, const Iterator pathBegin) {
     PositionType pathIdx[64];
     int actualLevel = GetPathIdx(&pathIdx[0], &pathIdx[totalLevel], pos,
