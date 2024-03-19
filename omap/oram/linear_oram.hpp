@@ -52,17 +52,20 @@ struct ORAM {
   }
 
   template <class Func>
+    requires UpdateOrRemoveFunction<Func, T>
   void Update(const UidType& uid, const Func& updateFunc) {
     T out = T();
     Update(uid, updateFunc, out);
   }
 
   template <class Func>
+    requires UpdateOrRemoveFunction<Func, T>
   void Update(const UidType& uid, const Func& updateFunc, T& out) {
     Update(uid, updateFunc, out, uid);
   }
 
   template <class Func>
+    requires UpdateOrRemoveFunction<Func, T>
   void Update(const UidType& uid, const Func& updateFunc, T& out,
               const UidType& updatedUid) {
     Read(uid, out);
@@ -252,6 +255,7 @@ struct ORAM {
    * @param out pointer to array of the output
    */
   template <class Func>
+    requires BatchUpdateOrRemoveFunction<Func, T>
   void BatchUpdate(uint64_t batchSize, const UidType* uid,
                    const Func& updateFunc, T* out) {
     BatchRead(batchSize, uid, out);
@@ -262,6 +266,7 @@ struct ORAM {
   }
 
   template <class Func>
+    requires BatchUpdateOrRemoveFunction<Func, T>
   void BatchUpdate(uint64_t batchSize, const UidType* uid,
                    const Func& updateFunc) {
     std::vector<T> out(batchSize);

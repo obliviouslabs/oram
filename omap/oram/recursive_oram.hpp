@@ -246,6 +246,7 @@ struct RecursiveORAM {
    * @param accessor The accessor function
    */
   template <class Func>
+    requires UpdateFunction<Func, T>
   void Access(UidType address, const Func& accessor) {
     Critical section(_lock);
     Assert(hasInited);
@@ -391,6 +392,7 @@ struct RecursiveORAM {
    * @param writeBackBuffer The write back buffer to store the updated data.
    */
   template <class Func>
+    requires BatchUpdateFunction<Func, T>
   void BatchAccessDeferWriteBack(const std::vector<UidType>& address,
                                  const Func& accessor,
                                  WriteBackBuffer& writeBackBuffer) {
@@ -525,6 +527,7 @@ struct RecursiveORAM {
    * @param accessor The accessor function.
    */
   template <class Func>
+    requires BatchUpdateFunction<Func, T>
   void BatchAccessDeferWriteBack(const std::vector<UidType>& address,
                                  const Func& accessor) {
     BatchAccessDeferWriteBack(address, accessor, oramWriteBackBuffer);

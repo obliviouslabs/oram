@@ -181,6 +181,7 @@ struct ORAM {
    * @return PositionType The random new position of the block
    */
   template <class Func>
+    requires UpdateOrRemoveFunction<Func, T>
   PositionType Update(PositionType pos, const UidType& uid,
                       const Func& updateFunc) {
     if (isLinear) {
@@ -204,6 +205,7 @@ struct ORAM {
    * @return PositionType The random new position of the block
    */
   template <class Func>
+    requires UpdateOrRemoveFunction<Func, T>
   PositionType Update(PositionType pos, const UidType& uid,
                       const Func& updateFunc, T& out) {
     if (isLinear) {
@@ -229,6 +231,7 @@ struct ORAM {
    * @return PositionType The random new position of the block
    */
   template <class Func>
+    requires UpdateOrRemoveFunction<Func, T>
   PositionType Update(PositionType pos, const UidType& uid,
                       const Func& updateFunc, T& out,
                       const UidType& updatedUid) {
@@ -253,6 +256,7 @@ struct ORAM {
    * @return PositionType
    */
   template <class Func>
+    requires UpdateOrRemoveFunction<Func, T>
   PositionType Update(PositionType pos, const UidType& uid, PositionType newPos,
                       const Func& updateFunc) {
     if (isLinear) {
@@ -277,6 +281,7 @@ struct ORAM {
    * @return PositionType The new position of the block
    */
   template <class Func>
+    requires UpdateOrRemoveFunction<Func, T>
   PositionType Update(PositionType pos, const UidType& uid, PositionType newPos,
                       const Func& updateFunc, T& out) {
     if (isLinear) {
@@ -303,6 +308,7 @@ struct ORAM {
    * @return PositionType The random new position of the block
    */
   template <class Func>
+    requires UpdateOrRemoveFunction<Func, T>
   PositionType Update(PositionType pos, const UidType& uid, PositionType newPos,
                       const Func& updateFunc, T& out,
                       const UidType& updatedUid) {
@@ -369,6 +375,7 @@ struct ORAM {
    * @param out Pointer to an array of output blocks
    */
   template <class Func>
+    requires BatchUpdateOrRemoveFunction<Func, T>
   void BatchUpdate(uint64_t batchSize, PositionType* pos, const UidType* uid,
                    const PositionType* newPos, const Func& updateFunc, T* out) {
     if (isLinear) {
@@ -393,6 +400,7 @@ struct ORAM {
    * written back.
    */
   template <class Func>
+    requires BatchUpdateOrRemoveFunction<Func, T>
   void BatchUpdate(uint64_t batchSize, PositionType* pos, const UidType* uid,
                    const PositionType* newPos, const Func& updateFunc) {
     if (isLinear) {
@@ -418,6 +426,7 @@ struct ORAM {
    * blocks.
    */
   template <class Func>
+    requires BatchUpdateOrRemoveFunction<Func, T>
   std::vector<PositionType> BatchUpdate(uint64_t batchSize, PositionType* pos,
                                         const UidType* uid,
                                         const Func& updateFunc) {

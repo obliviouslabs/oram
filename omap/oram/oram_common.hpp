@@ -1,5 +1,6 @@
 #pragma once
 
+#include <concepts>
 #include <functional>
 #include <vector>
 
@@ -12,6 +13,57 @@
 #include "heap_tree.hpp"
 
 namespace ODSL {
+
+/**
+ * @brief An update or remove function should be able to update an object of
+ * type T and return a boolean value indicating whether the object should be
+ * kept in the ORAM.
+ *
+ * @tparam Func The type of the update function.
+ * @tparam T The type of the object to be updated.
+ */
+template <class Func, typename T>
+concept UpdateOrRemoveFunction = requires(Func f, T& t) {
+  { f(t) } -> std::same_as<bool>;
+};
+
+/**
+ * @brief An update function should be able to update an object of
+ * type T.
+ *
+ * @tparam Func The type of the update function.
+ * @tparam T The type of the object to be updated.
+ */
+template <class Func, typename T>
+concept UpdateFunction = requires(Func f, T& t) {
+  { f(t) };
+};
+
+/**
+ * @brief A batch update or remove function should be able to update a batch of
+ * object of type T and return a vector of boolean value indicating whether each
+ * object should be kept in the ORAM.
+ *
+ * @tparam Func The type of the update function.
+ * @tparam T The type of the object to be updated.
+ */
+template <class Func, typename T>
+concept BatchUpdateOrRemoveFunction =
+    requires(Func f, T* t, uint64_t batchSize) {
+      { f(batchSize, t) } -> std::same_as<std::vector<bool>>;
+    };
+
+/**
+ * @brief A batch update or remove function should be able to update a batch of
+ * object of type T.
+ *
+ * @tparam Func The type of the update function.
+ * @tparam T The type of the object to be updated.
+ */
+template <class Func, typename T>
+concept BatchUpdateFunction = requires(Func f, std::vector<T>& t) {
+  { f(t) };
+};
 
 template <typename PositionType>
 int commonSuffixLength(PositionType a, PositionType b) {

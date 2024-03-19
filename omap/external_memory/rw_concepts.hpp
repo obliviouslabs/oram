@@ -1,5 +1,11 @@
 #include <concepts>
 #include <cstddef>
+
+/**
+ * @brief This file defines the concepts for reader and writer.
+ *
+ */
+
 template <class T, class... U>
 concept any_of = std::disjunction_v<std::is_same<T, U>...>;
 
