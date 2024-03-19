@@ -148,7 +148,7 @@ INLINE static bool parity(int x) {
 
 template <class Iterator>
 void GetThreadSize(Iterator begin, Iterator end, uint64_t size) {
-  int numThreads = end - begin;
+  int numThreads = (int)(end - begin);
   if (numThreads == 0) {
     return;
   }
@@ -188,9 +188,9 @@ void ParBitonicSortSepPayload(KeyIterator keyBegin, KeyIterator keyEnd,
                               bool dire) {
   size_t size = keyEnd - keyBegin;
   size_t maxThread = size * (sizeof(*keyBegin) + sizeof(*payloadBegin)) >> 17;
-  numThreads = std::min((uint64_t)numThreads, maxThread);
-  int logNumThreads = GetLogBaseTwo(numThreads);
-  numThreads = 1UL << logNumThreads;
+  numThreads = (int)std::min((uint64_t)numThreads, maxThread);
+  int logNumThreads = (int)GetLogBaseTwo(numThreads);
+  numThreads = 1 << logNumThreads;
   if (numThreads > 1) {
     std::vector<uint64_t> threadSize(numThreads);
     GetThreadSize(threadSize.begin(), threadSize.end(), size);
@@ -206,7 +206,7 @@ void ParBitonicSortSepPayload(KeyIterator keyBegin, KeyIterator keyEnd,
       KeyIterator threadKeyEnd = keyBegin + rightOffset;
       PayloadIterator threadPayloadBegin = payloadBegin + leftOffset;
       BitonicSortSepPayload(threadKeyBegin, threadKeyEnd, threadPayloadBegin,
-                            dire != parity(i) ^ (logNumThreads & 1));
+                            (dire != parity(i)) ^ (logNumThreads & 1));
     }
     ParBitonicSortSepPayloadRecursiveMerge(keyBegin, keyEnd, payloadBegin,
                                            numThreads, dire);

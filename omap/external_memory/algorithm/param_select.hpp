@@ -1,4 +1,5 @@
 #pragma once
+#include <cfloat>
 #include <cmath>
 #include <vector>
 
@@ -13,7 +14,7 @@ namespace EM::Algorithm {
 static double addLogs(double logA, double logB) {
   double bigger = std::max(logA, logB);
   double smaller = std::min(logA, logB);
-  if (bigger == -INFINITY) {
+  if (std::isinf(bigger)) {
     return bigger;
   }
   if (bigger - smaller > 100) {

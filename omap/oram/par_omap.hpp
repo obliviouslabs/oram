@@ -38,7 +38,7 @@ struct ParOMap {
     uint64_t hash;
     uint32_t shardIdx;
     bool operator<(const KVInfo& other) const {
-      return hash < other.hash | (hash == other.hash & key < other.key);
+      return (hash < other.hash) | ((hash == other.hash) & (key < other.key));
     }
 #ifndef ENCLAVE_MODE
     friend std::ostream& operator<<(std::ostream& os, const KVInfo& keyInfo) {
@@ -55,7 +55,7 @@ struct ParOMap {
     uint64_t hash;
     uint32_t shardIdx;
     bool operator<(const KeyInfo& other) const {
-      return hash < other.hash | (hash == other.hash & key < other.key);
+      return (hash < other.hash) | ((hash == other.hash) & (key < other.key));
     }
 #ifndef ENCLAVE_MODE
     friend std::ostream& operator<<(std::ostream& os, const KeyInfo& keyInfo) {
@@ -544,7 +544,7 @@ struct ParOMap {
     }
     EM::Algorithm::ParBitonicSortSepPayload(
         keyInfoVec.begin(), keyInfoVec.end(), recoveryArr.begin(),
-        shards.size() * 2);
+        (int)shards.size() * 2);
     std::vector<uint32_t> shardLoads(shardCount, 0);
     std::vector<uint32_t> prefixSumFirstCompaction(batchSize + 1);
     prefixSumFirstCompaction[0] = 0;
@@ -614,7 +614,7 @@ struct ParOMap {
 
     EM::Algorithm::ParBitonicSortSepPayload(recoveryArr.begin(),
                                             recoveryArr.end(), foundVec.begin(),
-                                            shards.size() * 2);
+                                            (int)shards.size() * 2);
     foundVec.resize(batchSize);
     return foundVec;
   }

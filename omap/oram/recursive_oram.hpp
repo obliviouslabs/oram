@@ -405,7 +405,7 @@ struct RecursiveORAM {
     for (size_t i = 0; i < address.size(); ++i) {
       UidType uid = address[i] / chunk_size;
       short index = address[i] % chunk_size;
-      for (int level = oramSizes.size() - 1; level >= 0; --level) {
+      for (int level = (int)oramSizes.size() - 1; level >= 0; --level) {
         writeBackBuffer.GetUids(level)[i] = uid;
         indices[level * batchSize + i] = index;
         index = uid % fan_out;
@@ -416,12 +416,12 @@ struct RecursiveORAM {
     std::vector<PositionType> pos(address.size(), 0);
     std::vector<PositionType> nextPos(address.size());
 
-    for (int level = 0; level < oramSizes.size() - 1; ++level) {
+    for (int level = 0; level < (int)oramSizes.size() - 1; ++level) {
       PositionType* nextNewPos = writeBackBuffer.GetNewPoses(level + 1);
       InternalNode* node = writeBackBuffer.GetInternalNodes(level);
       UidType* uids = writeBackBuffer.GetUids(level);
       for (size_t i = 0; i < address.size(); ++i) {
-        nextNewPos[i] = UniformRandom(oramSizes[level + 1] - 1);
+        nextNewPos[i] = (PositionType)UniformRandom(oramSizes[level + 1] - 1);
       }
 
       internalOrams[level].BatchReadAndRemove(address.size(), &pos[0], uids,

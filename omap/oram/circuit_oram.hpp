@@ -234,6 +234,15 @@ struct ORAM {
   }
 
   /**
+   * @brief Get a random position in the ORAM
+   *
+   * @return PositionType the random position
+   */
+  INLINE PositionType getRandPos() {
+    return (PositionType)UniformRandom(size() - 1);
+  }
+
+  /**
    * @brief Get a vector of random positions.
    *
    * @param batchSize The number of random positions to generate
@@ -242,7 +251,7 @@ struct ORAM {
   const std::vector<PositionType> getRandNewPoses(uint64_t batchSize) {
     std::vector<PositionType> newPos(batchSize);
     for (int i = 0; i < batchSize; ++i) {
-      newPos[i] = UniformRandom(size() - 1);
+      newPos[i] = getRandPos();
     }
     return newPos;
   }
@@ -278,7 +287,7 @@ struct ORAM {
   void deDuplicatePoses(uint64_t batchSize, PositionType* pos,
                         const UidType* uid) {
     for (uint64_t i = 1; i < batchSize; ++i) {
-      PositionType randPos = (PositionType)UniformRandom(size() - 1);
+      PositionType randPos = getRandPos();
       obliMove(uid[i] == uid[i - 1], pos[i], randPos);
     }
   }
@@ -437,7 +446,7 @@ struct ORAM {
    * @return PositionType The random new position of the block
    */
   PositionType Read(PositionType pos, const UidType& uid, T& out) {
-    PositionType newPos = UniformRandom(size() - 1);
+    PositionType newPos = getRandPos();
     return Read(pos, uid, out, newPos);
   }
 
@@ -469,7 +478,7 @@ struct ORAM {
    */
   template <const int _evict_freq = evict_freq>
   PositionType Write(const UidType& uid, const T& in) {
-    PositionType newPos = UniformRandom(size() - 1);
+    PositionType newPos = getRandPos();
     return Write<evict_freq>(uid, in, newPos);
   }
 
@@ -566,7 +575,7 @@ struct ORAM {
   PositionType Update(PositionType pos, const UidType& uid,
                       const Func& updateFunc, T& out,
                       const UidType& updatedUid) {
-    PositionType newPos = UniformRandom(size() - 1);
+    PositionType newPos = getRandPos();
     return Update(pos, uid, newPos, updateFunc, out, updatedUid);
   }
 

@@ -228,24 +228,24 @@ INLINE void CMOV_internal(const bool cond, void* dest, const void* src) {
     _mm256_storeu_si256((__m256i*)dest, destVec);
 #else
     CMOV_internal<16>(cond, dest, src);
-    CMOV_internal<16>(cond, (char*)dest + 16, (char*)src + 16);
+    CMOV_internal<16>(cond, (char*)dest + 16, (const char*)src + 16);
 #endif
   }
   if constexpr (sz % 32 >= 16) {
     constexpr uint64_t offset = 4 * (sz / 32);
-    uint64_t* src8 = (uint64_t*)src + offset;
+    const uint64_t* src8 = (const uint64_t*)src + offset;
     uint64_t* dest8 = (uint64_t*)dest + offset;
 #if defined(__SSE2__)
     const __m128i mask =
         _mm_set1_epi64x(-(!!cond));  // Create a mask based on cond
-    __m128i srcVec = _mm_loadu_si128((__m128i*)src8);
+    __m128i srcVec = _mm_loadu_si128((const __m128i*)src8);
     __m128i destVec = _mm_loadu_si128((__m128i*)dest8);
     __m128i blended = _mm_or_si128(_mm_and_si128(mask, srcVec),
                                    _mm_andnot_si128(mask, destVec));
     _mm_storeu_si128((__m128i*)dest8, blended);
 #else
     CMOV_internal<8>(cond, dest8, src8);
-    CMOV_internal<8>(cond, (char*)dest8 + 8, (char*)src8 + 8);
+    CMOV_internal<8>(cond, (char*)dest8 + 8, (const char*)src8 + 8);
 #endif
   }
 
