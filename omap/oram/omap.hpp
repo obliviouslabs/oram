@@ -10,12 +10,11 @@
 
 namespace ODSL {
 
-template <typename K, typename PositionType = uint64_t>
-
 /**
  * @brief Used to hash the key to two positions
  *
  */
+template <typename K, typename PositionType = uint64_t>
 struct OHashMapIndexer {
   static constexpr int saltLength = 16;  // 128 bits salt
   uint8_t salts[saltLength];             // salt for secure hash

@@ -204,7 +204,8 @@ struct ParOMap {
    * @brief Initialize the map from a reader. The data is fetched in batches and
    * for each batch, we route the data in parallel through a multi-way butterfly
    * network to load balance them to each shard. Used techniques described in
-   * https://eprint.iacr.org/2023/1258.
+   * https://eprint.iacr.org/2023/1258. Might throw error with some negligible
+   * probability (when some bucket overflows), in which case one may retry.
    *
    * @tparam Reader The type of the reader
    * @param reader The reader object
@@ -255,7 +256,6 @@ struct ParOMap {
     Element* tempElements = new Element[batchSize];
     uint8_t* tempMarks = new uint8_t[batchSize];
     int butterflyLevel = factors.size();
-
     while (!reader.eof()) {
       // set the first level of the butterfly network
       for (uint64_t bktIdx = 0; bktIdx < bktPerBatch; ++bktIdx) {
@@ -298,21 +298,6 @@ struct ParOMap {
         stride *= way;
       }
 
-      // check if the data is routed correctly in debug mode
-#ifndef NDEBUG
-      uint64_t realCount = 0;
-      for (uint64_t i = 0; i < batchSize; ++i) {
-        if (!batch[i].IsDummy()) {
-          uint64_t hash = secure_hash_with_salt((uint8_t*)&batch[i].v.key,
-                                                sizeof(K), randSalt);
-          uint64_t shardIdx = getShardByHash(hash);
-          Assert(shardIdx == i / (bktSize * parBatchCount));
-          ++realCount;
-        }
-      }
-      Assert(realCount == initSize);
-#endif
-
       // insert the data into the non-oblivious maps in parallel
 #pragma omp parallel for schedule(static)
       for (uint32_t i = 0; i < shardCount; ++i) {
@@ -343,7 +328,7 @@ struct ParOMap {
    * contain duplicates and may be arranged in any order. The values are written
    * in the same order as the keys. Larger batch size will likely increase the
    * throughput. The writeback process of the internal orams are deferred until
-   * ParWriteBack is called. The method may leak information with negligible
+   * WriteBack is called. The method may leak information with negligible
    * probability, which happens when the keys are very unbalanced. Since the
    * keys each shard receives are oblivious, an adversary cannot force such an
    * unbalanced distribution. This method is ~2x faster than the algorithm
@@ -363,9 +348,14 @@ struct ParOMap {
                                                const KeyIterator keyEnd,
                                                ValueIterator valueBegin) {
     uint64_t shardCount = shards.size();
-    uint64_t batchSize = keyEnd - keyBegin;
+    if (keyEnd - keyBegin > UINT32_MAX) {
+      // it takes too long to load balance a super large batch, consider
+      // breaking it into smaller ones
+      throw std::runtime_error("FindBatchDeferWriteBack: batch size too large");
+    }
+    uint32_t batchSize = (uint32_t)(keyEnd - keyBegin);
     // Calculate the max unique element per shard with high probability.
-    uint64_t shardSize = maxQueryPerShard(batchSize, shardCount);
+    uint32_t shardSize = (uint32_t)maxQueryPerShard(batchSize, shardCount);
     std::vector<KeyInfo> keyInfoVec(batchSize);
     // hash the keys and determine the shard index for each key
     for (uint32_t i = 0; i < batchSize; ++i) {
@@ -405,6 +395,12 @@ struct ParOMap {
         shardLoads[j] += matchFlag;
       }
     }
+    // With negligible probability, we need to enlarge the shard size for the
+    // batch to avoid overflow
+    for (uint32_t load : shardLoads) {
+      obliMove(load > shardSize, shardSize, load);
+    }
+
     std::vector<K> keyVec(shardCount * shardSize);
     for (uint32_t i = 0; i < batchSize; ++i) {
       keyVec[i] = keyInfoVec[i].key;
@@ -414,7 +410,6 @@ struct ParOMap {
     EM::Algorithm::OrCompactSeparateMark(keyVec.begin(),
                                          keyVec.begin() + batchSize,
                                          prefixSumFirstCompaction.begin());
-
     std::vector<uint32_t> prefixSumSecondCompaction(shardCount * shardSize + 1);
     std::vector<uint32_t> shardLoadPrefixSum(shardCount);
     shardLoadPrefixSum[0] = 0;
@@ -480,7 +475,7 @@ struct ParOMap {
    * and release the locks.
    *
    */
-  void ParWriteBack() {
+  void WriteBack() {
     uint64_t shardCount = shards.size();
 #pragma omp parallel for num_threads(shardCount * 2)
     for (uint64_t i = 0; i < shardCount * 2; ++i) {
@@ -489,7 +484,7 @@ struct ParOMap {
   }
 
   /**
-   * @brief Combines FindBatchDeferWriteBack and ParWriteBack.
+   * @brief Combines FindBatchDeferWriteBack and WriteBack.
    *
    * @tparam KeyIterator The type of the key iterator
    * @tparam ValueIterator The type of the value iterator
@@ -504,7 +499,7 @@ struct ParOMap {
                                  const KeyIterator keyEnd,
                                  ValueIterator valueBegin) {
     const auto& res = FindBatchDeferWriteBack(keyBegin, keyEnd, valueBegin);
-    ParWriteBack();
+    WriteBack();
     return res;
   }
 
@@ -528,8 +523,13 @@ struct ParOMap {
                                    const ValueIterator valueBegin) {
     // the overall procedure is similar to FindBatchDeferWriteBack
     uint64_t shardCount = shards.size();
-    uint64_t batchSize = keyEnd - keyBegin;
-    uint64_t shardSize = maxQueryPerShard(batchSize, shardCount);
+    if (keyEnd - keyBegin > UINT32_MAX) {
+      // it takes too long to load balance a super large batch, consider
+      // breaking it into smaller ones
+      throw std::runtime_error("InsertBatch: batch size too large");
+    }
+    uint32_t batchSize = (uint32_t)(keyEnd - keyBegin);
+    uint32_t shardSize = (uint32_t)maxQueryPerShard(batchSize, shardCount);
     std::vector<KVInfo> keyInfoVec(batchSize);
     for (uint32_t i = 0; i < batchSize; ++i) {
       keyInfoVec[i].key = *(keyBegin + i);
@@ -562,6 +562,12 @@ struct ParOMap {
         shardLoads[j] += matchFlag;
       }
     }
+    // With negligible probability, we need to enlarge the shard size for the
+    // batch to avoid overflow
+    for (uint32_t load : shardLoads) {
+      obliMove(load > shardSize, shardSize, load);
+    }
+
     std::vector<KVPair> kvVec(shardCount * shardSize);
     for (uint32_t i = 0; i < batchSize; ++i) {
       kvVec[i].key = keyInfoVec[i].key;
@@ -634,9 +640,14 @@ struct ParOMap {
   template <class KeyIterator>
   std::vector<uint8_t> EraseBatch(const KeyIterator keyBegin,
                                   const KeyIterator keyEnd) {
+    if (keyEnd - keyBegin > UINT32_MAX) {
+      // it takes too long to load balance a super large batch, consider
+      // breaking it into smaller ones
+      throw std::runtime_error("EraseBatch: batch size too large");
+    }
     uint64_t shardCount = shards.size();
-    uint64_t batchSize = keyEnd - keyBegin;
-    uint64_t shardSize = maxQueryPerShard(batchSize, shardCount);
+    uint32_t batchSize = (uint32_t)(keyEnd - keyBegin);
+    uint32_t shardSize = (uint32_t)maxQueryPerShard(batchSize, shardCount);
     std::vector<KeyInfo> keyInfoVec(batchSize);
     for (uint32_t i = 0; i < batchSize; ++i) {
       keyInfoVec[i].key = *(keyBegin + i);
@@ -668,6 +679,12 @@ struct ParOMap {
         shardLoads[j] += matchFlag;
       }
     }
+    // With negligible probability, we need to enlarge the shard size for the
+    // batch to avoid overflow
+    for (uint32_t load : shardLoads) {
+      obliMove(load > shardSize, shardSize, load);
+    }
+
     std::vector<K> keyVec(shardCount * shardSize);
     for (uint32_t i = 0; i < batchSize; ++i) {
       keyVec[i] = keyInfoVec[i].key;

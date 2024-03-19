@@ -876,7 +876,7 @@ void testParOMapPerfDeferWriteBack(size_t mapSize = 5e6,
       omap.FindBatchDeferWriteBack(addr.begin(), addr.end(), balance.begin());
       ocall_measure_time(&queryEnd);
       queryTimediff += queryEnd - queryStart;
-      omap.ParWriteBack();
+      omap.WriteBack();
     }
     ocall_measure_time(&end);
     uint64_t timediff = end - start;
