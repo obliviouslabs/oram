@@ -359,9 +359,9 @@ struct ParOMap {
    * is found
    */
   template <class KeyIterator, class ValueIterator>
-  std::vector<uint8_t> FindParBatchDeferWriteBack(const KeyIterator keyBegin,
-                                                  const KeyIterator keyEnd,
-                                                  ValueIterator valueBegin) {
+  std::vector<uint8_t> FindBatchDeferWriteBack(const KeyIterator keyBegin,
+                                               const KeyIterator keyEnd,
+                                               ValueIterator valueBegin) {
     uint64_t shardCount = shards.size();
     uint64_t batchSize = keyEnd - keyBegin;
     // Calculate the max unique element per shard with high probability.
@@ -489,7 +489,7 @@ struct ParOMap {
   }
 
   /**
-   * @brief Combines FindParBatchDeferWriteBack and ParWriteBack.
+   * @brief Combines FindBatchDeferWriteBack and ParWriteBack.
    *
    * @tparam KeyIterator The type of the key iterator
    * @tparam ValueIterator The type of the value iterator
@@ -500,10 +500,10 @@ struct ParOMap {
    * is found
    */
   template <class KeyIterator, class ValueIterator>
-  std::vector<uint8_t> FindParBatch(const KeyIterator keyBegin,
-                                    const KeyIterator keyEnd,
-                                    ValueIterator valueBegin) {
-    const auto& res = FindParBatchDeferWriteBack(keyBegin, keyEnd, valueBegin);
+  std::vector<uint8_t> FindBatch(const KeyIterator keyBegin,
+                                 const KeyIterator keyEnd,
+                                 ValueIterator valueBegin) {
+    const auto& res = FindBatchDeferWriteBack(keyBegin, keyEnd, valueBegin);
     ParWriteBack();
     return res;
   }
@@ -512,7 +512,7 @@ struct ParOMap {
    * @brief Insert a batch of key-value pairs into the map in parallel. For
    * duplicate keys, an arbitrary value will be inserted. The method may leak
    * information with negligible probability, similar to
-   * FindParBatchDeferWriteBack. The method is not thread-safe.
+   * FindBatchDeferWriteBack. The method is not thread-safe.
    *
    * @tparam KeyIterator The type of the key iterator
    * @tparam ValueIterator The type of the value iterator
@@ -523,10 +523,10 @@ struct ParOMap {
    * already exists.
    */
   template <class KeyIterator, class ValueIterator>
-  std::vector<uint8_t> InsertParBatch(const KeyIterator keyBegin,
-                                      const KeyIterator keyEnd,
-                                      const ValueIterator valueBegin) {
-    // the overall procedure is similar to FindParBatchDeferWriteBack
+  std::vector<uint8_t> InsertBatch(const KeyIterator keyBegin,
+                                   const KeyIterator keyEnd,
+                                   const ValueIterator valueBegin) {
+    // the overall procedure is similar to FindBatchDeferWriteBack
     uint64_t shardCount = shards.size();
     uint64_t batchSize = keyEnd - keyBegin;
     uint64_t shardSize = maxQueryPerShard(batchSize, shardCount);
@@ -622,7 +622,7 @@ struct ParOMap {
   /**
    * @brief Erase a batch of keys from the map in parallel. Keys may contain
    * duplicate and be arranged in any order. The method may leak information
-   * with negligible probability, similar to FindParBatchDeferWriteBack. The
+   * with negligible probability, similar to FindBatchDeferWriteBack. The
    * method is not thread-safe.
    *
    * @tparam KeyIterator The type of the key iterator
@@ -632,8 +632,8 @@ struct ParOMap {
    * existed in the map.
    */
   template <class KeyIterator>
-  std::vector<uint8_t> EraseParBatch(const KeyIterator keyBegin,
-                                     const KeyIterator keyEnd) {
+  std::vector<uint8_t> EraseBatch(const KeyIterator keyBegin,
+                                  const KeyIterator keyEnd) {
     uint64_t shardCount = shards.size();
     uint64_t batchSize = keyEnd - keyBegin;
     uint64_t shardSize = maxQueryPerShard(batchSize, shardCount);

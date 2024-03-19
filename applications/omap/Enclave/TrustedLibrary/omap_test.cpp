@@ -815,7 +815,7 @@ void testParOMapPerf(size_t mapSize = 5e6,
       for (uint32_t i = 0; i < batchSize; ++i) {
         addr[i].part[0] = (uint32_t)(initSize + r * batchSize + i);
       }
-      omap.InsertParBatch(addr.begin(), addr.end(), balance.begin());
+      omap.InsertBatch(addr.begin(), addr.end(), balance.begin());
     }
     ocall_measure_time(&end);
     uint64_t timediff = end - start;
@@ -827,7 +827,7 @@ void testParOMapPerf(size_t mapSize = 5e6,
       for (size_t i = 0; i < batchSize; ++i) {
         addr[i].part[0] = (uint32_t)(initSize + r * batchSize + i);
       }
-      omap.FindParBatch(addr.begin(), addr.end(), balance.begin());
+      omap.FindBatch(addr.begin(), addr.end(), balance.begin());
     }
     ocall_measure_time(&end);
     timediff = end - start;
@@ -873,8 +873,7 @@ void testParOMapPerfDeferWriteBack(size_t mapSize = 5e6,
       for (uint32_t i = 0; i < batchSize; ++i) {
         addr[i].part[0] = (uint32_t)(initSize + r * batchSize + i);
       }
-      omap.FindParBatchDeferWriteBack(addr.begin(), addr.end(),
-                                      balance.begin());
+      omap.FindBatchDeferWriteBack(addr.begin(), addr.end(), balance.begin());
       ocall_measure_time(&queryEnd);
       queryTimediff += queryEnd - queryStart;
       omap.ParWriteBack();
@@ -921,7 +920,7 @@ void testParOMapPerfSignal(size_t mapSize = 5e6,
       for (uint32_t i = 0; i < batchSize; ++i) {
         addr[i] = initSize + batchSize * (100000UL + r) + i;
       }
-      omap.FindParBatch(addr.begin(), addr.end(), balance.begin());
+      omap.FindBatch(addr.begin(), addr.end(), balance.begin());
     }
     ocall_measure_time(&end);
     uint64_t timediff = end - start;
