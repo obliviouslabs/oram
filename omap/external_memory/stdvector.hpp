@@ -80,10 +80,9 @@ struct StdVector : public std::vector<T> {
 
     Reader() {}
 
-    Reader(Iterator _begin, Iterator _end, uint32_t _auth = 0)
-        : it(_begin), end(_end) {}
+    Reader(Iterator _begin, Iterator _end) : it(_begin), end(_end) {}
 
-    void init(Iterator _begin, Iterator _end, uint32_t _auth = 0) {
+    void init(Iterator _begin, Iterator _end) {
       it = _begin;
       end = _end;
     }
@@ -121,10 +120,9 @@ struct StdVector : public std::vector<T> {
     Iterator end;
     Writer() {}
 
-    Writer(Iterator _begin, Iterator _end, uint32_t _auth = 0)
-        : it(_begin), end(_end) {}
+    Writer(Iterator _begin, Iterator _end) : it(_begin), end(_end) {}
 
-    void init(Iterator _begin, Iterator _end, uint32_t _auth = 0) {
+    void init(Iterator _begin, Iterator _end) {
       it = _begin;
       end = _end;
     }

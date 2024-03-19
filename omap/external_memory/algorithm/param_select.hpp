@@ -38,10 +38,10 @@ static double binomLogPmf(uint64_t k, uint64_t n, double p) {
   double logCkn = logCombin(k, n);
 
   if (p > 1e-5) {
-    return logCkn + k * log2(p) + (n - k) * log2(1 - p);
+    return logCkn + (double)k * log2(p) + (double)(n - k) * log2(1 - p);
   }
-  return logCkn + k * log2(p) -
-         (n - k) / log(2) * (p + p * p / 2 + p * p * p / 3);
+  return logCkn + (double)k * log2(p) -
+         (double)(n - k) / log(2) * (p + p * p / 2 + p * p * p / 3);
 }
 
 /// @brief log of the binomial survival function
@@ -51,61 +51,7 @@ static double binomLogSf(uint64_t k, uint64_t n, double p) {
   double eps = pmf - 40;
   while (pmf > eps && k < n) {
     ++k;
-    pmf += log2((double)(n - k + 1) / k) + log2(p / (1 - p));
-    sf = addLogs(sf, pmf);
-  }
-  return sf;
-}
-
-/// @brief log of the binomial cdf
-static double binomLogCdf(uint64_t k, uint64_t n, double p) {
-  double sf = -INFINITY;
-  double pmf = binomLogPmf(k, n, p);
-  double eps = pmf - 40;
-  while (pmf > eps) {
-    sf = addLogs(sf, pmf);
-    if (k == 0) {
-      break;
-    }
-    pmf -= log2((double)(n - k + 1) / k) + log2(p / (1 - p));
-    --k;
-  }
-  return sf;
-}
-
-/// @brief log of the hypergeometric pmf
-static double hypergeomLogPmf(uint64_t k, uint64_t M, uint64_t n, uint64_t N) {
-  Assert(N <= M);
-  if (k > N || k > n) {
-    return -INFINITY;
-  }
-
-  double logCkn = logCombin(k, n);
-  double logCN_kM_n = logCombin(N - k, M - n);
-  static size_t cachedM = 0;
-  static size_t cachedN = 0;
-  static size_t cachedLogMN = 0;
-  double logCMN;
-  if (M == cachedM && N == cachedN) {
-    logCMN = cachedLogMN;
-  } else {
-    logCMN = logCombin(N, M);
-    cachedM = M;
-    cachedN = N;
-    cachedLogMN = logCMN;
-  }
-  return logCkn + logCN_kM_n - logCMN;
-}
-
-/// @brief log of the hypergeometric survival function
-static double hypergeomLogSf(uint64_t k, uint64_t M, uint64_t n, uint64_t N) {
-  double sf = -INFINITY;
-  double pmf = hypergeomLogPmf(k, M, n, N);
-  double eps = pmf - 40;
-  while (pmf > eps && k < n) {
-    ++k;
-    pmf += log2((double)(n - k + 1) / k) -
-           log2((double)(M - n - N + k) / (N - k + 1));
+    pmf += log2((double)(n - k + 1) / (double)k) + log2(p / (1 - p));
     sf = addLogs(sf, pmf);
   }
   return sf;

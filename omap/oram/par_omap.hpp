@@ -83,7 +83,7 @@ struct ParOMap {
    * @return uint32_t the shard index
    */
   INLINE uint32_t getShardByHash(uint64_t hash) {
-    return hash / shardHashRange;
+    return (uint32_t)(hash / shardHashRange);
   }
 
   /**
@@ -99,7 +99,8 @@ struct ParOMap {
   static uint64_t maxQueryPerShard(uint64_t batchSize, uint64_t shardCount,
                                    double logFailProb = -40) {
     auto satisfy = [&](uint64_t n) {
-      double logSf = EM::Algorithm::binomLogSf(n, batchSize, 1.0 / shardCount);
+      double logSf =
+          EM::Algorithm::binomLogSf(n, batchSize, 1.0 / (double)shardCount);
       return logSf < logFailProb;
     };
     return EM::Algorithm::lowerBound(divRoundUp(batchSize, shardCount),
@@ -181,7 +182,7 @@ struct ParOMap {
       throw std::runtime_error("shardCount should be no more than 128");
     }
     shards.resize(shardCount);
-    shardSize = maxQueryPerShard(mapSize, shardCount, -60);
+    shardSize = (PositionType)maxQueryPerShard(mapSize, shardCount, -60);
     read_rand(randSalt, sizeof(randSalt));
     shardHashRange = (UINT64_MAX - 1) / shardCount + 1;
   }
@@ -382,7 +383,7 @@ struct ParOMap {
     }
     EM::Algorithm::ParBitonicSortSepPayload(
         keyInfoVec.begin(), keyInfoVec.end(), recoveryArr.begin(),
-        shards.size() * 2);
+        (int)shards.size() * 2);
 
     // Obliviously count the number of unique keys for each shard (using
     // simd acceleration). Also generate a prefix sum of the number of unique
@@ -465,7 +466,7 @@ struct ParOMap {
     // sort using the recovery array
     EM::Algorithm::ParBitonicSortSepPayload(
         recoveryArr.begin(), recoveryArr.end(), resultVec.begin(),
-        shards.size() * 2);
+        (int)shards.size() * 2);
     std::vector<uint8_t> foundFlags(batchSize);
     for (uint32_t i = 0; i < batchSize; ++i) {
       foundFlags[i] = resultVec[i].found;

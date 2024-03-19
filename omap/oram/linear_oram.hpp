@@ -12,8 +12,8 @@ namespace ODSL::LinearORAM {
 template <typename T, typename UidType = uint64_t>
 struct ORAM {
  private:
-  std::vector<T> data;  // oram data, indexed by uid
   UidType _size;        // oram size
+  std::vector<T> data;  // oram data, indexed by uid
 
  public:
   ORAM() : _size(0), data(0) {}
@@ -52,7 +52,7 @@ struct ORAM {
 
   template <class Func>
   void Update(const UidType& uid, const Func& updateFunc) {
-    T out;
+    T out = T();
     Update(uid, updateFunc, out);
   }
 
@@ -119,7 +119,7 @@ struct ORAM {
         uidCopy.begin(), uidCopy.begin() + batchSize, prefixSum.begin());
 
     // prepare marks for distributing uids to there corresponding location
-    int distributeLevel = GetLogBaseTwo(_size - 1);
+    int distributeLevel = (int)GetLogBaseTwo(_size - 1);
     for (uint64_t mask = 1UL << distributeLevel; mask != 0; mask >>= 1) {
       for (int64_t i = _size - mask - 1; i >= 0; --i) {
         bool movFlag =
@@ -214,7 +214,7 @@ struct ORAM {
     EM::Algorithm::OrCompactSeparateMark(
         uidCopy.begin(), uidCopy.begin() + batchSize, prefixSum.begin());
 
-    int distributeLevel = GetLogBaseTwo(_size - 1);
+    int distributeLevel = (int)GetLogBaseTwo(_size - 1);
     for (uint64_t mask = 1UL << distributeLevel; mask != 0; mask >>= 1) {
       for (int64_t i = _size - mask - 1; i >= 0; --i) {
         bool movFlag =

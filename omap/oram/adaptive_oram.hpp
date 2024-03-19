@@ -68,8 +68,7 @@ struct ORAM {
     }
   }
 
-  void SetSize(PositionType size, size_t cacheBytes = 1UL << 62,
-               int numThreads = 0) {
+  void SetSize(PositionType size, size_t cacheBytes = 1UL << 62) {
     if (linearOram || treeOram) {
       throw std::runtime_error("SetSize can only be called on empty oram");
     }

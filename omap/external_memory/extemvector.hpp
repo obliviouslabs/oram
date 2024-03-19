@@ -28,9 +28,8 @@ struct Vector {
   using Server = EM::MemoryServer::ServerFrontendInstance<
       Page, ::EM::Backend::MemServerBackend, ENCRYPTED, AUTH, DMCacheSize>;
 
-  Server server;
-
   uint64_t N;
+  Server server;
 
   static uint64_t GetMemoryUsage() { return DMCacheSize * sizeof(Page); }
 

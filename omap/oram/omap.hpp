@@ -52,8 +52,8 @@ struct OHashMapIndexer {
     HashIndices hashIndices;
     secure_hash_with_salt(key, salts, (uint8_t*)&hashIndices,
                           sizeof(hashIndices));
-    pos0 = hashIndices.h0 % _size;
-    pos1 = hashIndices.h1 % _size;
+    pos0 = (PositionType)hashIndices.h0 % _size;
+    pos1 = (PositionType)hashIndices.h1 % _size;
   }
 
   /**
@@ -328,7 +328,7 @@ struct OHashMap {
     if constexpr (isOblivious) {
       bool found = false;
       for (const auto& entry : stash) {
-        bool match = entry.valid & entry.key == key;
+        bool match = entry.valid & (entry.key == key);
         obliMove(match, value, entry.value);
         found |= match;
       }
@@ -359,7 +359,8 @@ struct OHashMap {
     bool updated = !entryToInsert.valid;
     for (auto it = begin; it != end; ++it) {
       auto& entry = *it;
-      bool matchFlag = entry.valid & entry.key == entryToInsert.key & !updated;
+      bool matchFlag =
+          entry.valid & (entry.key == entryToInsert.key) & !updated;
       obliMove(matchFlag, entry, entryToInsert);
       updated |= matchFlag;
     }
@@ -451,7 +452,7 @@ struct OHashMap {
       bool found = false;
       for (int i = 0; i < bucketSize; ++i) {
         const auto& entry = bucket.entries[i];
-        bool match = entry.valid & entry.key == key;
+        bool match = entry.valid & (entry.key == key);
         obliMove(match, value, entry.value);
         found |= match;
       }
@@ -558,7 +559,8 @@ struct OHashMap {
   void SetSize(PositionType size, uint64_t cacheBytes) {
     _size = size;
     load = 0;
-    tableSize = size / (2 * loadFactor * bucketSize) + 1;
+    tableSize =
+        (PositionType)((double)size / (2 * loadFactor * bucketSize) + 1);
     indexer.SetSize(tableSize);
     if constexpr (isOblivious) {
       // equally divide the cache between the two tables

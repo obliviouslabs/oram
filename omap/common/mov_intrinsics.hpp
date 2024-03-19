@@ -214,7 +214,7 @@ INLINE void CMOV_internal(const bool cond, void* dest, const void* src) {
     // on skylake, it's faster to run 256bit instructions two times
 #else
     CMOV_internal<32>(cond, dest, src);
-    CMOV_internal<32>(cond, (char*)dest + 32, (char*)src + 32);
+    CMOV_internal<32>(cond, (char*)dest + 32, (const char*)src + 32);
 #endif
     return;
   }
@@ -222,7 +222,7 @@ INLINE void CMOV_internal(const bool cond, void* dest, const void* src) {
 #if defined(__AVX2__)
     const __m256i mask =
         _mm256_set1_epi64x(-(!!cond));  // Create a mask based on cond
-    __m256i srcVec = _mm256_loadu_si256((__m256i*)src);
+    __m256i srcVec = _mm256_loadu_si256((const __m256i*)src);
     __m256i destVec =
         _mm256_blendv_epi8(_mm256_loadu_si256((__m256i*)dest), srcVec, mask);
     _mm256_storeu_si256((__m256i*)dest, destVec);
@@ -252,25 +252,25 @@ INLINE void CMOV_internal(const bool cond, void* dest, const void* src) {
   if constexpr (sz % 16 >= 8) {
     constexpr uint64_t offset = 2 * (sz / 16);
     uint64_t* curr1_64 = (uint64_t*)dest + offset;
-    uint64_t* curr2_64 = (uint64_t*)src + offset;
+    const uint64_t* curr2_64 = (const uint64_t*)src + offset;
     CMOV(cond, *curr1_64, *curr2_64);
   }
   if constexpr (sz % 8 >= 4) {
     constexpr uint64_t offset = 2 * (sz / 8);
     uint32_t* curr1_32 = (uint32_t*)dest + offset;
-    uint32_t* curr2_32 = (uint32_t*)src + offset;
+    const uint32_t* curr2_32 = (const uint32_t*)src + offset;
     CMOV(cond, *curr1_32, *curr2_32);
   }
   if constexpr (sz % 4 >= 2) {
     constexpr uint64_t offset = 2 * (sz / 4);
     uint16_t* curr1_16 = (uint16_t*)dest + offset;
-    uint16_t* curr2_16 = (uint16_t*)src + offset;
+    const uint16_t* curr2_16 = (const uint16_t*)src + offset;
     CMOV(cond, *curr1_16, *curr2_16);
   }
   if constexpr (sz % 2 >= 1) {
     constexpr uint64_t offset = 2 * (sz / 2);
     uint8_t* curr1_8 = (uint8_t*)dest + offset;
-    uint8_t* curr2_8 = (uint8_t*)src + offset;
+    const uint8_t* curr2_8 = (const uint8_t*)src + offset;
     CMOV(cond, *curr1_8, *curr2_8);
   }
 }
@@ -295,7 +295,7 @@ INLINE void obliSwap(const bool mov, T& guy1, T& guy2) {
 template <typename T>
 INLINE bool obliMove(const bool mov, T& dest, const T& src) {
   __m512i* curr1 = (__m512i*)&dest;
-  const __m512i* curr2 = (__m512i*)&src;
+  const __m512i* curr2 = (const __m512i*)&src;
   for (uint64_t i = 0; i < sizeof(T) / 64; ++i) {
     CMOV_internal<64>(mov, curr1, curr2);
     curr1++;

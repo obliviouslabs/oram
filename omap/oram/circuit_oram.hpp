@@ -230,7 +230,7 @@ struct ORAM {
    */
   void writeBackPath(const std::vector<Block_>& path, PositionType pos) {
     memcpy(stash->blocks, &path[0], stashSize * sizeof(Block_));
-    tree.WritePath(pos, (Bucket_*)(&path[stashSize]));
+    tree.WritePath(pos, (const Bucket_*)(&path[stashSize]));
   }
 
   /**
@@ -277,8 +277,8 @@ struct ORAM {
    */
   void deDuplicatePoses(uint64_t batchSize, PositionType* pos,
                         const UidType* uid) {
-    for (int i = 1; i < batchSize; ++i) {
-      PositionType randPos = UniformRandom(size() - 1);
+    for (uint64_t i = 1; i < batchSize; ++i) {
+      PositionType randPos = (PositionType)UniformRandom(size() - 1);
       obliMove(uid[i] == uid[i - 1], pos[i], randPos);
     }
   }
@@ -292,7 +292,7 @@ struct ORAM {
    * @param uid The uids of the blocks. Requires uid to be sorted.
    */
   void duplicateVal(uint64_t batchSize, T* out, const UidType* uid) {
-    for (int i = 1; i < batchSize; ++i) {
+    for (uint64_t i = 1; i < batchSize; ++i) {
       obliMove(uid[i] == uid[i - 1], out[i], out[i - 1]);
     }
   }
@@ -344,7 +344,7 @@ struct ORAM {
       dummyBucket.blocks[i].uid = DUMMY<UidType>();
     }
     tree.InitWithDefault(size, dummyBucket, cacheLevel);
-    depth = GetLogBaseTwo(size - 1) + 2;
+    depth = (int)GetLogBaseTwo(size - 1) + 2;
     if (depth > 64) {
       throw std::runtime_error("Circuit ORAM too large");
     }
@@ -506,7 +506,7 @@ struct ORAM {
   template <class Func>
   PositionType Update(PositionType pos, const UidType& uid, PositionType newPos,
                       const Func& updateFunc) {
-    T out;
+    T out = T();
     return Update(pos, uid, newPos, updateFunc, out);
   }
 
@@ -617,7 +617,7 @@ struct ORAM {
     memcpy(&path[0], stash->blocks, stashSize * sizeof(Block_));
 
     // read and remove
-    for (int i = 0; i < batchSize; ++i) {
+    for (uint64_t i = 0; i < batchSize; ++i) {
       int actualLevel = tree.ReadPath(pos[i], (Bucket_*)&(path[stashSize]));
       ReadElementAndRemoveFromPath(path.begin(),
                                    path.begin() + stashSize + Z * actualLevel,

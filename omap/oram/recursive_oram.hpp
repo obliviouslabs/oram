@@ -99,7 +99,7 @@ struct RecursiveORAM {
    */
   template <typename Reader>
   PositionType initFromReaderHelper(Reader& reader, int level = 0) {
-    if (level == oramSizes.size() - 1) {
+    if (level == (int)oramSizes.size() - 1) {
       LeafNode leafNode;
       for (short i = 0; i < chunk_size; ++i) {
         if (!reader.eof()) {
@@ -154,10 +154,11 @@ struct RecursiveORAM {
    */
   void SetSize(PositionType size, size_t cacheBytes = DEFAULT_HEAP_SIZE) {
     _size = size;
-    PositionType leafOramSize = divRoundUp(size, chunk_size);
+    PositionType leafOramSize = (PositionType)divRoundUp(size, chunk_size);
     int numLevel = 0;
-    PositionType internalSize = divRoundUp(leafOramSize, fan_out);
-    for (PositionType size = internalSize;; size = divRoundUp(size, fan_out)) {
+    PositionType internalSize = (PositionType)divRoundUp(leafOramSize, fan_out);
+    for (PositionType size = internalSize;;
+         size = (PositionType)divRoundUp(size, fan_out)) {
       oramSizes.push_back(size);
       ++numLevel;
       if (size <= 1) {
@@ -221,8 +222,7 @@ struct RecursiveORAM {
       throw std::runtime_error("Reader size does not match oram size");
     }
 
-    PositionType rootPos = initFromReaderHelper(reader);
-    Assert(rootPos == 0);
+    initFromReaderHelper(reader);
   }
 
   /**
@@ -253,7 +253,7 @@ struct RecursiveORAM {
     // first calculate the uid at each ORAM level, and the index within the node
     UidType uid = address / chunk_size;
     short index = address % chunk_size;
-    for (int level = oramSizes.size() - 1; level >= 0; --level) {
+    for (int level = (int)oramSizes.size() - 1; level >= 0; --level) {
       uids[level] = uid;
       indices[level] = index;
       index = uid % fan_out;
@@ -261,13 +261,14 @@ struct RecursiveORAM {
     }
     PositionType pos = 0;
     PositionType newPos = 0;
-    for (int level = 0; level < oramSizes.size() - 1; ++level) {
-      PositionType nextPos;
+    for (int level = 0; level < (int)oramSizes.size() - 1; ++level) {
+      PositionType nextPos = 0;
       // here we pre-calculate the next position, so that we can update the
       // position map in one go
-      PositionType nextNewPos = UniformRandom(oramSizes[level + 1] - 1);
+      PositionType nextNewPos =
+          (PositionType)UniformRandom(oramSizes[level + 1] - 1);
       auto updateFunc = [&](InternalNode& node) -> bool {
-        PositionType localNextPos;
+        PositionType localNextPos = 0;
         for (short i = 0; i < fan_out; ++i) {
           bool match = i == indices[level];
           obliMove(match, localNextPos, node.children[i]);
@@ -397,7 +398,7 @@ struct RecursiveORAM {
     // the overall implementation is similar to single access
     _lock.lock();
     Assert(hasInited);
-    int numLevel = oramSizes.size();
+    int numLevel = (int)oramSizes.size();
     size_t batchSize = address.size();
     writeBackBuffer.Init(numLevel, batchSize);
     std::vector<short> indices(numLevel * batchSize);
@@ -437,7 +438,7 @@ struct RecursiveORAM {
           obliMove(match, nextPos[i], node[i].children[j]);
         }
         // then duplicate what we already updated
-        if (i != address.size() - 1) {
+        if (i != (int64_t)address.size() - 1) {
           bool copyFlag = uids[i] == uids[i + 1];
           obliMove(copyFlag, node[i], node[i + 1]);
         }

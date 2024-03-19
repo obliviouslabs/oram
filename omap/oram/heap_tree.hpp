@@ -25,7 +25,7 @@ struct HeapTree {
  private:
   static const int evict_freq_ = evict_freq;
   static constexpr size_t max_node_per_page = divRoundUp(page_size, sizeof(T));
-  static constexpr size_t node_per_page_log2 =
+  static constexpr int node_per_page_log2 =
       GetLogBaseTwoConstexpr(max_node_per_page) + 1;
 
   /** By reducing the size of each packed subtree and store the packed tree in
@@ -83,12 +83,13 @@ struct HeapTree {
     }
     cacheLevel = _cacheLevel;
     leafCount = _size;
-    totalLevel = GetLogBaseTwo(_size - 1) + 2;
+    totalLevel = (int)GetLogBaseTwo(_size - 1) + 2;
     if (totalLevel > 64) {
       throw std::runtime_error("ORAM size too large.");
     }
     totalSize = 2 * _size - 1;
-    cacheSize = std::min((uint64_t)totalSize, (2UL << _cacheLevel) - 1);
+    cacheSize =
+        (PositionType)std::min((uint64_t)totalSize, (2UL << _cacheLevel) - 1);
     arr.SetSize(totalSize, cacheSize, defaultVal);
     extSize = totalSize - cacheSize;
   }
@@ -132,28 +133,29 @@ struct HeapTree {
   static int GetPathIdx(Iterator outputBegin, Iterator outputEnd,
                         PositionType idx, PositionType leafCount,
                         int cacheLevel) {
-    int totalLevel = GetLogBaseTwo(leafCount - 1) + 2;
+    int totalLevel = (int)GetLogBaseTwo(leafCount - 1) + 2;
     // when all the levels are cached
     if ((packLevel == 1 && cacheLevel < totalLevel) ||
         cacheLevel == totalLevel - 1) {
       return GetPathIdx(outputBegin, outputEnd, idx, leafCount, totalLevel);
     }
     // the number of nodes in the path
-    int pathLen = (idx | (1UL << totalLevel - 2)) < leafCount ? totalLevel
-                                                              : totalLevel - 1;
+    int pathLen = (idx | (PositionType)(1UL << (totalLevel - 2))) < leafCount
+                      ? totalLevel
+                      : totalLevel - 1;
     auto it = outputBegin;
     int i;
     // set top levels
     for (i = 0; i < std::min(pathLen, cacheLevel); ++i, ++it) {
-      PositionType prevNodes = (1UL << i) - 1;
+      PositionType prevNodes = (PositionType)((1UL << i) - 1);
       PositionType subTreeIdx = idx & prevNodes;
       if ((1UL << i) <= leafCount) {
         *it = prevNodes + subTreeIdx;
       } else {
-        PositionType mask = 1UL << (totalLevel - 2);
+        PositionType mask = (PositionType)(1UL << (totalLevel - 2));
         // number of deleted nodes on the last level left to path
-        PositionType deletedNode =
-            std::max((int64_t)(std::min(idx, mask) + mask - leafCount), 0L);
+        PositionType deletedNode = (PositionType)std::max(
+            (int64_t)(std::min(idx, mask) + mask - leafCount), 0L);
         *it = prevNodes + subTreeIdx - deletedNode;
       }
     }
@@ -164,18 +166,18 @@ struct HeapTree {
 
     // set fully packed levels in the middle
     for (; i < totalLevel - packLevel - 1; i += packLevel) {
-      PositionType prevNodes = (1UL << i) - 1;
+      PositionType prevNodes = (PositionType)((1UL << i) - 1);
       // begin offset of the pack
       PositionType beginOffset = prevNodes + (idx & prevNodes) * packed_size;
       // within each pack, nodes follow a standard heap layout
       for (int j = 0; j < packLevel; ++j, ++it) {
-        PositionType innerPrevNodes = (1UL << j) - 1;
+        PositionType innerPrevNodes = (PositionType)((1UL << j) - 1);
         *it = beginOffset + innerPrevNodes + ((idx >> i) & innerPrevNodes);
       }
     }
 
     // set levels with remaining nodes, which forms a packed tree
-    PositionType prevNodes = (1UL << i) - 1;
+    PositionType prevNodes = (PositionType)((1UL << i) - 1);
     int remainLevel = totalLevel - i;
     PositionType subTreeIdx = idx & prevNodes;
 
