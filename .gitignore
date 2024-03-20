@@ -69,3 +69,4 @@ db_usdt/
 db_rcc/
 mock_db/
 tx.log
+temp/

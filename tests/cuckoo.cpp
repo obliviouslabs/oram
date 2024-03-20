@@ -150,12 +150,8 @@ void testOHashMapFindBatch() {
         keys[i] = rand() % keySpace;
       }
       if (std_map.size() < mapSize) {
-        // for (int i = 0; i < batchSize; ++i) {
-        //   vals[i] = rand();
-        // }
         for (int i = 0; i < batchSize && std_map.size() < mapSize; ++i) {
           map.Find(keys[i], vals[i].value);
-          // std_map[keys[i]] = vals[i];
         }
       }
       std::vector<uint8_t> findExistFlag;
@@ -177,6 +173,27 @@ void testOHashMapFindBatch() {
   }
 }
 
+template <bool isOblivious>
+void testReplaceCount() {
+  // test replace count distribution
+  int mapSize = 1000000;
+  OHashMap<int, int, false> map(mapSize, 1UL << 62);
+  map.InitDefault();
+  for (int i = 0; i < mapSize; ++i) {
+    map.Insert(rand(), 0);
+  }
+  for (int r = 0; r < mapSize; ++r) {
+    int key = rand();
+    if constexpr (isOblivious) {
+      map.InsertOblivious(key, 0);
+      map.EraseOblivious(key);
+    } else {
+      map.Insert(key, 0);
+      map.Erase(key);
+    }
+  }
+}
+
 TEST(Cuckoo, OHashMapNonOblivious) { testOHashMap<false>(); }
 
 TEST(Cuckoo, OHashMapOblivious) { testOHashMap<true>(); }
@@ -194,3 +211,7 @@ TEST(Cuckoo, OHashMapFindBatchOblivious) { testOHashMapFindBatch<true>(); }
 TEST(Cuckoo, OHashMapInitWithDummy) {
   testOHashMapInitFromNonObliviousWithDummy();
 }
+
+TEST(Cuckoo, ReplaceCountDistriNonOblivious) { testReplaceCount<false>(); }
+
+TEST(Cuckoo, ReplaceCountDistriOblivious) { testReplaceCount<true>(); }

@@ -108,6 +108,99 @@ struct OHashMapEntry {
 #endif
 };
 
+template <typename K, typename V, const uint64_t stash_size = 16>
+struct LRUStash {
+  using KVEntry = OHashMapEntry<K, V>;
+  std::vector<KVEntry> stash;
+  std::vector<uint64_t> timestamps;
+  uint64_t currTime;
+  // as long as one oblivious insert occur, we cannot reveal the state of the
+  // stash
+  bool oInserted = false;
+
+  LRUStash() : currTime(0) {}
+
+  LRUStash(size_t capacity) : currTime(0) { SetSize(capacity); }
+
+  void SetSize(size_t capacity) {
+    stash.resize(capacity);
+    timestamps.resize(capacity);
+  }
+
+  uint64_t GetTimestamp() const { return currTime; }
+
+  void OInsert(const KVEntry& entry) {
+    oInserted = true;
+    if (stash.size() < stash_size) {
+      stash.resize(stash_size);
+      timestamps.resize(stash_size);
+    }
+    bool inserted = false;
+    for (size_t i = 0; i < stash.size(); ++i) {
+      bool isEmpty = !stash[i].valid;
+      bool insertFlag = isEmpty & !inserted;
+      obliMove(insertFlag, stash[i], entry);
+      obliMove(insertFlag, timestamps[i], currTime);
+      inserted |= insertFlag;
+    }
+    bool overflowFlag = !inserted & entry.valid;
+    if (overflowFlag) {
+      stash.push_back(entry);
+      timestamps.push_back(currTime);
+    }
+    if (currTime == UINT64_MAX) {
+      std::fill(timestamps.begin(), timestamps.end(), 0);
+    }
+    ++currTime;
+
+    // size_t stashLoad = 0;
+    // for (size_t i = 0; i < stash.size(); ++i) {
+    //   stashLoad += stash[i].valid;
+    // }
+    // if (stashLoad > 0) {
+    //   printf("%lu\n", stashLoad);
+    // }
+  }
+
+  void Insert(const KVEntry& entry) {
+    if (oInserted) {
+      OInsert(entry);
+      return;
+    }
+  }
+
+  void OPopOldest(KVEntry& entry) {
+    uint64_t oldestTime = currTime;
+    size_t oldestIdx = stash.size();
+    for (size_t i = 0; i < stash.size(); ++i) {
+      bool isOldest = (timestamps[i] <= oldestTime) & stash[i].valid;
+      obliMove(isOldest, oldestTime, timestamps[i]);
+      obliMove(isOldest, entry, stash[i]);
+      obliMove(isOldest, oldestIdx, i);
+    }
+    for (size_t i = 0; i < stash.size(); ++i) {
+      stash[i].valid &= (i != oldestIdx);
+    }
+    entry.valid &= (oldestIdx != stash.size());
+  }
+  using Iter = typename std::vector<KVEntry>::iterator;
+  Iter begin() { return stash.begin(); }
+  Iter end() { return stash.end(); }
+
+  size_t size() const { return stash.size(); }
+  void Erase(Iter it) {
+    if (oInserted) {
+      throw std::runtime_error("Cannot erase after oblivious insertion.");
+    }
+    uint64_t idx = std::distance(stash.begin(), it);
+    stash.erase(it);
+    timestamps.erase(timestamps.begin() + idx);
+  }
+  // bracket operator
+  KVEntry& operator[](size_t idx) { return stash[idx]; }
+  const KVEntry& operator[](size_t idx) const { return stash[idx]; }
+};
+
 /**
  * @brief A bucket can contain multiple entries that are fully associative. This
  * can significantly increase the load factor of the hash map.
@@ -176,7 +269,8 @@ struct OHashMap {
   TableType table0, table1;
   OHashMapIndexer<K, PositionType> indexer;
   using KVEntry = OHashMapEntry<K, V>;
-  std::vector<KVEntry> stash;
+  using StashType = LRUStash<K, V>;
+  StashType stash;
 
   /**
    * @brief Helper function that accesses the hash table.
@@ -271,8 +365,7 @@ struct OHashMap {
    *
    */
   template <const bool hideDummy = false>
-  static bool replaceIfExist(std::vector<KVEntry>& stash,
-                             const KVEntry& entryToInsert) {
+  static bool replaceIfExist(StashType& stash, const KVEntry& entryToInsert) {
     return replaceIfExist<hideDummy>(stash.begin(), stash.end(), entryToInsert);
   }
 
@@ -303,10 +396,9 @@ struct OHashMap {
    * @param entryToInsert the entry to insert
    * @return true if the entry is inserted, false otherwise
    */
-  static bool insertToStash(const KVEntry& entryToInsert,
-                            std::vector<KVEntry>& stash) {
+  static bool insertToStash(const KVEntry& entryToInsert, StashType& stash) {
     if (stash.size() < stash_max_size) {
-      stash.push_back(entryToInsert);
+      stash.Insert(entryToInsert);
       return true;
     }
     return false;
@@ -322,18 +414,19 @@ struct OHashMap {
    * @param stash the stash to search
    * @return true if the key is found, false otherwise
    */
-  static bool searchStash(const K& key, V& value,
-                          const std::vector<KVEntry>& stash) {
+  static bool searchStash(const K& key, V& value, const StashType& stash) {
     if constexpr (isOblivious) {
       bool found = false;
-      for (const auto& entry : stash) {
+      for (size_t i = 0; i < stash.size(); ++i) {
+        const auto& entry = stash[i];
         bool match = entry.valid & (entry.key == key);
         obliMove(match, value, entry.value);
         found |= match;
       }
       return found;
     } else {
-      for (const auto& entry : stash) {
+      for (size_t i = 0; i < stash.size(); ++i) {
+        const auto& entry = stash[i];
         if (entry.valid && entry.key == key) {
           value = entry.value;
           return true;
@@ -384,11 +477,11 @@ struct OHashMap {
    * @brief A helper function that replaces an entry in the stash if it exists.
    * The function is oblivious.
    *
-   * @param bucket the bucket to perform replace
+   * @param stash the stash to perform replace
    * @param entryToInsert the entry to insert
    * @return true if the entry is replaced, false otherwise
    */
-  static bool replaceIfExistOblivious(std::vector<KVEntry>& stash,
+  static bool replaceIfExistOblivious(StashType& stash,
                                       const KVEntry& entryToInsert) {
     return replaceIfExistOblivious(stash.begin(), stash.end(), entryToInsert);
   }
@@ -412,28 +505,6 @@ struct OHashMap {
       updated |= insertFlag;
     }
     return updated;
-  }
-
-  /**
-   * @brief A helper function that inserts an entry to the stash if a slot is
-   * empty. The function is oblivious.
-   *
-   * @param entryToInsert the entry to insert
-   * @param stash the stash to perform insert
-   * @return true if the entry is inserted, false otherwise
-   */
-  static bool insertToStashOblivious(const KVEntry& entryToInsert,
-                                     std::vector<KVEntry>& stash) {
-    if (stash.size() < stash_max_size) {
-      stash.resize(stash_max_size);
-    }
-    bool inserted = !entryToInsert.valid;
-    for (KVEntry& entry : stash) {
-      bool emptyFlag = !entry.valid;
-      obliMove(emptyFlag & !inserted, entry, entryToInsert);
-      inserted |= emptyFlag;
-    }
-    return inserted;
   }
 
   /**
@@ -515,6 +586,57 @@ struct OHashMap {
     }
   }
 
+  void insertEntryObliviousRetry(KVEntry& entryToInsert, int maxRetry = 15) {
+    auto swapUpdateFunc = [&](BucketType& bucket) {
+      int offset = (int)(UniformRandom32() % bucketSize);
+      bool insertSucceed = insertIfEmptyOblivious(bucket, entryToInsert);
+      entryToInsert.valid &= !insertSucceed;
+      obliSwap(entryToInsert.valid, entryToInsert, bucket.entries[offset]);
+    };
+    for (int r = 0; r < maxRetry; ++r) {
+      PositionType idx1 = indexer.getHashIdx1(entryToInsert.key);
+      updateHelper(idx1, table1, swapUpdateFunc);  // modifies entryToInsert
+
+      PositionType idx0 = indexer.getHashIdx0(entryToInsert.key);
+      updateHelper(idx0, table0, swapUpdateFunc);
+    }
+  }
+
+  bool insertEntryOblivious(KVEntry& entryToInsert, int maxRetry = 15) {
+    PositionType idx0, idx1;
+    indexer.getHashIndices(entryToInsert.key, idx0, idx1);
+    obliMove(!entryToInsert.valid, idx0,
+             (PositionType)UniformRandom(tableSize - 1));
+    obliMove(!entryToInsert.valid, idx1,
+             (PositionType)UniformRandom(tableSize - 1));
+    bool exist = false;
+    auto table0UpdateFunc = [&](BucketType& bucket0) {
+      bool replaceSucceed = replaceIfExistOblivious(bucket0, entryToInsert);
+      exist |= replaceSucceed;
+      entryToInsert.valid &= !replaceSucceed;
+      auto table1UpdateFunc = [&](BucketType& bucket1) {
+        bool replaceSucceed = replaceIfExistOblivious(bucket1, entryToInsert);
+        exist |= replaceSucceed;
+        entryToInsert.valid &= !replaceSucceed;
+        replaceSucceed = replaceIfExistOblivious(stash, entryToInsert);
+        exist |= replaceSucceed;
+        entryToInsert.valid &= !replaceSucceed;
+        bool insertSucceed = insertIfEmptyOblivious(bucket0, entryToInsert);
+        entryToInsert.valid &= !insertSucceed;
+        insertSucceed = insertIfEmptyOblivious(bucket1, entryToInsert);
+        entryToInsert.valid &= !insertSucceed;
+        int offset = (int)(UniformRandom32() % bucketSize);
+        obliSwap(entryToInsert.valid, bucket0.entries[offset], entryToInsert);
+      };
+      updateHelper(idx1, table1, table1UpdateFunc);
+    };
+    updateHelper(idx0, table0, table0UpdateFunc);
+
+    load += !exist;
+    insertEntryObliviousRetry(entryToInsert, maxRetry);
+    return exist;
+  }
+
  public:
   // result data structure for a query in a batch
   struct ValResult {
@@ -565,6 +687,7 @@ struct OHashMap {
       // equally divide the cache between the two tables
       table0.SetSize(tableSize, cacheBytes / 2);
       table1.SetSize(tableSize, cacheBytes / 2);
+      stash.SetSize(16);
     } else {
       // first give table0 all the cache, and give table1 the rest
       // because table0 is more likely to be accessed
@@ -603,7 +726,7 @@ struct OHashMap {
 
   const TableType& GetTable1() const { return table1; }
 
-  const std::vector<KVEntry>& GetStash() const { return stash; }
+  const StashType& GetStash() const { return stash; }
 
   using NonObliviousOHashMap = OHashMap<K, V, false, PositionType>;
 
@@ -650,7 +773,7 @@ struct OHashMap {
       table0.InitFromReader(reader0);
       table1.InitFromReader(reader1);
     }
-    for (const auto& entry : other.GetStash()) {
+    for (const auto& entry : other.GetStash().stash) {
       if (entry.valid) {
         // valid is public but dummy is not
         // since we deleted all dummies, it's likely that we don't need to put
@@ -808,9 +931,7 @@ struct OHashMap {
       }
     }
     printf("Warning OHashMap uses stash\n");
-    if (!insertToStash(entryToInsert, stash)) {
-      throw std::runtime_error("OHashMap insert failed");
-    }
+    stash.Insert(entryToInsert);
     return false;
   }
 
@@ -824,51 +945,18 @@ struct OHashMap {
    * @return true if the key already exists, false otherwise
    */
   bool InsertOblivious(const K& key, const V& value, bool isDummy = false) {
-    PositionType idx0, idx1;
-    indexer.getHashIndices(key, idx0, idx1);
-    obliMove(isDummy, idx0, (PositionType)UniformRandom(tableSize - 1));
-    obliMove(isDummy, idx1, (PositionType)UniformRandom(tableSize - 1));
-    bool exist = false;
     KVEntry entryToInsert = {!isDummy, false, key, value};
-    auto table0UpdateFunc = [&](BucketType& bucket0) {
-      bool replaceSucceed = replaceIfExistOblivious(bucket0, entryToInsert);
-      exist |= replaceSucceed;
-      entryToInsert.valid &= !replaceSucceed;
-      auto table1UpdateFunc = [&](BucketType& bucket1) {
-        bool replaceSucceed = replaceIfExistOblivious(bucket1, entryToInsert);
-        exist |= replaceSucceed;
-        entryToInsert.valid &= !replaceSucceed;
-        replaceSucceed = replaceIfExistOblivious(stash, entryToInsert);
-        exist |= replaceSucceed;
-        entryToInsert.valid &= !replaceSucceed;
-        bool insertSucceed = insertIfEmptyOblivious(bucket0, entryToInsert);
-        entryToInsert.valid &= !insertSucceed;
-        insertSucceed = insertIfEmptyOblivious(bucket1, entryToInsert);
-        entryToInsert.valid &= !insertSucceed;
-        obliSwap(entryToInsert.valid, bucket0.entries[0], entryToInsert);
-      };
-      updateHelper(idx1, table1, table1UpdateFunc);
-    };
-    updateHelper(idx0, table0, table0UpdateFunc);
-
-    load += !exist;
-    int offset;
-    auto swapUpdateFunc = [&](BucketType& bucket) {
-      bool insertSucceed = insertIfEmptyOblivious(bucket, entryToInsert);
-      entryToInsert.valid &= !insertSucceed;
-      obliSwap(entryToInsert.valid, entryToInsert, bucket.entries[offset]);
-    };
-    for (int r = 0; r < 10; ++r) {
-      offset = (r + 1) % bucketSize;  // double check if it works
-      PositionType idx1 = indexer.getHashIdx1(entryToInsert.key);
-      updateHelper(idx1, table1, swapUpdateFunc);  // modifies entryToInsert
-
-      PositionType idx0 = indexer.getHashIdx0(entryToInsert.key);
-      updateHelper(idx0, table0, swapUpdateFunc);
+    bool exist = insertEntryOblivious(entryToInsert, 1);
+    stash.OInsert(entryToInsert);
+    if (stash.GetTimestamp() % 2 == 0) {
+      stash.OPopOldest(entryToInsert);
+      insertEntryObliviousRetry(entryToInsert, 1);
+      stash.OInsert(entryToInsert);
     }
-    if (!insertToStashOblivious(entryToInsert, stash)) {
-      throw std::runtime_error("OHashMap insert failed");
-    }
+
+    // if (!insertToStashOblivious(entryToInsert, stash)) {
+    //   throw std::runtime_error("OHashMap insert failed");
+    // }
     return exist;
   }
 
@@ -1010,7 +1098,7 @@ struct OHashMap {
     for (auto it = stash.begin(); it != stash.end(); ++it) {
       if (it->key == key && it->valid) {
         --load;
-        stash.erase(it);
+        stash.Erase(it);
         return true;
       }
     }
