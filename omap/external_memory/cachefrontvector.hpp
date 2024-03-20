@@ -12,7 +12,7 @@ template <typename T,
           bool ENCRYPTED = true, bool AUTH = true,
           const uint64_t ext_cache_bytes = (1UL << 16)>
 struct Vector {
-  static constexpr uint64_t item_per_page = page_size / sizeof(T);
+ private:
   using ExtVec =
       EM::ExtVector::Vector<T, page_size, ENCRYPTED, AUTH,
                             std::max(1UL, ext_cache_bytes / page_size)>;
@@ -23,7 +23,15 @@ struct Vector {
   IntVec intVec;
   ExtVec* extVec = NULL;
   size_t cacheSize = 0;
+  static uint64_t transformCacheBytesToCacheSize(uint64_t N,
+                                                 uint64_t cacheBytes) {
+    if (cacheBytes < ExtVec::GetMemoryUsage()) {
+      throw std::runtime_error("Cache size too small");
+    }
+    return std::min(N, (cacheBytes - ExtVec::GetMemoryUsage()) / sizeof(T));
+  }
 
+ public:
   Vector() : intVec(0), cacheSize(0) {}
 
   Vector(uint64_t N) : intVec(N), cacheSize(N) {}
@@ -57,14 +65,6 @@ struct Vector {
     if (this->cacheSize < N) {
       extVec = new ExtVec(N - this->cacheSize);
     }
-  }
-
-  static uint64_t transformCacheBytesToCacheSize(uint64_t N,
-                                                 uint64_t cacheBytes) {
-    if (cacheBytes < ExtVec::GetMemoryUsage()) {
-      throw std::runtime_error("Cache size too small");
-    }
-    return std::min(N, (cacheBytes - ExtVec::GetMemoryUsage()) / sizeof(T));
   }
 
   void SetSizeByCacheBytes(uint64_t N, uint64_t cacheBytes) {
@@ -118,7 +118,6 @@ struct Vector {
     using iterator_category = std::random_access_iterator_tag;
     using value_type = T;
     using vector_type = Vector;
-    constexpr static bool random_access = true;
 
     // Iterator constructors here...
     explicit Iterator(uint64_t ptr, Vector& vec) : m_ptr(ptr), vec_ptr(&vec) {}
@@ -282,16 +281,6 @@ struct Vector {
     INLINE bool eof() { return end <= it; }
 
     size_t size() { return end - it; }
-  };
-
-  struct PrefetchReader : public Reader {
-    using value_type = T;
-    using iterator_type = Iterator;
-    PrefetchReader() {}
-
-    PrefetchReader(Iterator _begin, Iterator _end, uint32_t _auth = 0,
-                   uint64_t _heapSize = DEFAULT_HEAP_SIZE)
-        : Reader(_begin, _end, _auth) {}
   };
 
   struct Writer {

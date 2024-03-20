@@ -36,7 +36,7 @@ struct Vector {
   // https://www.internalpointers.com/post/writing-custom-iterators-modern-cpp
   struct Iterator {
     // Iterator tags here...
-    using iterator_category = std::forward_iterator_tag;
+    using iterator_category = std::random_access_iterator_tag;
     using difference_type = std::ptrdiff_t;
     using value_type = T;
     using pointer = uint64_t;
@@ -45,7 +45,6 @@ struct Vector {
     using reference = T&;
     using const_reference = const T&;
     using vector_type = Vector;
-    constexpr static bool random_access = true;
 
     // Iterator constructors here...
     explicit Iterator(pointer ptr, Vector& vec) : m_ptr(ptr), vec_ptr(&vec) {}
@@ -96,10 +95,6 @@ struct Vector {
       ++(*this);
       return tmp;
     }
-
-    page_idx_type get_page_idx() const { return m_ptr / item_per_page; }
-
-    page_offset_type get_page_offset() const { return m_ptr % item_per_page; }
 
     friend bool operator==(const Iterator& a, const Iterator& b) {
       return a.m_ptr == b.m_ptr;

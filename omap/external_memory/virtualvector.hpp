@@ -4,6 +4,7 @@
 namespace EM::VirtualVector {
 template <typename VT>
 struct Vector {
+ private:
   using value_type = VT;
   using reference = VT&;
   using const_reference = const VT&;
@@ -11,9 +12,10 @@ struct Vector {
   using const_pointer = const VT*;
   size_t _size;
   std::function<VT&(size_t)> virtualize;
+
+ public:
   Vector(size_t size, std::function<VT&(size_t)> virtualize)
       : _size(size), virtualize(virtualize) {}
-
   struct Iterator {
     using iterator_category = std::random_access_iterator_tag;
     using value_type = VT;
@@ -22,7 +24,6 @@ struct Vector {
     using pointer = uint64_t;
     using reference = VT&;
     using const_reference = const VT&;
-    constexpr static bool random_access = false;
     Iterator() : m_ptr(0) {}
 
     // Constructor to initialize the base iterator and custom attribute
@@ -119,8 +120,6 @@ struct Vector {
 
     size_t size() { return end - it; }
   };
-
-  typedef Reader PrefetchReader;
 
   struct Writer {
     using value_type = VT;

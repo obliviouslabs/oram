@@ -8,11 +8,9 @@
  * */
 template <typename T>
 struct StdVector : public std::vector<T> {
-  constexpr static size_t item_per_page = 1;
-
   struct Iterator : public std::vector<T>::iterator {
     using vector_type = StdVector<T>;
-    constexpr static bool random_access = true;
+    using iterator_category = std::random_access_iterator_tag;
 
     Iterator() : std::vector<T>::iterator() {}
 
@@ -51,8 +49,6 @@ struct StdVector : public std::vector<T> {
     friend Iterator operator-(const Iterator& it, uint32_t size) {
       return Iterator(typename std::vector<T>::iterator(it) - size);
     }
-
-    size_t get_page_offset() { return 0; }
   };
   StdVector() : std::vector<T>() {}
   StdVector(uint64_t N) : std::vector<T>(N) {}
@@ -101,16 +97,6 @@ struct StdVector : public std::vector<T> {
     INLINE bool eof() { return end <= it; }
 
     size_t size() { return end - it; }
-  };
-
-  struct PrefetchReader : public Reader {
-    using value_type = T;
-    using iterator_type = Iterator;
-    PrefetchReader() {}
-
-    PrefetchReader(Iterator _begin, Iterator _end, uint32_t _auth = 0,
-                   uint64_t _heapSize = DEFAULT_HEAP_SIZE)
-        : Reader(_begin, _end, _auth) {}
   };
 
   struct Writer {
