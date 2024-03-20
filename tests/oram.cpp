@@ -12,9 +12,13 @@ using namespace ODSL::CircuitORAM;
 TEST(ORAM, Init) { ORAM<int> oram(1024); }
 
 TEST(ORAM, CommonSuffixLen) {
-  uint64_t a = 3;
-  uint64_t b = 5;
-  ASSERT_EQ(ODSL::commonSuffixLength(a, b), 1);
+  size_t round = 100000UL;
+  for (size_t r = 0; r < round; ++r) {
+    int desiredLen = UniformRandom(63);
+    uint64_t a = UniformRandom();
+    uint64_t b = a ^ (((UniformRandom() << 1) | 1) << desiredLen);
+    ASSERT_EQ(ODSL::CommonSuffixLength(a, b), desiredLen);
+  }
 }
 
 TEST(ORAM, WithoutPositionMap1) {
@@ -34,7 +38,6 @@ TEST(ORAM, WithoutPositionMap1) {
       uint64_t pos = oram.Read(posMap[i], i, val);
       posMap[i] = pos;
       ASSERT_EQ(val, valMap[i]);
-      // printf("read %lu %lu\n", i, val);
     }
   }
   for (uint64_t i = 0; i < memSize; i++) {
@@ -49,7 +52,6 @@ TEST(ORAM, WithoutPositionMap1) {
     posMap[i] = pos;
     ++valMap[i];
     ASSERT_EQ(val, valMap[i]);
-    // printf("write %lu %lu\n", i, val);
   }
   for (int r = 0; r < 7; ++r) {
     for (uint64_t i = 0; i < memSize; i++) {
@@ -57,7 +59,6 @@ TEST(ORAM, WithoutPositionMap1) {
       uint64_t pos = oram.Read(posMap[i], i, val);
       posMap[i] = pos;
       ASSERT_EQ(val, valMap[i]);
-      // printf("read %lu %lu\n", i, val);
     }
   }
 }
@@ -79,7 +80,6 @@ TEST(ORAM, BatchUpdate) {
       uint64_t pos = oram.Read(posMap[i], i, val);
       posMap[i] = pos;
       ASSERT_EQ(val, valMap[i]);
-      // printf("read %lu %lu\n", i, val);
     }
   }
   printf("test batch update with duplicate\n");
@@ -107,7 +107,6 @@ TEST(ORAM, BatchUpdate) {
     posMap[i] = newPoses[0];
     posMap[peer] = newPoses[1];
     std::swap(valMap[i], valMap[peer]);
-    // printf("write %lu %lu\n", i, val);
   }
   for (int r = 0; r < 7; ++r) {
     for (uint64_t i = 0; i < memSize; i++) {
@@ -115,7 +114,6 @@ TEST(ORAM, BatchUpdate) {
       uint64_t pos = oram.Read(posMap[i], i, val);
       posMap[i] = pos;
       ASSERT_EQ(val, valMap[i]);
-      // printf("read %lu %lu\n", i, val);
     }
   }
 }
@@ -127,7 +125,9 @@ TEST(ORAM, BatchUpdateLarge) {
   size_t BackendSize = 1e9;
   EM::Backend::g_DefaultBackend =
       new EM::Backend::MemServerBackend(BackendSize);
-  int memSize = 2e3;
+  int memSize = 1e5;
+  uint64_t round = 5000;
+  uint64_t maxBatchSize = 1000;
   ODSL::CircuitORAM::ORAM<uint64_t> oram(memSize, 1UL << 62);
   std::vector<uint64_t> posMap(memSize);
   std::vector<uint64_t> valMap(memSize);
@@ -137,15 +137,16 @@ TEST(ORAM, BatchUpdateLarge) {
     posMap[i] = pos;
     valMap[i] = val;
   }
-  for (uint64_t i = 0; i < memSize; i++) {
-    for (int j = 0; j < 100; ++j) {
+  for (uint64_t r = 0; r < round; ++r) {
+    // add some random reads
+    for (int j = 0; j < 10; ++j) {
       uint64_t val;
       uint64_t uid = UniformRandom(memSize - 1);
       uint64_t pos = oram.Read(posMap[uid], uid, val);
       posMap[uid] = pos;
       ASSERT_EQ(val, valMap[uid]);
     }
-    uint64_t batchSize = 1000;
+    uint64_t batchSize = UniformRandom(1, maxBatchSize);
     std::vector<uint64_t> batchUid(batchSize);
     std::vector<uint64_t> batchPos(batchSize);
     for (uint64_t j = 0; j < batchSize; j++) {

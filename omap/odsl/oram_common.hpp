@@ -76,7 +76,7 @@ concept BatchUpdateFunction = requires(Func f, std::vector<T>& t) {
  * @return int The length of the common suffix
  */
 template <typename PositionType>
-int commonSuffixLength(PositionType a, PositionType b) {
+int CommonSuffixLength(PositionType a, PositionType b) {
   return std::countr_zero(a ^ b);
 }
 

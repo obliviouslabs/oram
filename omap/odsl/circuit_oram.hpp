@@ -90,7 +90,7 @@ struct ORAM {
       int bucketDeepestLevel = -1;
       for (int j = (i == 0 ? -actualStashSize : 0); j < Z; ++j) {
         int idx = actualStashSize + i * Z + j;
-        int deepestLevel = commonSuffixLength(path[idx].position, pos);
+        int deepestLevel = CommonSuffixLength(path[idx].position, pos);
         bool deeperFlag =
             !path[idx].IsDummy() & (deepestLevel > bucketDeepestLevel);
         obliMove(deeperFlag, bucketDeepestLevel, deepestLevel);
