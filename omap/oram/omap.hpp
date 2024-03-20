@@ -108,27 +108,52 @@ struct OHashMapEntry {
 #endif
 };
 
+/**
+ * @brief A stash storing elements that cannot be stored in the hash tables.
+ * Helps deamortize the cost of oblivious insertion.
+ *
+ * @tparam K the key type
+ * @tparam V the value type
+ * @tparam stash_size the default stash size for oblivious insertion
+ */
 template <typename K, typename V, const uint64_t stash_size = 16>
 struct LRUStash {
   using KVEntry = OHashMapEntry<K, V>;
-  std::vector<KVEntry> stash;
-  std::vector<uint64_t> timestamps;
-  uint64_t currTime;
+  std::vector<KVEntry> stash;        // the stash data
+  std::vector<uint64_t> timestamps;  // the timestamp each entry is inserted
+  uint64_t currTime;                 // the current timestamp
   // as long as one oblivious insert occur, we cannot reveal the state of the
   // stash
-  bool oInserted = false;
+  bool oInserted = false;  // whether an oblivious insert has occurred
 
   LRUStash() : currTime(0) {}
 
   LRUStash(size_t capacity) : currTime(0) { SetSize(capacity); }
 
+  /**
+   * @brief Set the stash size for oblivious insertion
+   *
+   * @param capacity the stash size
+   */
   void SetSize(size_t capacity) {
     stash.resize(capacity);
     timestamps.resize(capacity);
   }
 
+  /**
+   * @brief Get the current timestamp
+   *
+   * @return uint64_t the current timestamp
+   */
   uint64_t GetTimestamp() const { return currTime; }
 
+  /**
+   * @brief Obliviously insert an entry to the stash and record the timestamp.
+   * If entry.valid is false, the insertion is dummy. If the stash overflows,
+   * the method will enlarge the stash, which is not oblivious.
+   *
+   * @param entry the entry to insert
+   */
   void OInsert(const KVEntry& entry) {
     oInserted = true;
     if (stash.size() < stash_size) {
@@ -148,27 +173,35 @@ struct LRUStash {
       stash.push_back(entry);
       timestamps.push_back(currTime);
     }
+    // reset the timestamps if the current time overflows
     if (currTime == UINT64_MAX) {
       std::fill(timestamps.begin(), timestamps.end(), 0);
     }
     ++currTime;
-
-    // size_t stashLoad = 0;
-    // for (size_t i = 0; i < stash.size(); ++i) {
-    //   stashLoad += stash[i].valid;
-    // }
-    // if (stashLoad > 0) {
-    //   printf("%lu\n", stashLoad);
-    // }
   }
 
+  /**
+   * @brief Insert an entry to the stash and record the timestamp.
+   * If previously an oblivious insert has occurred, the method will insert
+   * obliviously. Otherwise, it will directly push the entry to the stash.
+   *
+   * @param entry the entry to insert
+   */
   void Insert(const KVEntry& entry) {
-    if (oInserted) {
+    if (oInserted || (stash.size() >= stash_size)) {
       OInsert(entry);
       return;
     }
+    stash.push_back(entry);
+    timestamps.push_back(currTime);
   }
 
+  /**
+   * @brief Read the oldest entry in the stash and remove it. If the stash is
+   * empty, entry.valid will be set to false.
+   *
+   * @param entry the oldest entry
+   */
   void OPopOldest(KVEntry& entry) {
     uint64_t oldestTime = currTime;
     size_t oldestIdx = stash.size();
@@ -183,11 +216,14 @@ struct LRUStash {
     }
     entry.valid &= (oldestIdx != stash.size());
   }
-  using Iter = typename std::vector<KVEntry>::iterator;
-  Iter begin() { return stash.begin(); }
-  Iter end() { return stash.end(); }
 
-  size_t size() const { return stash.size(); }
+  using Iter = typename std::vector<KVEntry>::iterator;
+
+  /**
+   * @brief Non-obliviously erase an entry from the stash
+   *
+   * @param it the iterator to the entry to erase
+   */
   void Erase(Iter it) {
     if (oInserted) {
       throw std::runtime_error("Cannot erase after oblivious insertion.");
@@ -196,8 +232,39 @@ struct LRUStash {
     stash.erase(it);
     timestamps.erase(timestamps.begin() + idx);
   }
-  // bracket operator
+
+  /**
+   * @brief Returns the beginning iterator of the internal stash data
+   *
+   */
+  Iter begin() { return stash.begin(); }
+
+  /**
+   * @brief Returns the end iterator of the internal stash data
+   *
+   */
+  Iter end() { return stash.end(); }
+
+  /**
+   * @brief Returns the size of the stash
+   *
+   */
+  size_t size() const { return stash.size(); }
+
+  /**
+   * @brief Bracket operator to access the stash
+   *
+   * @param idx the index to access
+   * @return KVEntry& the entry at the index
+   */
   KVEntry& operator[](size_t idx) { return stash[idx]; }
+
+  /**
+   * @brief Const bracket operator to access the stash
+   *
+   * @param idx the index to access
+   * @return const KVEntry& the entry at the index
+   */
   const KVEntry& operator[](size_t idx) const { return stash[idx]; }
 };
 
