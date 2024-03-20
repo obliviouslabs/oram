@@ -16,7 +16,7 @@ docker run -it --rm -v $PWD:/builder -u $(id -u) cppbuilder
 
 ## How to enter the docker environment to run algorithms in enclave
 ```bash
-docker run -v /tmp/sortbackend:/ssdmount --privileged -it --rm -v $PWD:/builder -p 8080:8080 cppbuilder
+docker run -v /tmp/omapbackend:/ssdmount --privileged -it --rm -v $PWD:/builder -p 8080:8080 cppbuilder
 ```
 
 ## How to run the unit tests
@@ -37,23 +37,23 @@ cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
 ninja -C build
 ```
 
-## Build the sorting example enclave (hardware mode)
+## Build the omap example enclave (hardware mode)
 ```bash
 source /startsgxenv.sh
-cd applications/sorting
+cd applications/omap
 make
 ```
 
-## Build the sorting example enclave (simulation mode)
+## Build the omap example enclave (simulation mode)
 ```bash
 source /startsgxenv.sh
-cd applications/sorting
+cd applications/omap
 make SGX_MODE=SIM
 ```
 
-## Run a sample script to test runtime of sorting algorithms
+## Run a sample script to test runtime of omap algorithms
 ```bash
-cd applications/sorting
+cd applications/omap
 ./algo_runner.sh
 ```
 
@@ -67,8 +67,9 @@ tools/docker - dockerfiles used for reproducible builds
 
 ### omap folder structure
 
+oram - core library code of oblivious RAMs and maps
 common - common c++ utilies, cpu abstractions, cryptography abstractions and tracing code
-external_memory - external memory abstraction and sorting algorithms
+external_memory - external memory abstraction and algorithmic building blocks
 external_memory/server - server abstraction for different external memory scenarios (sgx, file system, ram)
 
 

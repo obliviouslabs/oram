@@ -49,9 +49,6 @@ struct NonCachedServerFrontendInstance {
   } nounce_t;
 
   nounce_t nounce;
-  // prevent the slot to be freed, the slot should be saved elsewhere to avoid
-  // memory leak
-  void preventFree() { slot.base = -1; }
 
   NonCachedServerFrontendInstance(NonCachedServerFrontendInstance& other)
       : backend(other.backend) {
