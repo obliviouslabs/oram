@@ -9,9 +9,7 @@
 
 using namespace ODSL::CircuitORAM;
 
-TEST(ORAM, Init) { ORAM<int> oram(1024); }
-
-TEST(ORAM, CommonSuffixLen) {
+TEST(ORAMBasic, CommonSuffixLen) {
   size_t round = 100000UL;
   for (size_t r = 0; r < round; ++r) {
     int desiredLen = UniformRandom(63);
@@ -21,7 +19,7 @@ TEST(ORAM, CommonSuffixLen) {
   }
 }
 
-TEST(ORAM, WithoutPositionMap1) {
+TEST(CircuitORAM, SingleAccess) {
   int memSize = 1000;
   ODSL::CircuitORAM::ORAM<uint64_t, 2, 20> oram(memSize);
   std::vector<uint64_t> posMap(memSize);
@@ -63,7 +61,7 @@ TEST(ORAM, WithoutPositionMap1) {
   }
 }
 
-TEST(ORAM, BatchUpdate) {
+TEST(CircuitORAM, BatchUpdate) {
   int memSize = 400;
   ODSL::AdaptiveORAM::ORAM<uint64_t> oram(memSize, 1UL << 62);
   std::vector<uint64_t> posMap(memSize);
@@ -118,7 +116,7 @@ TEST(ORAM, BatchUpdate) {
   }
 }
 
-TEST(ORAM, BatchUpdateLarge) {
+TEST(CircuitORAM, BatchUpdateLarge) {
   if (EM::Backend::g_DefaultBackend) {
     delete EM::Backend::g_DefaultBackend;
   }
@@ -190,9 +188,9 @@ TEST(ORAM, BatchUpdateLarge) {
   }
 }
 
-TEST(ORAM, WithoutPositionMapMixed) {
+TEST(CircuitORAM, Mixed) {
   for (int memSize : {2, 3, 5, 7, 9, 33, 40, 55, 127, 129, 543, 678, 1023, 1025,
-                      2000, 71429}) {
+                      2000, 4567, 12345, 25432, 71429}) {
     ODSL::CircuitORAM::ORAM<uint64_t> oram(memSize);
     std::vector<uint64_t> posMap(memSize, -1);
     std::vector<uint64_t> valMap(memSize);
@@ -246,7 +244,7 @@ TEST(ORAM, WithoutPositionMapMixed) {
   }
 }
 
-TEST(ORAM, WithoutPositionMapMixedOverflowHandling) {
+TEST(CircuitORAM, OverflowHandling) {
   for (int memSize : {2, 3, 5, 7, 9, 33, 40, 55, 127, 129, 543, 678, 1023, 1025,
                       2000, 71429}) {
     ODSL::CircuitORAM::ORAM<uint64_t, 2, 5, uint64_t, uint64_t, 4096, 1> oram(
@@ -303,7 +301,7 @@ TEST(ORAM, WithoutPositionMapMixedOverflowHandling) {
   }
 }
 
-TEST(ORAM, StashLoad) {
+TEST(CircuitORAM, StashLoad) {
   GTEST_SKIP();
   size_t memSize = 1UL << 16;
   static constexpr int Z = 2;
@@ -343,30 +341,7 @@ TEST(ORAM, StashLoad) {
   }
 }
 
-TEST(ORAM, NonPowerOfTwo) {
-  for (int memSize :
-       {2, 3, 5, 7, 9, 33, 40, 55, 127, 129, 543, 678, 1023, 1025, 2000}) {
-    ORAM<uint64_t> oram(memSize);
-    std::vector<uint64_t> posMap(memSize);
-    std::vector<uint64_t> valMap(memSize);
-    for (uint64_t i = 0; i < memSize; i++) {
-      uint64_t val = UniformRandom();
-      uint64_t pos = oram.Write(i, val);
-      posMap[i] = pos;
-      valMap[i] = val;
-    }
-    for (int r = 0; r < 7; ++r) {
-      for (uint64_t i = 0; i < memSize; i++) {
-        uint64_t val;
-        uint64_t pos = oram.Read(posMap[i], i, val);
-        posMap[i] = pos;
-        ASSERT_EQ(val, valMap[i]);
-      }
-    }
-  }
-}
-
-TEST(ORAM, DiffCacheSize) {
+TEST(CircuitORAM, VariousSizes) {
   for (int memSize : {2, 3, 5, 7, 9, 33, 40, 55, 127, 129, 543, 678, 1023, 1025,
                       2000, 3000}) {
     for (size_t cacheSize = 1UL << 17; cacheSize > 1; cacheSize *= 0.95) {
@@ -401,7 +376,7 @@ TEST(ORAM, DiffCacheSize) {
   }
 }
 
-TEST(ORAM, WithoutPositionMapLargePerf) {
+TEST(CircuitORAM, ReadPerf) {
   int memSize = 1 << 20;
   ODSL::CircuitORAM::ORAM<TestElement> oram(memSize);
 
@@ -413,10 +388,11 @@ TEST(ORAM, WithoutPositionMapLargePerf) {
   }
   auto end = std::chrono::system_clock::now();
   std::chrono::duration<double> diff = end - start;
-  printf("Time per access: %f us\n", diff.count() * 1e6 / numAccesses);
+  printf("Time per access (%lu bytes element): %f us\n", sizeof(TestElement),
+         diff.count() * 1e6 / numAccesses);
 }
 
-TEST(ORAM, testInitWithReader) {
+TEST(CircuitORAM, testInitWithReader) {
   for (int memSize :
        {2,   3,    5,    7,    9,    33,    40,    55,    127,    129,   543,
         678, 1023, 1025, 2000, 4567, 12345, 54321, 71429, 100000, 200000}) {
@@ -593,10 +569,6 @@ TEST(RecursiveORAM, testBatchAccessDefer) {
   StdVector<uint64_t>::Reader reader(ref.begin(), ref.end());
   oram.InitFromReader(reader);
   for (int round = 0; round < 1e4; ++round) {
-    // uint64_t addr = UniformRandom(size - 1);
-    // int64_t val;
-    // oram.Read(addr, val);
-    // ASSERT_EQ(val, ref[addr]);
     std::vector<uint64_t> addrs(100);
     for (uint64_t& addr : addrs) {
       addr = UniformRandom(size - 1);
@@ -609,10 +581,6 @@ TEST(RecursiveORAM, testBatchAccessDefer) {
                  addrs[i], ref[addrs[i]], xs[i]);
           abort();
         }
-        // else {
-        //   printf("Read correct result for uid %lu, got %lu\n", addrs[i],
-        //          ref[addrs[i]]);
-        // }
         ++xs[i];
       }
     };
