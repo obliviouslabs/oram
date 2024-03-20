@@ -6,7 +6,7 @@
 #include "external_memory/stdvector.hpp"
 #include "static_sort.hpp"
 
-namespace EM::Algorithm {
+namespace Algorithm {
 
 template <class Iterator, typename Compare>
 void BitonicMergePow2(Iterator begin, Iterator end, Compare cmp, bool dire) {
@@ -220,4 +220,4 @@ void ParBitonicSortSepPayload(KeyIterator keyBegin, KeyIterator keyEnd,
                               PayloadIterator payloadBegin, int numThreads) {
   ParBitonicSortSepPayload(keyBegin, keyEnd, payloadBegin, numThreads, true);
 }
-}  // namespace EM::Algorithm
+}  // namespace Algorithm

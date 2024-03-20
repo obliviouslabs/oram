@@ -7,7 +7,7 @@
 
 #include "../../common.hpp"
 #include "crypt.hpp"
-#include "oram/omap.hpp"
+#include "odsl/omap.hpp"
 #include "sgx_error.h"
 #include "sgx_report.h"
 #include "sgx_spinlock.h"

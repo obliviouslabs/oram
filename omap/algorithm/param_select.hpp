@@ -8,7 +8,7 @@
 /// This file contains some utility functions to help calculate parameters given
 /// a desired success probability.
 
-namespace EM::Algorithm {
+namespace Algorithm {
 
 /// @brief add two numbers in log space
 static double addLogs(double logA, double logB) {
@@ -84,4 +84,4 @@ static T lowerBound(T left, T right, const Check& satisfy, T prec = 1) {
     }
   }
 }
-}  // namespace EM::Algorithm
+}  // namespace Algorithm

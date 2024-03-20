@@ -5,7 +5,7 @@
 /// adapted from:
 /// https://stackoverflow.com/questions/19790522/very-fast-sorting-of-fixed-length-arrays-using-comparator-networks
 
-namespace EM::Algorithm {
+namespace Algorithm {
 
 /// This class is a functor that sorts a fixed size array or container using a
 /// compile time generated Bose-Nelson sorting network, which is slightly faster
@@ -90,4 +90,4 @@ class StaticSort {
     PS<Container, Compare, 1, NumElements, (NumElements <= 1)> ps(arr);
   };
 };
-}  // namespace EM::Algorithm
+}  // namespace Algorithm

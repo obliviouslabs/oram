@@ -2,9 +2,9 @@
 
 #include <unordered_map>
 
-#include "external_memory/algorithm/element.hpp"
-#include "oram/adaptive_oram.hpp"
-#include "oram/recursive_oram.hpp"
+#include "algorithm/element.hpp"
+#include "odsl/adaptive_oram.hpp"
+#include "odsl/recursive_oram.hpp"
 #include "testutils.hpp"
 
 using namespace ODSL::CircuitORAM;

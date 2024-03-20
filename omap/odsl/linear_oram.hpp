@@ -1,7 +1,7 @@
 #pragma once
+#include "algorithm/or_compact_shuffle.hpp"
 #include "common/cpp_extended.hpp"
-#include "external_memory/algorithm/or_compact_shuffle.hpp"
-#include "oram/block.hpp"
+#include "odsl/block.hpp"
 
 /**
  * @brief A simple linear oram efficient at small size.
@@ -119,7 +119,7 @@ struct ORAM {
       prefixSum[i + 1] = prefixSum[i] + !isDup;
     }
     // compact the unique uids
-    EM::Algorithm::OrCompactSeparateMark(
+    Algorithm::OrCompactSeparateMark(
         uidCopy.begin(), uidCopy.begin() + batchSize, prefixSum.begin());
 
     // prepare marks for distributing uids to there corresponding location
@@ -143,12 +143,12 @@ struct ORAM {
     uidCopy[_size] = oramPrefixSum;
 
     // compact the oram entries we want to query
-    EM::Algorithm::OrCompactSeparateMark(
-        oramCopy.begin(), oramCopy.begin() + _size, uidCopy.begin());
+    Algorithm::OrCompactSeparateMark(oramCopy.begin(), oramCopy.begin() + _size,
+                                     uidCopy.begin());
 
     // distribute these oram entries to align with the first unique uids in the
     // batch
-    EM::Algorithm::OrDistributeSeparateMark(
+    Algorithm::OrDistributeSeparateMark(
         oramCopy.begin(), oramCopy.begin() + batchSize, prefixSum.begin());
 
     // propagate results for duplicates, and copy the results to the output
@@ -215,7 +215,7 @@ struct ORAM {
       prefixSum[i + 1] = prefixSum[i] + !isDup;
     }
 
-    EM::Algorithm::OrCompactSeparateMark(
+    Algorithm::OrCompactSeparateMark(
         uidCopy.begin(), uidCopy.begin() + batchSize, prefixSum.begin());
 
     int distributeLevel = (int)GetLogBaseTwo(_size - 1);
@@ -234,11 +234,11 @@ struct ORAM {
       oramPrefixSum += isReal;
     }
     uidCopy[_size] = oramPrefixSum;
-    EM::Algorithm::OrCompactSeparateMark(
-        inCopy.begin(), inCopy.begin() + batchSize, prefixSum.begin());
+    Algorithm::OrCompactSeparateMark(inCopy.begin(), inCopy.begin() + batchSize,
+                                     prefixSum.begin());
 
-    EM::Algorithm::OrDistributeSeparateMark(
-        inCopy.begin(), inCopy.begin() + _size, uidCopy.begin());
+    Algorithm::OrDistributeSeparateMark(inCopy.begin(), inCopy.begin() + _size,
+                                        uidCopy.begin());
     for (uint64_t i = 0; i < _size; i++) {
       bool isReal = uidCopy[i] != uidCopy[i + 1];
       obliMove(isReal, data[i], inCopy[i]);

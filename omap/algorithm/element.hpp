@@ -12,7 +12,7 @@
 #define ELEMENT_SIZE 128
 #endif
 
-namespace EM::Algorithm {
+namespace Algorithm {
 /// @brief Wrapper for flex-way butterfly o-sort
 /// @tparam T type of elements
 template <typename T>
@@ -58,7 +58,7 @@ struct TaggedT {
     return mark;
   }
 };
-}  // namespace EM::Algorithm
+}  // namespace Algorithm
 
 /// @brief Example of a sort element
 struct TestElement {

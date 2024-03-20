@@ -635,8 +635,8 @@ struct OHashMap {
     for (PositionType i = 0; i < keySize; ++i) {
       recoveryVec[i] = i;
     }
-    EM::Algorithm::BitonicSortSepPayload(hashIndices.begin(), hashIndices.end(),
-                                         recoveryVec.begin());
+    Algorithm::BitonicSortSepPayload(hashIndices.begin(), hashIndices.end(),
+                                     recoveryVec.begin());
     std::vector<BucketType> buckets(keySize);
 
     if (tableNum == 0) {
@@ -645,8 +645,8 @@ struct OHashMap {
       table1.BatchReadDeferWriteBack(hashIndices, buckets);
     }
 
-    EM::Algorithm::BitonicSortSepPayload(recoveryVec.begin(), recoveryVec.end(),
-                                         buckets.begin());
+    Algorithm::BitonicSortSepPayload(recoveryVec.begin(), recoveryVec.end(),
+                                     buckets.begin());
     for (size_t i = 0; i < keySize; ++i) {
       (valResBegin + i)->found =
           searchBucket(*(keyBegin + i), (valResBegin + i)->value, buckets[i]);
@@ -845,7 +845,7 @@ struct OHashMap {
         // valid is public but dummy is not
         // since we deleted all dummies, it's likely that we don't need to put
         // these entries in the stash
-        InsertOblivious(entry.key, entry.value, entry.dummy);
+        OInsert(entry.key, entry.value, entry.dummy);
       }
     }
   }
@@ -1011,7 +1011,7 @@ struct OHashMap {
    * @param isDummy whether the insertion is dummy
    * @return true if the key already exists, false otherwise
    */
-  bool InsertOblivious(const K& key, const V& value, bool isDummy = false) {
+  bool OInsert(const K& key, const V& value, bool isDummy = false) {
     KVEntry entryToInsert = {!isDummy, false, key, value};
     bool exist = insertEntryOblivious(entryToInsert, 1);
     stash.OInsert(entryToInsert);
@@ -1179,7 +1179,7 @@ struct OHashMap {
    * @param isDummy whether the erase is dummy operation
    * @return true if the key is found, false otherwise
    */
-  bool EraseOblivious(const K& key, bool isDummy = false) {
+  bool OErase(const K& key, bool isDummy = false) {
     if (isDummy) {
       return false;
     }

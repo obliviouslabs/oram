@@ -2,8 +2,8 @@
 
 #include <omp.h>
 
-#include "external_memory/algorithm/merge_split.hpp"
-#include "external_memory/algorithm/param_select.hpp"
+#include "algorithm/merge_split.hpp"
+#include "algorithm/param_select.hpp"
 #include "omap.hpp"
 
 /// @brief A parallel oblivious map by sharding. Each shard is an oblivious map,
@@ -100,11 +100,11 @@ struct ParOMap {
                                    double logFailProb = -40) {
     auto satisfy = [&](uint64_t n) {
       double logSf =
-          EM::Algorithm::binomLogSf(n, batchSize, 1.0 / (double)shardCount);
+          Algorithm::binomLogSf(n, batchSize, 1.0 / (double)shardCount);
       return logSf < logFailProb;
     };
-    return EM::Algorithm::lowerBound(divRoundUp(batchSize, shardCount),
-                                     batchSize, satisfy);
+    return Algorithm::lowerBound(divRoundUp(batchSize, shardCount), batchSize,
+                                 satisfy);
   }
 
   /**
@@ -120,11 +120,11 @@ struct ParOMap {
   static uint64_t numRealPerBkt(uint64_t bktSize, uint64_t shardCount,
                                 double logFailProb = -60) {
     auto satisfy = [&](uint64_t numDummy) {
-      double logSf = EM::Algorithm::binomLogSf(
+      double logSf = Algorithm::binomLogSf(
           bktSize, (bktSize - numDummy) * shardCount, 1.0 / shardCount);
       return logSf < logFailProb;
     };
-    return bktSize - EM::Algorithm::lowerBound(1UL, bktSize - 1, satisfy);
+    return bktSize - Algorithm::lowerBound(1UL, bktSize - 1, satisfy);
   }
 
   // TODO: support more flexible factorization
@@ -223,7 +223,7 @@ struct ParOMap {
       nonOMap.SetSize(shardSize, 0);
     }
 
-    using Element = EM::Algorithm::TaggedT<KVPair>;
+    using Element = Algorithm::TaggedT<KVPair>;
     const size_t bktSize =
         std::min(8192UL, GetNextPowerOfTwo(maxInitSizePerShard));
     size_t bktRealSize = numRealPerBkt(bktSize, shardCount, -60);
@@ -372,9 +372,9 @@ struct ParOMap {
     for (uint32_t i = 0; i < batchSize; ++i) {
       recoveryArr[i] = i;
     }
-    EM::Algorithm::ParBitonicSortSepPayload(
-        keyInfoVec.begin(), keyInfoVec.end(), recoveryArr.begin(),
-        (int)shards.size() * 2);
+    Algorithm::ParBitonicSortSepPayload(keyInfoVec.begin(), keyInfoVec.end(),
+                                        recoveryArr.begin(),
+                                        (int)shards.size() * 2);
 
     // Obliviously count the number of unique keys for each shard (using
     // simd acceleration). Also generate a prefix sum of the number of unique
@@ -408,9 +408,8 @@ struct ParOMap {
     }
     // Compact the unique elements in the sorted array using the prefix
     // sum.
-    EM::Algorithm::OrCompactSeparateMark(keyVec.begin(),
-                                         keyVec.begin() + batchSize,
-                                         prefixSumFirstCompaction.begin());
+    Algorithm::OrCompactSeparateMark(keyVec.begin(), keyVec.begin() + batchSize,
+                                     prefixSumFirstCompaction.begin());
     std::vector<uint32_t> prefixSumSecondCompaction(shardCount * shardSize + 1);
     std::vector<uint32_t> shardLoadPrefixSum(shardCount);
     shardLoadPrefixSum[0] = 0;
@@ -428,8 +427,8 @@ struct ParOMap {
     }
     // Distribute the compacted elements so that the elements of shard i starts
     // at offset shard_size * i.
-    EM::Algorithm::OrDistributeSeparateMark(keyVec.begin(), keyVec.end(),
-                                            prefixSumSecondCompaction.begin());
+    Algorithm::OrDistributeSeparateMark(keyVec.begin(), keyVec.end(),
+                                        prefixSumSecondCompaction.begin());
     using ValResult = BaseMap::ValResult;
     std::vector<ValResult> resultVec(shardCount * shardSize);
 
@@ -443,14 +442,14 @@ struct ParOMap {
     }
 
     // Compact the result values in reverse order of the previous distribution.
-    EM::Algorithm::OrCompactSeparateMark(resultVec.begin(), resultVec.end(),
-                                         prefixSumSecondCompaction.begin());
+    Algorithm::OrCompactSeparateMark(resultVec.begin(), resultVec.end(),
+                                     prefixSumSecondCompaction.begin());
 
     // Distribute the compacted result values in reverse order of the previous
     // compaction.
-    EM::Algorithm::OrDistributeSeparateMark(resultVec.begin(),
-                                            resultVec.begin() + batchSize,
-                                            prefixSumFirstCompaction.begin());
+    Algorithm::OrDistributeSeparateMark(resultVec.begin(),
+                                        resultVec.begin() + batchSize,
+                                        prefixSumFirstCompaction.begin());
 
     // Propagate the values of the duplicate elements.
     for (uint32_t i = 1; i < batchSize; ++i) {
@@ -460,9 +459,9 @@ struct ParOMap {
 
     // Parallel bitonic sort the values in reverse order the previous bitonic
     // sort using the recovery array
-    EM::Algorithm::ParBitonicSortSepPayload(
-        recoveryArr.begin(), recoveryArr.end(), resultVec.begin(),
-        (int)shards.size() * 2);
+    Algorithm::ParBitonicSortSepPayload(recoveryArr.begin(), recoveryArr.end(),
+                                        resultVec.begin(),
+                                        (int)shards.size() * 2);
     std::vector<uint8_t> foundFlags(batchSize);
     for (uint32_t i = 0; i < batchSize; ++i) {
       foundFlags[i] = resultVec[i].found;
@@ -543,9 +542,9 @@ struct ParOMap {
     for (uint32_t i = 0; i < batchSize; ++i) {
       recoveryArr[i] = i;
     }
-    EM::Algorithm::ParBitonicSortSepPayload(
-        keyInfoVec.begin(), keyInfoVec.end(), recoveryArr.begin(),
-        (int)shards.size() * 2);
+    Algorithm::ParBitonicSortSepPayload(keyInfoVec.begin(), keyInfoVec.end(),
+                                        recoveryArr.begin(),
+                                        (int)shards.size() * 2);
     std::vector<uint32_t> shardLoads(shardCount, 0);
     std::vector<uint32_t> prefixSumFirstCompaction(batchSize + 1);
     prefixSumFirstCompaction[0] = 0;
@@ -574,9 +573,8 @@ struct ParOMap {
       kvVec[i].key = keyInfoVec[i].key;
       kvVec[i].value = keyInfoVec[i].value;
     }
-    EM::Algorithm::OrCompactSeparateMark(kvVec.begin(),
-                                         kvVec.begin() + batchSize,
-                                         prefixSumFirstCompaction.begin());
+    Algorithm::OrCompactSeparateMark(kvVec.begin(), kvVec.begin() + batchSize,
+                                     prefixSumFirstCompaction.begin());
 
     std::vector<uint32_t> prefixSumSecondCompaction(shardCount * shardSize + 1);
     std::vector<uint32_t> shardLoadPrefixSum(shardCount);
@@ -594,34 +592,34 @@ struct ParOMap {
       }
     }
 
-    EM::Algorithm::OrDistributeSeparateMark(kvVec.begin(), kvVec.end(),
-                                            prefixSumSecondCompaction.begin());
+    Algorithm::OrDistributeSeparateMark(kvVec.begin(), kvVec.end(),
+                                        prefixSumSecondCompaction.begin());
     std::vector<uint8_t> foundVec(shardCount * shardSize);
 #pragma omp parallel for schedule(static)
     for (uint32_t i = 0; i < shardCount; ++i) {
       uint32_t numReal = shardLoads[i];
       for (uint32_t j = 0; j < shardSize; ++j) {
-        foundVec[i * shardSize + j] = shards[i].InsertOblivious(
-            kvVec[i * shardSize + j].key, kvVec[i * shardSize + j].value,
-            j >= numReal);
+        foundVec[i * shardSize + j] =
+            shards[i].OInsert(kvVec[i * shardSize + j].key,
+                              kvVec[i * shardSize + j].value, j >= numReal);
       }
     }
 
-    EM::Algorithm::OrCompactSeparateMark(foundVec.begin(), foundVec.end(),
-                                         prefixSumSecondCompaction.begin());
+    Algorithm::OrCompactSeparateMark(foundVec.begin(), foundVec.end(),
+                                     prefixSumSecondCompaction.begin());
 
-    EM::Algorithm::OrDistributeSeparateMark(foundVec.begin(),
-                                            foundVec.begin() + batchSize,
-                                            prefixSumFirstCompaction.begin());
+    Algorithm::OrDistributeSeparateMark(foundVec.begin(),
+                                        foundVec.begin() + batchSize,
+                                        prefixSumFirstCompaction.begin());
 
     for (uint32_t i = 1; i < batchSize; ++i) {
       bool isDup = keyInfoVec[i].key == keyInfoVec[i - 1].key;
       obliMove(isDup, foundVec[i], foundVec[i - 1]);
     }
 
-    EM::Algorithm::ParBitonicSortSepPayload(recoveryArr.begin(),
-                                            recoveryArr.end(), foundVec.begin(),
-                                            (int)shards.size() * 2);
+    Algorithm::ParBitonicSortSepPayload(recoveryArr.begin(), recoveryArr.end(),
+                                        foundVec.begin(),
+                                        (int)shards.size() * 2);
     foundVec.resize(batchSize);
     return foundVec;
   }
@@ -660,9 +658,8 @@ struct ParOMap {
     for (uint32_t i = 0; i < batchSize; ++i) {
       recoveryArr[i] = i;
     }
-    EM::Algorithm::ParBitonicSortSepPayload(
-        keyInfoVec.begin(), keyInfoVec.end(), recoveryArr.begin(),
-        shards.size() * 2);
+    Algorithm::ParBitonicSortSepPayload(keyInfoVec.begin(), keyInfoVec.end(),
+                                        recoveryArr.begin(), shards.size() * 2);
     std::vector<uint32_t> shardLoads(shardCount, 0);
     std::vector<uint32_t> prefixSumFirstCompaction(batchSize + 1);
     prefixSumFirstCompaction[0] = 0;
@@ -690,9 +687,8 @@ struct ParOMap {
     for (uint32_t i = 0; i < batchSize; ++i) {
       keyVec[i] = keyInfoVec[i].key;
     }
-    EM::Algorithm::OrCompactSeparateMark(keyVec.begin(),
-                                         keyVec.begin() + batchSize,
-                                         prefixSumFirstCompaction.begin());
+    Algorithm::OrCompactSeparateMark(keyVec.begin(), keyVec.begin() + batchSize,
+                                     prefixSumFirstCompaction.begin());
 
     std::vector<uint32_t> prefixSumSecondCompaction(shardCount * shardSize + 1);
     std::vector<uint32_t> shardLoadPrefixSum(shardCount);
@@ -710,33 +706,32 @@ struct ParOMap {
       }
     }
 
-    EM::Algorithm::OrDistributeSeparateMark(keyVec.begin(), keyVec.end(),
-                                            prefixSumSecondCompaction.begin());
+    Algorithm::OrDistributeSeparateMark(keyVec.begin(), keyVec.end(),
+                                        prefixSumSecondCompaction.begin());
     std::vector<uint8_t> foundVec(shardCount * shardSize);
 #pragma omp parallel for schedule(static)
     for (uint32_t i = 0; i < shardCount; ++i) {
       uint32_t numReal = shardLoads[i];
       for (uint32_t j = 0; j < shardSize; ++j) {
         foundVec[i * shardSize + j] =
-            shards[i].EraseOblivious(keyVec[i * shardSize + j], j >= numReal);
+            shards[i].OErase(keyVec[i * shardSize + j], j >= numReal);
       }
     }
 
-    EM::Algorithm::OrCompactSeparateMark(foundVec.begin(), foundVec.end(),
-                                         prefixSumSecondCompaction.begin());
+    Algorithm::OrCompactSeparateMark(foundVec.begin(), foundVec.end(),
+                                     prefixSumSecondCompaction.begin());
 
-    EM::Algorithm::OrDistributeSeparateMark(foundVec.begin(),
-                                            foundVec.begin() + batchSize,
-                                            prefixSumFirstCompaction.begin());
+    Algorithm::OrDistributeSeparateMark(foundVec.begin(),
+                                        foundVec.begin() + batchSize,
+                                        prefixSumFirstCompaction.begin());
 
     for (uint32_t i = 1; i < batchSize; ++i) {
       bool isDup = keyInfoVec[i].key == keyInfoVec[i - 1].key;
       obliMove(isDup, foundVec[i], foundVec[i - 1]);
     }
 
-    EM::Algorithm::ParBitonicSortSepPayload(recoveryArr.begin(),
-                                            recoveryArr.end(), foundVec.begin(),
-                                            shards.size() * 2);
+    Algorithm::ParBitonicSortSepPayload(recoveryArr.begin(), recoveryArr.end(),
+                                        foundVec.begin(), shards.size() * 2);
     foundVec.resize(batchSize);
     return foundVec;
   }

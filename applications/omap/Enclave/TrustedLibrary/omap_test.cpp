@@ -6,9 +6,9 @@
 #include <functional>
 #include <unordered_map>
 
-#include "oram/omap.hpp"
-#include "oram/par_omap.hpp"
-#include "oram/recursive_oram.hpp"
+#include "odsl/omap.hpp"
+#include "odsl/par_omap.hpp"
+#include "odsl/recursive_oram.hpp"
 #include "sgx_thread.h"
 #include "sgx_trts.h"
 
@@ -33,7 +33,7 @@ void testOmpSpeedup() {
   for (int i = 0; i < maxThread; ++i) {
     std::vector<uint64_t> vec(65546);
     for (int r = 0; r < 100; ++r) {
-      EM::Algorithm::BitonicSort(vec);
+      Algorithm::BitonicSort(vec);
     }
   }
   ocall_measure_time(&end);
@@ -45,7 +45,7 @@ void testOmpSpeedup() {
   for (int i = 0; i < maxThread; ++i) {
     std::vector<uint64_t> vec(65546);
     for (int r = 0; r < 100; ++r) {
-      EM::Algorithm::BitonicSort(vec);
+      Algorithm::BitonicSort(vec);
     }
   }
   ocall_measure_time(&end);
@@ -503,7 +503,7 @@ void testOMap() {
   for (size_t r = 0; r < round; ++r) {
     uint64_t i = UniformRandom(mapSize);
     int64_t val = UniformRandom(mapSize * 3);
-    bool res = omap.InsertOblivious(i, val);
+    bool res = omap.OInsert(i, val);
     if (map.find(i) != map.end()) {
       if (!res) {
         printf("insert failed at round %lu, does not replace element\n", r);

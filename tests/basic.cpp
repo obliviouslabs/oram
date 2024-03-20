@@ -1,7 +1,7 @@
 #include <gtest/gtest.h>
 
 #include "common/mov_intrinsics.hpp"
-#include "oram/heap_tree.hpp"
+#include "odsl/heap_tree.hpp"
 #include "testutils.hpp"
 
 template <const uint64_t size>

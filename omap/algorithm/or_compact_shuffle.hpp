@@ -8,7 +8,7 @@
  * It also implements a reversed procedure of OrCompact, which we call
  * OrDistribute.
  */
-namespace EM::Algorithm {
+namespace Algorithm {
 template <class Iterator, class MarkIterator>
 void OrOffCompactSeparateMark(Iterator begin, Iterator end,
                               const MarkIterator markBegin, size_t z) {
@@ -187,4 +187,4 @@ void OrShuffle(Vec& vec) {
   OrShuffle(vec.begin(), vec.end());
 }
 
-}  // namespace EM::Algorithm
+}  // namespace Algorithm

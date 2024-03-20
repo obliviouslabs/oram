@@ -67,9 +67,10 @@ tools/docker - dockerfiles used for reproducible builds
 
 ### omap folder structure
 
-oram - core library code of oblivious RAMs and maps
+odsl - core library code of oblivious data structures
+algorithm - algorithmic building blocks for oblivious data structures
 common - common c++ utilies, cpu abstractions, cryptography abstractions and tracing code
-external_memory - external memory abstraction and algorithmic building blocks
+external_memory - external memory vector abstraction
 external_memory/server - server abstraction for different external memory scenarios (sgx, file system, ram)
 
 

@@ -13,7 +13,7 @@
  * o(1))NlogN oblivious swaps.
  */
 
-namespace EM::Algorithm {
+namespace Algorithm {
 
 /// @brief A special case of interleave. Two way means we need not generate the
 /// Euler graph, but can swap elements in one pass. It also supports non-power
@@ -547,4 +547,4 @@ void MergeSplitKWay(const Iterator* begins, const size_t k, const size_t Z,
     MergeSplitKWay(begins, k, Z, (T*)NULL, NULL, pivotBegin);
   }
 }
-}  // namespace EM::Algorithm
+}  // namespace Algorithm

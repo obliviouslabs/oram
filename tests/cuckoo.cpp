@@ -1,6 +1,6 @@
 #include <gtest/gtest.h>
 
-#include "oram/omap.hpp"
+#include "odsl/omap.hpp"
 #include "unordered_map"
 
 using namespace ODSL;
@@ -18,7 +18,7 @@ void testOHashMap() {
         int key = rand() % keySpace;
         int value = rand();
         if constexpr (isOblivious) {
-          map.InsertOblivious(key, value);
+          map.OInsert(key, value);
         } else {
           map.Insert(key, value);
         }
@@ -60,7 +60,7 @@ void testOHashMapInitFromReader() {
         int key = rand() % keySpace;
         int value = rand();
         if constexpr (isOblivious) {
-          map.InsertOblivious(key, value);
+          map.OInsert(key, value);
         } else {
           map.Insert(key, value);
         }
@@ -105,7 +105,7 @@ void testOHashMapInitFromNonObliviousWithDummy() {
       if (std_map.size() < mapSize) {
         int key = rand() % keySpace;
         int value = rand();
-        map.InsertOblivious(key, value);
+        map.OInsert(key, value);
         std_map[key] = value;
       }
 
@@ -185,8 +185,8 @@ void testReplaceCount() {
   for (int r = 0; r < mapSize; ++r) {
     int key = rand();
     if constexpr (isOblivious) {
-      map.InsertOblivious(key, 0);
-      map.EraseOblivious(key);
+      map.OInsert(key, 0);
+      map.OErase(key);
     } else {
       map.Insert(key, 0);
       map.Erase(key);

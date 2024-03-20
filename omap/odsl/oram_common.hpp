@@ -6,9 +6,9 @@
 /// @brief This file defines some methods and concepts common to binary-tree
 /// based ORAMs.
 
+#include "algorithm/bitonic.hpp"
+#include "algorithm/or_compact_shuffle.hpp"
 #include "bucket.hpp"
-#include "external_memory/algorithm/bitonic.hpp"
-#include "external_memory/algorithm/or_compact_shuffle.hpp"
 #include "external_memory/rw_concepts.hpp"
 #include "external_memory/stdvector.hpp"
 #include "external_memory/virtualvector.hpp"
