@@ -182,6 +182,7 @@ void testHeapTreeCorrectness() {
   //     levels\n", page_size, HeapTree<int, uint64_t, page_size>::packLevel);
   using HeapTree_ = HeapTree<int, uint64_t, page_size>;
   for (size_t size = 2; size < 100000; size = 1.05 * size + 1) {
+    int totalLevel = GetLogBaseTwo(size - 1) + 2;
     for (int cacheLevel = 1; cacheLevel < GetLogBaseTwo(size) + 2;
          ++cacheLevel) {
       int maxLevel = GetLogBaseTwo(size - 1) + 2;
@@ -195,7 +196,7 @@ void testHeapTreeCorrectness() {
         }
         int commonSuffixLen = std::countr_zero(path1 ^ path2);
         int level1 = HeapTree_::GetPathIdx(pathIdxs1.begin(), pathIdxs1.end(),
-                                           path1, size, cacheLevel);
+                                           path1, size, totalLevel, cacheLevel);
         for (int i = 0; i < level1; ++i) {
           ASSERT_LT(pathIdxs1[i], size * 2 - 1);
           if (i > 0) {
@@ -203,7 +204,7 @@ void testHeapTreeCorrectness() {
           }
         }
         int level2 = HeapTree_::GetPathIdx(pathIdxs2.begin(), pathIdxs2.end(),
-                                           path2, size, cacheLevel);
+                                           path2, size, totalLevel, cacheLevel);
         for (int i = 0; i < level2; ++i) {
           ASSERT_LT(pathIdxs2[i], size * 2 - 1);
           if (i > 0) {

@@ -126,18 +126,19 @@ struct HeapTree {
    * @param outputEnd
    * @param idx idx of the path
    * @param leafCount the number of leaves in the tree
+   * @param totalLevel the total number of levels in the tree
    * @param cacheLevel the number of top levels to cache
    * @return int the number of nodes in the path
    */
   template <class Iterator>
   static int GetPathIdx(Iterator outputBegin, Iterator outputEnd,
                         PositionType idx, PositionType leafCount,
-                        int cacheLevel) {
-    int totalLevel = (int)GetLogBaseTwo(leafCount - 1) + 2;
+                        int totalLevel, int cacheLevel) {
     // when all the levels are cached
     if ((packLevel == 1 && cacheLevel < totalLevel) ||
         cacheLevel == totalLevel - 1) {
-      return GetPathIdx(outputBegin, outputEnd, idx, leafCount, totalLevel);
+      return GetPathIdx(outputBegin, outputEnd, idx, leafCount, totalLevel,
+                        totalLevel);
     }
     // the number of nodes in the path
     int pathLen = (idx | (PositionType)(1UL << (totalLevel - 2))) < leafCount
@@ -191,7 +192,8 @@ struct HeapTree {
     // number of (totalLevel - 1)-bit elements < size, whose last i bits =
     // subtree idx
     PositionType subtreeLeafCount = ((leafCount - subTreeIdx - 1) >> i) + 1;
-    GetPathIdx(it, outputEnd, idx >> i, subtreeLeafCount, remainLevel);
+    GetPathIdx(it, outputEnd, idx >> i, subtreeLeafCount, remainLevel,
+               remainLevel);
     for (; i < pathLen; ++i, ++it) {
       *it += beginOffset;
     }
@@ -200,19 +202,19 @@ struct HeapTree {
   }
 
   /**
-   * @brief Retrieve the node on the path
+   * @brief Retrieve the node on the path, and output the node indices
    *
    * @tparam Iterator The type of the iterator to store the path
    * @param pos The index of the path
    * @param pathBegin The begin iterator to store the path
+   * @param pathIdx Output the internal indices of the path
    * @return int The number of nodes in the path
    */
   template <class Iterator>
-  int ReadPath(PositionType pos, Iterator pathBegin) {
-    PositionType pathIdx[64];
-
+  int ReadPathAndGetPathIdx(PositionType pos, Iterator pathBegin,
+                            PositionType pathIdx[64]) {
     int actualLevel = GetPathIdx(&pathIdx[0], &pathIdx[totalLevel], pos,
-                                 leafCount, cacheLevel);
+                                 leafCount, totalLevel, cacheLevel);
 
     for (int i = 0; i < actualLevel; ++i) {
       PositionType idx = pathIdx[i];
@@ -222,7 +224,8 @@ struct HeapTree {
   }
 
   /**
-   * @brief Write the path to the tree
+   * @brief Write the path to the tree, given the depth of the path and the node
+   * indices
    *
    * @tparam Iterator The type of the iterator to store the path
    * @param pos The index of the path
@@ -230,16 +233,13 @@ struct HeapTree {
    * @return int The number of nodes in the path
    */
   template <class Iterator>
-  int WritePath(PositionType pos, const Iterator pathBegin) {
-    PositionType pathIdx[64];
-    int actualLevel = GetPathIdx(&pathIdx[0], &pathIdx[totalLevel], pos,
-                                 leafCount, cacheLevel);
+  void WritePath(PositionType pos, const Iterator pathBegin, int pathDepth,
+                 const PositionType pathIdx[64]) {
     // we have checked that total level <= 64
-    Assert(actualLevel <= totalLevel);
-    for (int i = 0; i < actualLevel; ++i) {
+    Assert(pathDepth <= totalLevel);
+    for (int i = 0; i < pathDepth; ++i) {
       PositionType idx = pathIdx[i];
       arr[idx] = *(pathBegin + i);
     }
-    return actualLevel;
   }
 };
