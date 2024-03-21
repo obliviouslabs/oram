@@ -1,6 +1,6 @@
 searchfiles()
 
-include_directories (${PROJECT_SOURCE_DIR}/osort)
+include_directories (${PROJECT_SOURCE_DIR}/omap)
 include_directories (${OPENSSL_INCLUDE_DIR})
 
 add_executable(
@@ -55,3 +55,7 @@ target_link_libraries(
 )
 
 include(GoogleTest)
+gtest_discover_tests(test_basic)
+gtest_discover_tests(test_oram)
+gtest_discover_tests(test_cuckoo)
+gtest_discover_tests(test_par_omap)
