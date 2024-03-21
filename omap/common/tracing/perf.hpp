@@ -8,11 +8,11 @@
 struct PerfCounters {
 #ifdef ENABLE_PERF_COUNTERS
 #define F(_, name, ...) uint64_t name = 0;
-#include "common/tracing/perf_counters.hxx"
+#include "common/tracing/perf_counters.hpp"
 
   void Reset() {
 #define F(_, name, ...) this->name = 0;
-#include "common/tracing/perf_counters.hxx"
+#include "common/tracing/perf_counters.hpp"
   }
 
   void Log(std::ostream& ofs) {
@@ -22,7 +22,7 @@ struct PerfCounters {
   } else {                                                   \
     ofs << description << ": " << (name) << std::endl;       \
   }
-#include "common/tracing/perf_counters.hxx"
+#include "common/tracing/perf_counters.hpp"
   }
 #endif
 };
