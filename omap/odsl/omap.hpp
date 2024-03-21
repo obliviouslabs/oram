@@ -141,19 +141,14 @@ struct LRUStash {
   }
 
   /**
-   * @brief Get the current timestamp
-   *
-   * @return uint64_t the current timestamp
-   */
-  uint64_t GetTimestamp() const { return currTime; }
-
-  /**
    * @brief Obliviously insert an entry to the stash and record the timestamp.
    * If entry.valid is false, the insertion is dummy. If the stash overflows,
    * the method will enlarge the stash, which is not oblivious.
    *
+   * @tparam highPriority whether the entry should be populated first
    * @param entry the entry to insert
    */
+  template <const bool highPriority = false>
   void OInsert(const KVEntry& entry) {
     oInserted = true;
     if (stash.size() < stash_size) {
@@ -161,17 +156,18 @@ struct LRUStash {
       timestamps.resize(stash_size);
     }
     bool inserted = false;
+    uint64_t time = highPriority ? 0 : currTime;
     for (size_t i = 0; i < stash.size(); ++i) {
       bool isEmpty = !stash[i].valid;
       bool insertFlag = isEmpty & !inserted;
       obliMove(insertFlag, stash[i], entry);
-      obliMove(insertFlag, timestamps[i], currTime);
+      obliMove(insertFlag, timestamps[i], time);
       inserted |= insertFlag;
     }
     bool overflowFlag = !inserted & entry.valid;
     if (overflowFlag) {
       stash.push_back(entry);
-      timestamps.push_back(currTime);
+      timestamps.push_back(time);
     }
     // reset the timestamps if the current time overflows
     if (currTime == UINT64_MAX) {
@@ -653,23 +649,20 @@ struct OHashMap {
     }
   }
 
-  void insertEntryObliviousRetry(KVEntry& entryToInsert, int maxRetry = 15) {
-    auto swapUpdateFunc = [&](BucketType& bucket) {
-      int offset = (int)(UniformRandom32() % bucketSize);
-      bool insertSucceed = insertIfEmptyOblivious(bucket, entryToInsert);
-      entryToInsert.valid &= !insertSucceed;
-      obliSwap(entryToInsert.valid, entryToInsert, bucket.entries[offset]);
-    };
-    for (int r = 0; r < maxRetry; ++r) {
-      PositionType idx1 = indexer.getHashIdx1(entryToInsert.key);
-      updateHelper(idx1, table1, swapUpdateFunc);  // modifies entryToInsert
-
-      PositionType idx0 = indexer.getHashIdx0(entryToInsert.key);
-      updateHelper(idx0, table0, swapUpdateFunc);
-    }
-  }
-
-  bool insertEntryOblivious(KVEntry& entryToInsert, int maxRetry = 15) {
+  /**
+   * @brief Try to insert entry into either table0 or table1 obliviously without
+   * swapping existing elements. If the element already exists either in table
+   * 0, table 1, or the stash, replace the existing element. If there's no
+   * available slot, swap entryToInsert with a random element from the bucket in
+   * table 0. If the insertion is successful, entryToInsert.valid will be set to
+   * false, and dummy operations will be performed to ensure oblivousness.
+   *
+   * @param entryToInsert the entry to insert, and will be modified to the entry
+   * swapped out if no slot is available.
+   *
+   * @return true if the key already exists, false otherwise
+   */
+  bool insertEntryOblivious(KVEntry& entryToInsert) {
     PositionType idx0, idx1;
     indexer.getHashIndices(entryToInsert.key, idx0, idx1);
     obliMove(!entryToInsert.valid, idx0,
@@ -700,8 +693,36 @@ struct OHashMap {
     updateHelper(idx0, table0, table0UpdateFunc);
 
     load += !exist;
-    insertEntryObliviousRetry(entryToInsert, maxRetry);
     return exist;
+  }
+
+  /**
+   * @brief Try to insert entry into table 1 obliviously, if table 1 is
+   * occupied, swap a random element out of the bucket in table 1 and try to
+   * insert this element into table 0. If table 0 is also occupied, swap a
+   * random element out of the bucket in table 0 and save it in entryToInsert.
+   * If either of the insertion succeeds, entryToInsert.valid will become false,
+   * and dummy operations will be performed to ensure oblivoiusness. The method
+   * may retry multiple times.
+   *
+   * @param entryToInsert the entry to insert, and will be modified to the entry
+   * swapped out if no slot is available.
+   * @param maxRetry the maximum number of retries, default to 1
+   */
+  void insertEntryObliviousRetry(KVEntry& entryToInsert, int maxRetry = 1) {
+    auto swapUpdateFunc = [&](BucketType& bucket) {
+      int offset = (int)(UniformRandom32() % bucketSize);
+      bool insertSucceed = insertIfEmptyOblivious(bucket, entryToInsert);
+      entryToInsert.valid &= !insertSucceed;
+      obliSwap(entryToInsert.valid, entryToInsert, bucket.entries[offset]);
+    };
+    for (int r = 0; r < maxRetry; ++r) {
+      PositionType idx1 = indexer.getHashIdx1(entryToInsert.key);
+      updateHelper(idx1, table1, swapUpdateFunc);  // modifies entryToInsert
+
+      PositionType idx0 = indexer.getHashIdx0(entryToInsert.key);
+      updateHelper(idx0, table0, swapUpdateFunc);
+    }
   }
 
  public:
@@ -997,7 +1018,6 @@ struct OHashMap {
         return false;
       }
     }
-    printf("Warning OHashMap uses stash\n");
     stash.Insert(entryToInsert);
     return false;
   }
@@ -1013,17 +1033,19 @@ struct OHashMap {
    */
   bool OInsert(const K& key, const V& value, bool isDummy = false) {
     KVEntry entryToInsert = {!isDummy, false, key, value};
-    bool exist = insertEntryOblivious(entryToInsert, 1);
-    stash.OInsert(entryToInsert);
-    if (stash.GetTimestamp() % 2 == 0) {
+    bool exist = insertEntryOblivious(entryToInsert);
+    // the element just swapped out is more likely to get inserted to somewhere
+    // else
+    stash.template OInsert<true>(entryToInsert);
+
+    for (int i = 0; i < 2; ++i) {
+      // use FIFO order so that we won't get stuck by loops in the random graph
+      // of cuckoo hashing
       stash.OPopOldest(entryToInsert);
       insertEntryObliviousRetry(entryToInsert, 1);
       stash.OInsert(entryToInsert);
     }
 
-    // if (!insertToStashOblivious(entryToInsert, stash)) {
-    //   throw std::runtime_error("OHashMap insert failed");
-    // }
     return exist;
   }
 

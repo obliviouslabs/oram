@@ -176,21 +176,46 @@ void testOHashMapFindBatch() {
 template <bool isOblivious>
 void testReplaceCount() {
   // test replace count distribution
-  int mapSize = 1000000;
-  OHashMap<int, int, false> map(mapSize, 1UL << 62);
-  map.InitDefault();
-  for (int i = 0; i < mapSize; ++i) {
-    map.Insert(rand(), 0);
-  }
-  for (int r = 0; r < mapSize; ++r) {
-    int key = rand();
-    if constexpr (isOblivious) {
-      map.OInsert(key, 0);
-      map.OErase(key);
-    } else {
-      map.Insert(key, 0);
-      map.Erase(key);
+  int mapSize = 100000;
+  int round = 10000;
+  int outerRound = 500;
+
+  int windowSize = 5;
+
+  std::vector<uint64_t> stashLoads(30, 0);
+  for (int rr = 0; rr < outerRound; ++rr) {
+    OHashMap<int, int, false> map(mapSize, 1UL << 62);
+    map.InitDefault();
+    const auto& stash = map.GetStash();
+    for (int i = 0; i < mapSize; ++i) {
+      map.Insert(rand(), 0);
     }
+    for (int r = 0; r < round; ++r) {
+      int key = rand();
+      if constexpr (isOblivious) {
+        map.OInsert(key, 0);
+        map.OErase(key);
+      } else {
+        map.Insert(key, 0);
+        map.Erase(key);
+      }
+      if (r % windowSize == 0) {
+        int load = 0;
+        for (int k = 0; k < stash.size(); ++k) {
+          if (stash[k].valid) {
+            ++load;
+          }
+        }
+        stashLoads[load]++;
+      }
+    }
+  }
+  for (int i = 0; i < stashLoads.size(); ++i) {
+    printf("%d %lu\n", i, stashLoads[i]);
+  }
+  for (int i = 10; i < stashLoads.size(); ++i) {
+    // stash load should be less than 10 with high probability
+    ASSERT_EQ(stashLoads[i], 0);
   }
 }
 
