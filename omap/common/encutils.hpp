@@ -82,62 +82,34 @@ uint64_t secure_hash_with_salt(const T& data, const uint8_t (&salt)[16]);
 template <typename T>
 void secure_hash_with_salt(const T& data, const uint8_t (&salt)[16], void* res,
                            uint8_t resSize);
-#ifndef NOOPENSSL
-#include <openssl/crypto.h>
-#include <openssl/evp.h>
-#include <openssl/rand.h>
-
+#ifndef ENCLAVE_MODE_ENCLAVE
+#include <bearssl.h>
+#include <cstdint>
 #include <cstring>
+
 template <typename T>
 uint64_t secure_hash_with_salt(const T& data, const uint8_t (&salt)[16]) {
   return secure_hash_with_salt((const uint8_t*)&data, sizeof(T), salt);
 }
 
 template <typename T>
-void secure_hash_with_salt(const T& data, const uint8_t (&salt)[16],
-                           uint8_t* res, uint32_t resSize) {
-  const size_t data_size = sizeof(T);
-  EVP_MD_CTX* mdctx = EVP_MD_CTX_new();
-  uint64_t result = 0;
-  unsigned char hash[EVP_MAX_MD_SIZE];
-  unsigned int lengthOfHash = 0;
+void secure_hash_with_salt(const T& data, const uint8_t (&salt)[16], uint8_t* res, size_t resSize) {
+    // Initialize the hash context
+    br_sha256_context ctx;
+    br_sha256_init(&ctx);
 
-  if (mdctx == NULL) {
-    // Handle error
-    return;
-  }
+    // Hash the salt
+    br_sha256_update(&ctx, salt, sizeof(salt));
 
-  if (1 != EVP_DigestInit_ex(mdctx, EVP_sha256(), NULL)) {
-    // Handle error
-    EVP_MD_CTX_free(mdctx);
-    return;
-  }
+    // Hash the data
+    br_sha256_update(&ctx, &data, sizeof(T));
 
-  // Hash the salt
-  if (1 != EVP_DigestUpdate(mdctx, salt, sizeof(salt))) {
-    // Handle error
-    EVP_MD_CTX_free(mdctx);
-    return;
-  }
+    // Finalize the hash and get the result
+    unsigned char hash[br_sha256_SIZE]; // br_sha256_SIZE is normally 32 for SHA-256
+    br_sha256_out(&ctx, hash);
 
-  // Hash the data
-  if (1 != EVP_DigestUpdate(mdctx, &data, data_size)) {
-    // Handle error
-    EVP_MD_CTX_free(mdctx);
-    return;
-  }
-
-  // Finalize the hash
-  if (1 != EVP_DigestFinal_ex(mdctx, hash, &lengthOfHash)) {
-    // Handle error
-    EVP_MD_CTX_free(mdctx);
-    return;
-  }
-
-  // Use the first 8 bytes of the hash as the result
-  memcpy(res, hash, resSize);
-
-  EVP_MD_CTX_free(mdctx);
+    // Copy the result to the output buffer, up to resSize bytes
+    memcpy(res, hash, resSize < br_sha256_SIZE ? resSize : br_sha256_SIZE);
 }
 
 #else

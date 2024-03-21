@@ -9,7 +9,7 @@ set(PROJECT_TRDPARTY_DIR "thirdparty")
 # gtest is currently buggy with clang and interprocess optimization, we needded to remove this flag: -Werror
 # set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -O0 -DNDEBUG -g -ggdb -fno-inline -no-pie")
 set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -O3 -DNDEBUG ")
-set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -O0 -g -ggdb -fno-inline -no-pie")
+set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -DNOOPENSSL -O0 -g -ggdb -fno-inline -no-pie")
 set(CMAKE_CXX_FLAGS "${CMAKE_C_FLAGS} -march=native -mtune=native")
 include(cmake/colors.cmake)
 
@@ -39,6 +39,7 @@ find_package(OpenMP REQUIRED)
 
 include(cmake/searchfiles.cmake)
 include(cmake/boost.cmake)
+include(cmake/bearssl.cmake)
 
 
 
