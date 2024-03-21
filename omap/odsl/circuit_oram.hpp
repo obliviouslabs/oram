@@ -41,40 +41,15 @@ struct ORAM {
   std::vector<Block_> path;  // a temporary buffer for reading and writing paths
 
   /**
-   * @brief Evict a path of pathLen blocks
-   *
-   * @param path The path to evict
-   * @param pos The position of the path
-   * @param pathLen Only evict the first pathLen blocks in the path
-   */
-  static void evictPath(std::vector<Block_>& path, PositionType pos,
-                        int pathLen) {
-    int depth = (pathLen - stashSize) / Z;
-    return evictPath(path, pos, depth, stashSize);
-  }
-
-  /**
-   * @brief Evict an entire path
-   *
-   * @param path The path to evict
-   * @param pos The position of the path
-   */
-  static void evictPath(std::vector<Block_>& path, PositionType pos) {
-    int depth = (path.size() - stashSize) / Z;
-    return evictPath(path, pos, depth, stashSize);
-  }
-
-  /**
    * @brief Evict path
    *
-   * @param path The path to evict. The first actualStashSize blocks are stash.
+   * @param path The path to evict. The first stashSize blocks are stash.
    * @param pos The position of the path
    * @param depth The depth of the path, i.e., the number of buckets excluding
    * stash
-   * @param actualStashSize The actual size of the stash in the path
    */
-  static void evictPath(std::vector<Block_>& path, PositionType pos, int depth,
-                        int actualStashSize) {
+  static void evictPath(std::vector<Block_>& path, PositionType pos,
+                        int depth) {
     // allocate metadata on stack to avoid contention of heap allocation
     int deepest[64];
     int deepestIdx[64];
@@ -82,72 +57,115 @@ struct ORAM {
     std::fill(&deepest[0], &deepest[depth], -1);
     std::fill(&deepestIdx[0], &deepestIdx[depth], 0);
     std::fill(&target[0], &target[depth], -1);
-    int src = -1;
-    int goal = -1;
 
-    for (int i = 0; i < depth; ++i) {
-      obliMove(goal >= i, deepest[i], src);
+    // first pass, root to leaf
+
+    // pack the two integers so that we can set them using one obliMove
+    struct SrcGoal {
+      int src;
+      int goal;
+    };
+    SrcGoal sg = {-1, -1};
+    // first level including the stash
+    for (int idx = 0; idx < stashSize + Z; ++idx) {
+      int deepestLevel = CommonSuffixLength(path[idx].position, pos);
+      bool deeperFlag = !path[idx].IsDummy() & (deepestLevel > sg.goal);
+      obliMove(deeperFlag, sg.goal, deepestLevel);
+      obliMove(deeperFlag, deepestIdx[0], idx);
+    }
+    obliMove(sg.goal >= 0, sg.src, 0);
+    // the remaining levels
+    for (int i = 1; i < depth; ++i) {
+      obliMove(sg.goal >= i, deepest[i], sg.src);
       int bucketDeepestLevel = -1;
-      for (int j = (i == 0 ? -actualStashSize : 0); j < Z; ++j) {
-        int idx = actualStashSize + i * Z + j;
+      int offset = stashSize + i * Z;
+      for (int j = 0; j < Z; ++j) {
+        int idx = offset + j;
         int deepestLevel = CommonSuffixLength(path[idx].position, pos);
         bool deeperFlag =
             !path[idx].IsDummy() & (deepestLevel > bucketDeepestLevel);
         obliMove(deeperFlag, bucketDeepestLevel, deepestLevel);
         obliMove(deeperFlag, deepestIdx[i], idx);
       }
-      bool deeperFlag = bucketDeepestLevel > goal;
-      obliMove(deeperFlag, goal, bucketDeepestLevel);
-      obliMove(deeperFlag, src, i);
+      bool deeperFlag = bucketDeepestLevel > sg.goal;
+      obliMove(deeperFlag, sg, {i, bucketDeepestLevel});
     }
 
-    int dest = -1;
-    src = -1;
+    // second pass, leaf to root
+
+    struct SrcDest {
+      int src;
+      int dest;
+    };
+    SrcDest sd = {-1, -1};
     for (int i = depth - 1; i > 0; --i) {
-      obliMove(i == src, target[i], dest);
-      obliMove(i == src, dest, -1);
-      obliMove(i == src, src, -1);
+      bool isSrc = i == sd.src;
+      obliMove(isSrc, target[i], sd.dest);
+      obliMove(isSrc, sd, {-1, -1});
       bool hasEmpty = false;
+      int offset = stashSize + i * Z;
       for (int j = 0; j < Z; ++j) {
-        int idx = actualStashSize + i * Z + j;
+        int idx = offset + j;
         hasEmpty |= path[idx].IsDummy();
       }
-      bool changeFlag =
-          (((dest == -1) & hasEmpty) | (target[i] != -1)) & (deepest[i] != -1);
-      obliMove(changeFlag, src, deepest[i]);
-      obliMove(changeFlag, dest, i);
+      bool changeFlag = (((sd.dest == -1) & hasEmpty) | (target[i] != -1)) &
+                        (deepest[i] != -1);
+      obliMove(changeFlag, sd, {deepest[i], i});
     }
-    obliMove(0 == src, target[0], dest);
+    obliMove(0 == sd.src, target[0], sd.dest);
+
+    // actually moving the data
 
     Block_ hold;
-    hold.uid = DUMMY<UidType>();
-    dest = -1;
-
-    for (int i = 0; i < depth; ++i) {
-      Block_ toWrite = hold;
-      bool placeFlag = !hold.IsDummy() & (i == dest);
-      obliMove(!placeFlag, toWrite.uid, DUMMY<UidType>());
-      obliMove(placeFlag, hold.uid, DUMMY<UidType>());
-      obliMove(placeFlag, dest, -1);
+    for (int idx = 0; idx < stashSize + Z; ++idx) {
+      bool isDeepest = idx == deepestIdx[0];
+      bool readAndRemoveFlag = isDeepest & (target[0] != -1);
+      obliMove(readAndRemoveFlag, hold, path[idx]);
+      obliMove(readAndRemoveFlag, path[idx].uid, DUMMY<UidType>());
+    }
+    int dest = target[0];
+    for (int i = 1; i < depth - 1; ++i) {
       bool hasTargetFlag = target[i] != -1;
-      for (int j = (i == 0 ? -actualStashSize : 0); j < Z; ++j) {
-        int idx = actualStashSize + i * Z + j;
+      bool placeDummyFlag = (i == dest) & !hasTargetFlag;
+
+      int offset = stashSize + i * Z;
+      for (int j = 0; j < Z; ++j) {
+        // case 0: level i is neither a dest and not a src
+        //         hasTargetFlag = false, placeDummyFlag = false
+        //         nothing will change
+        // case 1: level i is a dest but not a src
+        //         hasTargetFlag = false, placeDummyFlag = true
+        //         hold will be swapped with each dummy slot
+        //         after the first swap, hold will become dummy, and the
+        //         subsequent swaps have no effect.
+        // case 2: level i is a src but not a dest
+        //         hasTargetFlag = true, placeDummyFlag = false
+        //         hold must be dummy originally (eviction cannot carry two
+        //         blocks). hold will be swapped with the slot that evicts to
+        //         deepest.
+        // case 3: level i is both a src and a dest
+        //         hasTargetFlag = true, placeDummyFlag = false
+        //         hold will be swapped with the slot that evicts to deepest,
+        //         which fulfills both src and dest requirements.
+        int idx = offset + j;
         bool isDeepest = (idx == deepestIdx[i]);
         bool readAndRemoveFlag = isDeepest & hasTargetFlag;
-        obliMove(readAndRemoveFlag, hold, path[idx]);
-        obliMove(readAndRemoveFlag, path[idx].uid, DUMMY<UidType>());
+        bool writeFlag = path[idx].IsDummy() & placeDummyFlag;
+        bool swapFlag = readAndRemoveFlag | writeFlag;
+        // for large element, obliSwap is faster than performing two obliMove
+        obliSwap(swapFlag, hold, path[idx]);
       }
-      obliMove(hasTargetFlag, dest, target[i]);
-      if (i == 0) {
-        continue;  // no need to write to stash
-      }
-      bool needWriteFlag = !toWrite.IsDummy();
-      for (int j = 0; j < Z; ++j) {
-        int idx = actualStashSize + i * Z + j;
-        bool writeFlag = needWriteFlag & path[idx].IsDummy();
-        obliMove(writeFlag, path[idx], toWrite);
-        needWriteFlag &= !writeFlag;
-      }
+      obliMove(hasTargetFlag | placeDummyFlag, dest, target[i]);
+    }
+
+    bool placeDummyFlag = (depth - 1 == dest);
+    int offset = stashSize + (depth - 1) * Z;
+    bool written = false;
+    for (int j = 0; j < Z; ++j) {
+      int idx = offset + j;
+      bool writeFlag = (path[idx].IsDummy() & placeDummyFlag) & !written;
+      written |= writeFlag;
+      obliMove(writeFlag, path[idx], hold);
     }
   }
 
@@ -157,8 +175,8 @@ struct ORAM {
    * @param pos The position of the path to evict
    */
   void evict(PositionType pos) {
-    int len = readPath(pos, path);
-    evictPath(path, pos, len);
+    int pathDepth = readPath(pos, path);
+    evictPath(path, pos, pathDepth);
     writeBackPath(path, pos);
   }
 
@@ -183,16 +201,16 @@ struct ORAM {
    * @tparam _evict_freq Number of evictions to perform
    * @param newBlock The new block to write
    * @param pos The position of the path
-   * @param pathLen The length of the path
+   * @param pathDepth The depth of the path
    * @param retry Maximum number of retries
    */
   template <const int _evict_freq = evict_freq>
   INLINE void writeBlockWithRetry(const Block_& newBlock, PositionType pos,
-                                  int pathLen, int retry = 10) {
+                                  int pathDepth, int retry = 10) {
     while (true) {
       bool success = WriteNewBlockToPath(
           path.begin(), path.begin() + stashSize + Z, newBlock);
-      evictPath(path, pos, pathLen);
+      evictPath(path, pos, pathDepth);
       writeBackPath(path, pos);
       evict<_evict_freq>();
       if (success) {
@@ -203,7 +221,7 @@ struct ORAM {
       }
       --retry;
       pos = (evictCounter++) % size();
-      pathLen = readPath(pos, path);
+      pathDepth = readPath(pos, path);
     }
   }
 
@@ -212,15 +230,14 @@ struct ORAM {
    *
    * @param pos The position of the path
    * @param path The buffer to store the path
-   * @return int The length of the path
+   * @return int The depth of the path
    */
   int readPath(PositionType pos, std::vector<Block_>& path) {
     Assert(path.size() == stashSize + Z * depth);
 
     memcpy(&path[0], stash->blocks, stashSize * sizeof(Block_));
 
-    int level = tree.ReadPath(pos, (Bucket_*)(&path[stashSize]));
-    return stashSize + Z * level;
+    return tree.ReadPath(pos, (Bucket_*)(&path[stashSize]));
   }
 
   /**
@@ -431,12 +448,13 @@ struct ORAM {
    */
   PositionType Read(PositionType pos, const UidType& uid, T& out,
                     PositionType newPos) {
-    int len = readPath(pos, path);
+    int pathDepth = readPath(pos, path);
 
-    ReadElementAndRemoveFromPath(path.begin(), path.begin() + len, uid, out);
+    ReadElementAndRemoveFromPath(
+        path.begin(), path.begin() + (pathDepth * Z + stashSize), uid, out);
 
     Block_ newBlock(out, newPos, uid);
-    writeBlockWithRetry(newBlock, pos, len);
+    writeBlockWithRetry(newBlock, pos, pathDepth);
     return newPos;
   }
 
@@ -465,9 +483,9 @@ struct ORAM {
   template <const int _evict_freq = evict_freq>
   PositionType Write(const UidType& uid, const T& in, PositionType newPos) {
     PositionType pos = (evictCounter++) % size();
-    int len = readPath(pos, path);
+    int pathDepth = readPath(pos, path);
     Block_ newBlock(in, newPos, uid);
-    writeBlockWithRetry<_evict_freq>(newBlock, pos, len);
+    writeBlockWithRetry<_evict_freq>(newBlock, pos, pathDepth);
     return newPos;
   }
 
@@ -607,13 +625,14 @@ struct ORAM {
   PositionType Update(PositionType pos, const UidType& uid, PositionType newPos,
                       const Func& updateFunc, T& out,
                       const UidType& updatedUid) {
-    int len = readPath(pos, path);
-    ReadElementAndRemoveFromPath(path.begin(), path.begin() + len, uid, out);
+    int pathDepth = readPath(pos, path);
+    ReadElementAndRemoveFromPath(
+        path.begin(), path.begin() + (pathDepth * Z + stashSize), uid, out);
     bool keepFlag = updateFunc(out);
     UidType newUid = DUMMY<UidType>();
     obliMove(keepFlag, newUid, updatedUid);
     Block_ newBlock(out, newPos, updatedUid);
-    writeBlockWithRetry(newBlock, pos, len);
+    writeBlockWithRetry(newBlock, pos, pathDepth);
     return newPos;
   }
 
@@ -676,7 +695,7 @@ struct ORAM {
         writeBack &= (uid[i] != uid[i - 1]);
       }
       obliMove(writeBack, toWrite.uid, uid[i]);
-      writeBlockWithRetry(toWrite, p, stashSize + Z * actualLevel);
+      writeBlockWithRetry(toWrite, p, actualLevel);
     }
 
     memcpy(stash->blocks, &path[0], stashSize * sizeof(Block_));

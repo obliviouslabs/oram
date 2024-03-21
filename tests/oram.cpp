@@ -80,7 +80,6 @@ TEST(CircuitORAM, BatchUpdate) {
       ASSERT_EQ(val, valMap[i]);
     }
   }
-  printf("test batch update with duplicate\n");
   for (uint64_t i = 0; i < memSize; i++) {
     uint64_t peer = UniformRandom(memSize - 1);
     if (!(UniformRandom() % 10)) {
@@ -302,15 +301,15 @@ TEST(CircuitORAM, OverflowHandling) {
 }
 
 TEST(CircuitORAM, StashLoad) {
-  GTEST_SKIP();
+  // GTEST_SKIP();
   size_t memSize = 1UL << 16;
   static constexpr int Z = 2;
   static constexpr int stashSize = 50;
-  ODSL::CircuitORAM::ORAM<int, Z, stashSize, uint64_t, uint64_t> oram(memSize);
+  ODSL::CircuitORAM::ORAM<int, Z, stashSize, uint32_t, uint32_t> oram(memSize);
   size_t warmupWindowCount = 1e5;
-  size_t windowCount = 1e8;
+  size_t windowCount = 1e6;
   size_t windowSize = 10;
-  std::vector<uint64_t> posMap(memSize);
+  std::vector<uint32_t> posMap(memSize);
   for (int i = 0; i < memSize; ++i) {
     posMap[i] = oram.Write(i, 0);
   }
@@ -319,9 +318,9 @@ TEST(CircuitORAM, StashLoad) {
     int windowMaxStashLoad = 0;
     for (int j = 0; j < windowSize; ++j) {
       int val;
-      uint64_t idx = UniformRandom(memSize - 1);
-      uint64_t oldpos = posMap[idx];
-      uint64_t pos = oram.Read(oldpos, idx, val);
+      uint32_t idx = UniformRandom32(memSize - 1);
+      uint32_t oldpos = posMap[idx];
+      uint32_t pos = oram.Read(oldpos, idx, val);
       posMap[idx] = pos;
 
       int stashLoad = 0;
@@ -336,7 +335,7 @@ TEST(CircuitORAM, StashLoad) {
       ++elementDistribute[windowMaxStashLoad];
     }
   }
-  for (int i = 0; i < 60; ++i) {
+  for (int i = 0; i < 50; ++i) {
     printf("%d %lu\n", i, elementDistribute[i]);
   }
 }
@@ -380,7 +379,7 @@ TEST(CircuitORAM, ReadPerf) {
   int memSize = 1 << 20;
   ODSL::CircuitORAM::ORAM<TestElement> oram(memSize);
 
-  uint64_t numAccesses = 1e6;
+  uint64_t numAccesses = 3e6;
   auto start = std::chrono::system_clock::now();
   for (uint64_t i = 0; i < numAccesses; i++) {
     TestElement val;
