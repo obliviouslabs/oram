@@ -195,16 +195,16 @@ void testHeapTreeCorrectness() {
           continue;
         }
         int commonSuffixLen = std::countr_zero(path1 ^ path2);
-        int level1 = HeapTree_::GetPathIdx(pathIdxs1.begin(), pathIdxs1.end(),
-                                           path1, size, totalLevel, cacheLevel);
+        int level1 = HeapTree_::GetPathIdx(pathIdxs1.begin(), path1, size,
+                                           totalLevel, cacheLevel);
         for (int i = 0; i < level1; ++i) {
           ASSERT_LT(pathIdxs1[i], size * 2 - 1);
           if (i > 0) {
             ASSERT_LT(pathIdxs1[i - 1], pathIdxs1[i]);
           }
         }
-        int level2 = HeapTree_::GetPathIdx(pathIdxs2.begin(), pathIdxs2.end(),
-                                           path2, size, totalLevel, cacheLevel);
+        int level2 = HeapTree_::GetPathIdx(pathIdxs2.begin(), path2, size,
+                                           totalLevel, cacheLevel);
         for (int i = 0; i < level2; ++i) {
           ASSERT_LT(pathIdxs2[i], size * 2 - 1);
           if (i > 0) {

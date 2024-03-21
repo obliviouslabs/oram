@@ -51,12 +51,15 @@ struct ORAM {
   static void evictPath(std::vector<Block_>& path, PositionType pos,
                         int depth) {
     // allocate metadata on stack to avoid contention of heap allocation
-    int deepest[64];
-    int deepestIdx[64];
-    int target[64];
-    std::fill(&deepest[0], &deepest[depth], -1);
-    std::fill(&deepestIdx[0], &deepestIdx[depth], 0);
-    std::fill(&target[0], &target[depth], -1);
+    int deepest[64];     // the deepest level an block in this level can go
+    int deepestIdx[64];  // the index of the block in this level that goes
+                         // deepest
+    int target[64];      // the target level an block in this level should go
+    bool hasEmpty[64];   // whether each level has empty slot
+    std::fill(&deepest[0], &deepest[64], -1);
+    std::fill(&deepestIdx[0], &deepestIdx[64], 0);
+    std::fill(&target[0], &target[64], -1);
+    std::fill(&hasEmpty[0], &hasEmpty[64], false);
 
     // first pass, root to leaf
 
@@ -82,8 +85,11 @@ struct ORAM {
       for (int j = 0; j < Z; ++j) {
         int idx = offset + j;
         int deepestLevel = CommonSuffixLength(path[idx].position, pos);
-        bool deeperFlag =
-            !path[idx].IsDummy() & (deepestLevel > bucketDeepestLevel);
+        bool isEmpty = path[idx].IsDummy();
+        hasEmpty[i] |= isEmpty;
+        // cache if each empty has empty slot, so in the second scan, we don't
+        // need to access the buckets
+        bool deeperFlag = !isEmpty & (deepestLevel > bucketDeepestLevel);
         obliMove(deeperFlag, bucketDeepestLevel, deepestLevel);
         obliMove(deeperFlag, deepestIdx[i], idx);
       }
@@ -102,13 +108,7 @@ struct ORAM {
       bool isSrc = i == sd.src;
       obliMove(isSrc, target[i], sd.dest);
       obliMove(isSrc, sd, {-1, -1});
-      bool hasEmpty = false;
-      int offset = stashSize + i * Z;
-      for (int j = 0; j < Z; ++j) {
-        int idx = offset + j;
-        hasEmpty |= path[idx].IsDummy();
-      }
-      bool changeFlag = (((sd.dest == -1) & hasEmpty) | (target[i] != -1)) &
+      bool changeFlag = (((sd.dest == -1) & hasEmpty[i]) | (target[i] != -1)) &
                         (deepest[i] != -1);
       obliMove(changeFlag, sd, {deepest[i], i});
     }
@@ -660,22 +660,18 @@ struct ORAM {
     // mask duplicate positions
     deDuplicatePoses(batchSize, pos, uid);
 
-    // only copy stash once
-    memcpy(&path[0], stash->blocks, stashSize * sizeof(Block_));
     PositionType pathIdx[64];
     // read and remove
     for (uint64_t i = 0; i < batchSize; ++i) {
-      int actualLevel = tree.ReadPathAndGetPathIdx(
-          pos[i], (Bucket_*)&(path[stashSize]), pathIdx);
-      ReadElementAndRemoveFromPath(path.begin(),
-                                   path.begin() + stashSize + Z * actualLevel,
+      int actualLevel = tree.GetPathIdx(&pathIdx[0], pos[i]);
+      ReadElementAndRemoveFromPath(stash->blocks, stash->blocks + stashSize,
                                    uid[i], out[i]);
-      tree.WritePath(pos[i], (Bucket_*)&(path[stashSize]), actualLevel,
-                     pathIdx);
+      for (int j = 0; j < actualLevel; ++j) {
+        Bucket_& bucket = tree.GetNodeByIdx(pathIdx[j]);
+        ReadElementAndRemoveFromPath(bucket.blocks, bucket.blocks + Z, uid[i],
+                                     out[i]);
+      }
     }
-
-    // copy stash back
-    memcpy(stash->blocks, &path[0], stashSize * sizeof(Block_));
 
     // propagate duplicate values
     duplicateVal(batchSize, out, uid);

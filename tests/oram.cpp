@@ -187,6 +187,38 @@ TEST(CircuitORAM, BatchUpdateLarge) {
   }
 }
 
+TEST(CircuitORAM, BatchReadAndRemovePerf) {
+  if (EM::Backend::g_DefaultBackend) {
+    delete EM::Backend::g_DefaultBackend;
+  }
+  size_t BackendSize = 1e9;
+  EM::Backend::g_DefaultBackend =
+      new EM::Backend::MemServerBackend(BackendSize);
+  int memSize = 1e5;
+  uint64_t round = 5000;
+  uint64_t batchSize = 1000;
+  ODSL::CircuitORAM::ORAM<TestElement> oram(memSize, 1UL << 62);
+  std::vector<uint64_t> posMap(memSize, 0);
+  std::vector<uint64_t> batchUid(batchSize, 0);
+  std::vector<uint64_t> batchPos(batchSize);
+  std::vector<TestElement> batchVals(batchSize);
+  for (uint64_t r = 0; r < round; ++r) {
+    // add some random reads
+    for (uint64_t j = 0; j < batchSize; j++) {
+      batchPos[j] = posMap[batchUid[j]];
+    }
+    auto updateFunc = [&](uint64_t batchSize,
+                          TestElement* vals) -> std::vector<bool> {
+      for (uint64_t j = 0; j < batchSize; j++) {
+        vals[j].key++;
+      }
+      return std::vector<bool>(batchSize, true);
+    };
+    oram.BatchReadAndRemove(batchSize, &batchPos[0], &batchUid[0],
+                            &batchVals[0]);
+  }
+}
+
 TEST(CircuitORAM, Mixed) {
   for (int memSize : {2, 3, 5, 7, 9, 33, 40, 55, 127, 129, 543, 678, 1023, 1025,
                       2000, 4567, 12345, 25432, 71429}) {
