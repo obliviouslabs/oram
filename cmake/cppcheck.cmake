@@ -8,7 +8,7 @@ add_custom_target(
         --std=c++20
         --library=googletest.cfg
         # --template="[{severity}][{id}] {message} {callstack} \(On {file}:{line}\)"
-        -I../osort/ -I../tests/
+        -I../omap/ -I../tests/
         --verbose
         --quiet
         ${SOURCE_FILES_NM}
@@ -19,7 +19,7 @@ add_custom_target(
         COMMAND cppcheck 
         --xml --xml-version=2 
         --enable=all 
-        -I../osort/ -I../tests/
+        -I../omap/ -I../tests/
         --std=c++20 
         --library=googletest.cfg
         -DBOOST_STACKTRACE_USE_ADDR2LINE 
