@@ -45,24 +45,24 @@ void __attribute__((noinline)) sgxsd_br_clear_stack() {
 #ifndef ENCLAVE_MODE_ENCLAVE
 uint64_t secure_hash_with_salt(const uint8_t* data, size_t data_size, const uint8_t (&salt)[16]) {
   uint64_t res;
-    // Initialize the hash context
-    br_sha256_context ctx;
-    br_sha256_init(&ctx);
+  // Initialize the hash context
+  br_sha256_context ctx;
+  br_sha256_init(&ctx);
 
-    // Hash the salt
-    br_sha256_update(&ctx, salt, sizeof(salt));
+  // Hash the salt
+  br_sha256_update(&ctx, salt, sizeof(salt));
 
-    // Hash the data
-    br_sha256_update(&ctx, &data, data_size);
+  // Hash the data
+  br_sha256_update(&ctx, &data, data_size);
 
-    // Finalize the hash and get the result
-    unsigned char hash[br_sha256_SIZE]; // br_sha256_SIZE is normally 32 for SHA-256
-    br_sha256_out(&ctx, hash);
+  // Finalize the hash and get the result
+  unsigned char hash[br_sha256_SIZE]; // br_sha256_SIZE is normally 32 for SHA-256
+  br_sha256_out(&ctx, hash);
 
-    // Copy the result to the output buffer, up to resSize bytes
-    memcpy(&res, hash, 8);
+  // Copy the result to the output buffer, up to resSize bytes
+  memcpy(&res, hash, 8);
 
-    return res;
+  return res;
 }
 #else
 #include <cstring>
