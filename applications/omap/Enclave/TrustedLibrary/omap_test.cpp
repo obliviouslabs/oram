@@ -190,9 +190,10 @@ void testOmpSpeedup() {
     std::vector<uint64_t> path(tree.GetDepth());
     for (int r = 0; r < 1e7; ++r) {
       uint64_t nodeIdxArr[64];
-      int depth =
-          tree.ReadPathAndGetNodeIdxArr(r % size, path.begin(), nodeIdxArr);
-      tree.WritePath(r % size, path.begin(), depth, nodeIdxArr);
+      int depth = tree.GetNodeIdxArr(nodeIdxArr, r % size);
+      for (int i = 0; i < depth; ++i) {
+        ++tree.GetNodeByIdx(nodeIdxArr[i]);
+      }
     }
   }
 
@@ -206,12 +207,12 @@ void testOmpSpeedup() {
     HeapTree<uint64_t> tree;
     uint64_t size = 2048;
     tree.Init(size);
-    std::vector<uint64_t> path(tree.GetDepth());
     for (int r = 0; r < 1e7; ++r) {
       uint64_t nodeIdxArr[64];
-      int depth =
-          tree.ReadPathAndGetNodeIdxArr(r % size, path.begin(), nodeIdxArr);
-      tree.WritePath(r % size, path.begin(), depth, nodeIdxArr);
+      int depth = tree.GetNodeIdxArr(nodeIdxArr, r % size);
+      for (int i = 0; i < depth; ++i) {
+        ++tree.GetNodeByIdx(nodeIdxArr[i]);
+      }
     }
   }
   ocall_measure_time(&end);

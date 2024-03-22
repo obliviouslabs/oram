@@ -212,48 +212,6 @@ struct HeapTree {
   }
 
   /**
-   * @brief Retrieve the node on the path, and output the node indices
-   *
-   * @tparam Iterator The type of the iterator to store the path
-   * @param pos The index of the path
-   * @param pathBegin The begin iterator to store the path
-   * @param nodeIdxArr Output the internal indices of the path
-   * @return int The number of nodes in the path
-   */
-  template <class Iterator>
-  int ReadPathAndGetNodeIdxArr(PositionType pos, Iterator pathBegin,
-                               PositionType nodeIdxArr[64]) {
-    int actualLevel =
-        GetNodeIdxArr(&nodeIdxArr[0], pos, leafCount, totalLevel, cacheLevel);
-
-    for (int i = 0; i < actualLevel; ++i) {
-      PositionType idx = nodeIdxArr[i];
-      *(pathBegin + i) = arr.Get(idx);
-    }
-    return actualLevel;
-  }
-
-  /**
-   * @brief Write the path to the tree, given the depth of the path and the node
-   * indices
-   *
-   * @tparam Iterator The type of the iterator to store the path
-   * @param pos The index of the path
-   * @param pathBegin The begin iterator to store the path
-   * @return int The number of nodes in the path
-   */
-  template <class Iterator>
-  void WritePath(PositionType pos, const Iterator pathBegin, int pathDepth,
-                 const PositionType nodeIdxArr[64]) {
-    // we have checked that total level <= 64
-    Assert(pathDepth <= totalLevel);
-    for (int i = 0; i < pathDepth; ++i) {
-      PositionType idx = nodeIdxArr[i];
-      arr[idx] = *(pathBegin + i);
-    }
-  }
-
-  /**
    * @brief Get individual node By index
    *
    * @param idx The index of the node
