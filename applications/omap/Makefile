@@ -172,7 +172,7 @@ else
 endif
 
 Enclave_C_Flags := $(Enclave_Flags) -std=c17 
-Enclave_Cpp_Flags := $(Enclave_Flags) -std=c++20 -nostdinc++ -fopenmp -DNOOPENSSL -DENCLAVE_MODE -DELEMENT_SIZE=${ELEMENT_SIZE} -DALGO=${ALGO} -DMIN_SIZE=${MIN_SIZE} -DMAX_SIZE=${MAX_SIZE} -DSTEP_RATIO=${STEP_RATIO} -DENCLAVE_SIZE=${ENCLAVE_SIZE} -DTCS_NUM=${TCS_NUM}
+Enclave_Cpp_Flags := $(Enclave_Flags) -std=c++20 -nostdinc++ -fopenmp -DENCLAVE_MODE -DELEMENT_SIZE=${ELEMENT_SIZE} -DALGO=${ALGO} -DMIN_SIZE=${MIN_SIZE} -DMAX_SIZE=${MAX_SIZE} -DSTEP_RATIO=${STEP_RATIO} -DENCLAVE_SIZE=${ENCLAVE_SIZE} -DTCS_NUM=${TCS_NUM}
 ifeq ($(DISK_IO), 1)
 	Enclave_Cpp_Flags += -DDISK_IO
 endif

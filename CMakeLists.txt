@@ -9,7 +9,7 @@ set(PROJECT_TRDPARTY_DIR "thirdparty")
 # gtest is currently buggy with clang and interprocess optimization, we needded to remove this flag: -Werror
 # set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -O0 -DNDEBUG -g -ggdb -fno-inline -no-pie")
 set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -O3 -DNDEBUG ")
-set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -DNOOPENSSL -O0 -g -ggdb -fno-inline -no-pie")
+set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -O0 -g -ggdb -fno-inline -no-pie")
 set(CMAKE_CXX_FLAGS "${CMAKE_C_FLAGS} -march=native -mtune=native")
 include(cmake/colors.cmake)
 
@@ -23,17 +23,6 @@ FetchContent_Declare(
 set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(googletest)
 
-# If you don't want to install openssl, uncommenting the following lines should work:
-# FetchContent_Declare(
-#   ssl_content
-#   GIT_REPOSITORY https://github.com/janbar/openssl-cmake.git
-#   GIT_TAG "1.1.1k-20210430"
-# )
-# FetchContent_MakeAvailable(ssl_content)
-# add_library(OpenSSL::SSL ALIAS ssl)
-# add_library(OpenSSL::Crypto ALIAS crypto)
-
-find_package(OpenSSL REQUIRED)
 find_package (Boost REQUIRED)
 find_package(OpenMP REQUIRED)
 

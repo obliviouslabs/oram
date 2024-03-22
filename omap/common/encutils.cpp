@@ -19,8 +19,8 @@
 
 RandGen default_rand;
 
-// In enclave mode we can't use openssl, so we use libsodium, which should be
-// packed in the enclave directly.
+// We have two versions of bearssl. For the enclave we need the sgx prepacked one, for non enclave we need one installed in the OS. This file allows us to use SGX library functions instead of bearssl inside of the enclave whenever they are available.
+
 void aes_init() {
   static int init = 0;
   if (init == 0) {

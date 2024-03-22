@@ -1,7 +1,6 @@
 searchfiles()
 
 include_directories (${PROJECT_SOURCE_DIR}/omap)
-include_directories (${OPENSSL_INCLUDE_DIR})
 
 add_executable(
   test_par_omap
