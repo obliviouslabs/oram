@@ -55,5 +55,7 @@ RUN chmod +x /rocksDBInstall.sh && \
 SHELL ["/bin/bash", "-c"] 
 RUN ln -s /usr/lib/libsgx_urts.so /usr/lib/libsgx_urts.so.2
 
+RUN apt update -y && apt upgrade -y && apt install -y libbearssl-dev
+
 WORKDIR /builder/
 CMD ["bash"]

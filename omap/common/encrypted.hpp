@@ -28,9 +28,6 @@ struct Encrypted {
   uint8_t data[SIZE];  // We don't need to adjust this because CTR modes don't
                        // need padding.
   uint8_t iv[AES_BLOCK_SIZE];
-#ifndef NOOPENSSL
-  uint8_t tag[AES_BLOCK_SIZE];
-#endif
 
   // Encrypted& operator=(const Encrypted&) = delete;
   // Encrypted(const Encrypted&) = delete;
@@ -38,27 +35,15 @@ struct Encrypted {
   INLINE void Encrypt(const T& in) {
     // PROFILE_F();
     GetRand16(iv);
-#ifndef NOOPENSSL
-    // GetRand16(iv);
-    aes_256_gcm_encrypt(
-        SIZE, const_cast<uint8_t*>(reinterpret_cast<const uint8_t*>(&in)), KEY,
-        iv, tag, data);
-#else
     aes_256_ctr_encrypt(
         SIZE, const_cast<uint8_t*>(reinterpret_cast<const uint8_t*>(&in)), KEY,
         iv, data);
-#endif
   }
 
   INLINE void Decrypt(T& out) /*const*/ {
     // PROFILE_F();
-#ifndef NOOPENSSL
-    bool r = aes_256_gcm_decrypt(SIZE, data, KEY, iv, tag,
-                                 reinterpret_cast<uint8_t*>(&out));
-#else
     bool r = aes_256_ctr_decrypt(SIZE, data, KEY, iv,
                                  reinterpret_cast<uint8_t*>(&out));
-#endif
     Assert(r);
     IGNORE_UNUSED(r);
   }
