@@ -90,27 +90,30 @@ uint64_t secure_hash_with_salt(const T& data, const uint8_t (&salt)[16]) {
 
 #ifndef ENCLAVE_MODE_ENCLAVE
 #include <bearssl.h>
+
 #include <cstdint>
 #include <cstring>
 
 template <typename T>
-void secure_hash_with_salt(const T& data, const uint8_t (&salt)[16], uint8_t* res, size_t resSize) {
-    // Initialize the hash context
-    br_sha256_context ctx;
-    br_sha256_init(&ctx);
+void secure_hash_with_salt(const T& data, const uint8_t (&salt)[16],
+                           uint8_t* res, size_t resSize) {
+  // Initialize the hash context
+  br_sha256_context ctx;
+  br_sha256_init(&ctx);
 
-    // Hash the salt
-    br_sha256_update(&ctx, salt, sizeof(salt));
+  // Hash the salt
+  br_sha256_update(&ctx, salt, sizeof(salt));
 
-    // Hash the data
-    br_sha256_update(&ctx, &data, sizeof(T));
+  // Hash the data
+  br_sha256_update(&ctx, &data, sizeof(T));
 
-    // Finalize the hash and get the result
-    unsigned char hash[br_sha256_SIZE]; // br_sha256_SIZE is normally 32 for SHA-256
-    br_sha256_out(&ctx, hash);
+  // Finalize the hash and get the result
+  unsigned char
+      hash[br_sha256_SIZE];  // br_sha256_SIZE is normally 32 for SHA-256
+  br_sha256_out(&ctx, hash);
 
-    // Copy the result to the output buffer, up to resSize bytes
-    memcpy(res, hash, resSize < br_sha256_SIZE ? resSize : br_sha256_SIZE);
+  // Copy the result to the output buffer, up to resSize bytes
+  memcpy(res, hash, resSize < br_sha256_SIZE ? resSize : br_sha256_SIZE);
 }
 
 #else
