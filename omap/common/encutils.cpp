@@ -19,7 +19,10 @@
 
 RandGen default_rand;
 
-// We have two versions of bearssl. For the enclave we need the sgx prepacked one, for non enclave we need one installed in the OS. This file allows us to use SGX library functions instead of bearssl inside of the enclave whenever they are available.
+// We have two versions of bearssl. For the enclave we need the sgx prepacked
+// one, for non enclave we need one installed in the OS. This file allows us to
+// use SGX library functions instead of bearssl inside of the enclave whenever
+// they are available.
 
 void aes_init() {
   static int init = 0;
@@ -31,9 +34,7 @@ void aes_init() {
 }
 
 #ifndef ENCLAVE_MODE_ENCLAVE
-void handleErrors(void) {
-  throw std::runtime_error("BearSSL error");
-}
+void handleErrors(void) { throw std::runtime_error("BearSSL error"); }
 #endif
 
 void __attribute__((noinline)) sgxsd_br_clear_stack() {
@@ -43,33 +44,35 @@ void __attribute__((noinline)) sgxsd_br_clear_stack() {
 }
 
 #ifndef ENCLAVE_MODE_ENCLAVE
-uint64_t secure_hash_with_salt(const uint8_t* data, size_t data_size, const uint8_t (&salt)[16]) {
+uint64_t secure_hash_with_salt(const uint8_t *data, size_t data_size,
+                               const uint8_t (&salt)[16]) {
   uint64_t res;
-    // Initialize the hash context
-    br_sha256_context ctx;
-    br_sha256_init(&ctx);
+  // Initialize the hash context
+  br_sha256_context ctx;
+  br_sha256_init(&ctx);
 
-    // Hash the salt
-    br_sha256_update(&ctx, salt, sizeof(salt));
+  // Hash the salt
+  br_sha256_update(&ctx, salt, sizeof(salt));
 
-    // Hash the data
-    br_sha256_update(&ctx, &data, data_size);
+  // Hash the data
+  br_sha256_update(&ctx, data, data_size);
 
-    // Finalize the hash and get the result
-    unsigned char hash[br_sha256_SIZE]; // br_sha256_SIZE is normally 32 for SHA-256
-    br_sha256_out(&ctx, hash);
+  // Finalize the hash and get the result
+  unsigned char
+      hash[br_sha256_SIZE];  // br_sha256_SIZE is normally 32 for SHA-256
+  br_sha256_out(&ctx, hash);
 
-    // Copy the result to the output buffer, up to resSize bytes
-    memcpy(&res, hash, 8);
+  // Copy the result to the output buffer, up to resSize bytes
+  memcpy(&res, hash, 8);
 
-    return res;
+  return res;
 }
 #else
 #include <cstring>
 
 #include "sgx_tcrypto.h"
 #include "sgx_trts.h"
-uint64_t secure_hash_with_salt(const uint8_t* data, size_t data_size,
+uint64_t secure_hash_with_salt(const uint8_t *data, size_t data_size,
                                const uint8_t (&salt)[16]) {
   sgx_sha_state_handle_t sha_handle;
   sgx_sha256_hash_t hash;
@@ -113,11 +116,11 @@ uint64_t secure_hash_with_salt(const uint8_t* data, size_t data_size,
 #endif
 
 bool sgxsd_aes_gcm_run(bool encrypt,
-                               const uint8_t p_key[SGXSD_AES_GCM_KEY_SIZE],
-                               const void *p_src, uint32_t src_len, void *p_dst,
-                               const uint8_t p_iv[SGXSD_AES_GCM_KEY_SIZE],
-                               const void *p_aad, uint32_t aad_len,
-                               uint8_t p_mac[SGXSD_AES_GCM_KEY_SIZE]) {
+                       const uint8_t p_key[SGXSD_AES_GCM_KEY_SIZE],
+                       const void *p_src, uint32_t src_len, void *p_dst,
+                       const uint8_t p_iv[SGXSD_AES_GCM_KEY_SIZE],
+                       const void *p_aad, uint32_t aad_len,
+                       uint8_t p_mac[SGXSD_AES_GCM_KEY_SIZE]) {
   if (p_key == NULL || ((p_src == NULL || p_dst == NULL) && src_len != 0) ||
       p_iv == NULL || (p_aad == NULL && aad_len != 0) || p_mac == NULL) {
     return 0;
@@ -169,14 +172,14 @@ bool aes_256_gcm_decrypt(uint64_t ciphertextSize, uint8_t *ciphertext,
                          uint8_t iv[AES_BLOCK_SIZE],
                          uint8_t tag[AES_BLOCK_SIZE], uint8_t *plaintext) {
   aes_init();
-  return sgxsd_aes_gcm_run(false, key, ciphertext, ciphertextSize,
-                                plaintext, iv, nullptr, 0, tag);
+  return sgxsd_aes_gcm_run(false, key, ciphertext, ciphertextSize, plaintext,
+                           iv, nullptr, 0, tag);
 }
 
 bool sgxsd_aes_ctr_run(bool encrypt,
-                               const uint8_t p_key[SGXSD_AES_GCM_KEY_SIZE],
-                               const void *p_src, uint32_t src_len, void *p_dst,
-                               const uint8_t p_iv[SGXSD_AES_GCM_KEY_SIZE]) {
+                       const uint8_t p_key[SGXSD_AES_GCM_KEY_SIZE],
+                       const void *p_src, uint32_t src_len, void *p_dst,
+                       const uint8_t p_iv[SGXSD_AES_GCM_KEY_SIZE]) {
   if (p_key == NULL || ((p_src == NULL || p_dst == NULL) && src_len != 0) ||
       p_iv == NULL) {
     return 0;
@@ -205,8 +208,8 @@ bool aes_256_ctr_decrypt(uint64_t ciphertextSize, uint8_t *ciphertext,
                          const uint8_t key[AES_BLOCK_SIZE],
                          const uint8_t iv[AES_BLOCK_SIZE], uint8_t *plaintext) {
   aes_init();
-  return sgxsd_aes_ctr_run(false, key, ciphertext, ciphertextSize,
-                                plaintext, iv);
+  return sgxsd_aes_ctr_run(false, key, ciphertext, ciphertextSize, plaintext,
+                           iv);
 }
 
 #ifndef ENCLAVE_MODE_ENCLAVE
@@ -226,25 +229,25 @@ uint8_t RandGen::rand1() {
 }
 
 void read_rand(uint8_t *output, size_t size) {
-      FILE *fp = fopen("/dev/urandom", "rb");
-    if (fp == NULL) {
-        perror("Failed to open /dev/urandom");
-        return; // Failure
-    }
+  FILE *fp = fopen("/dev/urandom", "rb");
+  if (fp == NULL) {
+    perror("Failed to open /dev/urandom");
+    return;  // Failure
+  }
 
-    size_t read = fread(output, 1, size, fp);
-    fclose(fp);
+  size_t read = fread(output, 1, size, fp);
+  fclose(fp);
 
-    if (read != size) {
-        perror("Failed to read enough bytes");
-        // Handle the error, not enough data was read
-        return; // Failure
-    }
+  if (read != size) {
+    perror("Failed to read enough bytes");
+    // Handle the error, not enough data was read
+    return;  // Failure
+  }
 
-    return; // Success
+  return;  // Success
 }
 
-#else 
+#else
 RandGen::RandGen() {}
 
 uint64_t RandGen::rand64() {

@@ -52,7 +52,7 @@ class RandomDevice : public std::random_device {
 
 class RandGen {
   RandomDevice<> rd;
-#ifndef ENCLAVE_MODE
+#ifndef ENCLAVE_MODE_ENCLAVE
   std::minstd_rand engine;
 #endif
  public:
@@ -82,34 +82,38 @@ uint64_t secure_hash_with_salt(const T& data, const uint8_t (&salt)[16]);
 template <typename T>
 void secure_hash_with_salt(const T& data, const uint8_t (&salt)[16], void* res,
                            uint8_t resSize);
-#ifndef ENCLAVE_MODE_ENCLAVE
-#include <bearssl.h>
-#include <cstdint>
-#include <cstring>
 
 template <typename T>
 uint64_t secure_hash_with_salt(const T& data, const uint8_t (&salt)[16]) {
   return secure_hash_with_salt((const uint8_t*)&data, sizeof(T), salt);
 }
 
+#ifndef ENCLAVE_MODE_ENCLAVE
+#include <bearssl.h>
+
+#include <cstdint>
+#include <cstring>
+
 template <typename T>
-void secure_hash_with_salt(const T& data, const uint8_t (&salt)[16], uint8_t* res, size_t resSize) {
-    // Initialize the hash context
-    br_sha256_context ctx;
-    br_sha256_init(&ctx);
+void secure_hash_with_salt(const T& data, const uint8_t (&salt)[16],
+                           uint8_t* res, size_t resSize) {
+  // Initialize the hash context
+  br_sha256_context ctx;
+  br_sha256_init(&ctx);
 
-    // Hash the salt
-    br_sha256_update(&ctx, salt, sizeof(salt));
+  // Hash the salt
+  br_sha256_update(&ctx, salt, sizeof(salt));
 
-    // Hash the data
-    br_sha256_update(&ctx, &data, sizeof(T));
+  // Hash the data
+  br_sha256_update(&ctx, &data, sizeof(T));
 
-    // Finalize the hash and get the result
-    unsigned char hash[br_sha256_SIZE]; // br_sha256_SIZE is normally 32 for SHA-256
-    br_sha256_out(&ctx, hash);
+  // Finalize the hash and get the result
+  unsigned char
+      hash[br_sha256_SIZE];  // br_sha256_SIZE is normally 32 for SHA-256
+  br_sha256_out(&ctx, hash);
 
-    // Copy the result to the output buffer, up to resSize bytes
-    memcpy(res, hash, resSize < br_sha256_SIZE ? resSize : br_sha256_SIZE);
+  // Copy the result to the output buffer, up to resSize bytes
+  memcpy(res, hash, resSize < br_sha256_SIZE ? resSize : br_sha256_SIZE);
 }
 
 #else
@@ -117,17 +121,6 @@ void secure_hash_with_salt(const T& data, const uint8_t (&salt)[16], uint8_t* re
 
 #include "sgx_tcrypto.h"
 #include "sgx_trts.h"
-template <typename T>
-uint64_t secure_hash_with_salt(const T& data, const uint8_t (&salt)[16]) {
-  uint8_t data_with_salt[sizeof(T) + 16];
-  memcpy(data_with_salt, &data, sizeof(T));
-  memcpy(data_with_salt + sizeof(T), salt, 16);
-  sgx_sha256_hash_t hash;
-  sgx_sha256_msg((uint8_t*)&data_with_salt[0], sizeof(T) + 16, &hash);
-  uint64_t result;
-  memcpy(&result, &hash, sizeof(result));
-  return result;
-}
 
 template <typename T>
 void secure_hash_with_salt(const T& data, const uint8_t (&salt)[16], void* res,
