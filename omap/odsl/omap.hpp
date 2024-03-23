@@ -887,7 +887,7 @@ struct OHashMap {
   void InitFromReader(Reader& reader, uint64_t additionalCacheBytes = 0) {
     if constexpr (!isOblivious) {
       while (!reader.eof()) {
-        std::pair<K, V> entry = reader.read();
+        const std::pair<K, V>& entry = reader.read();
         Insert(entry.first, entry.second);
       }
     } else {

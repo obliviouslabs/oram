@@ -76,6 +76,8 @@ struct ParOMap {
   // the size of hash range for each shard
   uint64_t shardHashRange;
 
+  PositionType _size;
+
   /**
    * @brief translate a hash to a shard index
    *
@@ -188,6 +190,13 @@ struct ParOMap {
   }
 
   /**
+   * @brief Return the capacity of the map.
+   *
+   * @return PositionType
+   */
+  PositionType size() const { return _size; }
+
+  /**
    * @brief Initialize an empty map with a given cache size for all shards.
    *
    * @param cacheBytes The cache size in bytes (for all shards in total).
@@ -200,162 +209,36 @@ struct ParOMap {
     }
   }
 
-  /**
-   * @brief Initialize the map from a reader. The data is fetched in batches and
-   * for each batch, we route the data in parallel through a multi-way butterfly
-   * network to load balance them to each shard. Used techniques described in
-   * https://eprint.iacr.org/2023/1258. Might throw error with some negligible
-   * probability (when some bucket overflows), in which case one may retry.
-   *
-   * @tparam Reader The type of the reader
-   * @param reader The reader object
-   * @param cacheBytes
-   */
-  template <class Reader>
-    requires Readable<Reader, std::pair<K, V>>
-  void InitFromReader(Reader& reader, uint64_t cacheBytes = DEFAULT_HEAP_SIZE) {
-    uint64_t shardCount = shards.size();
-    uint64_t initSize = reader.size();
-    uint64_t maxInitSizePerShard = maxQueryPerShard(initSize, shardCount, -60);
-    using NonObliviousOHashMap = OHashMap<K, V, false, PositionType>;
-    std::vector<NonObliviousOHashMap> nonOMaps(shardCount);
-    for (auto& nonOMap : nonOMaps) {
-      nonOMap.SetSize(shardSize, 0);
-    }
-
-    using Element = Algorithm::TaggedT<KVPair>;
-    const size_t bktSize =
-        std::min(8192UL, GetNextPowerOfTwo(maxInitSizePerShard));
-    size_t bktRealSize = numRealPerBkt(bktSize, shardCount, -60);
-    uint64_t minBatchSize = bktSize * shardCount;
-    uint64_t maxBatchSize = cacheBytes / (sizeof(Element) + 8) / 2;
-    std::vector<uint64_t> factors = factorizeShardCount(shardCount);
-    if (maxBatchSize < minBatchSize) {
-      throw std::runtime_error("InitFromReader cache size too small");
-    }
-
-    uint64_t totalBktNeeded = divRoundUp(initSize, bktRealSize);
-    // make sure it's a multiple of shardCount
-    uint64_t bktPerShard = divRoundUp(totalBktNeeded, shardCount);
-    if (bktPerShard * bktSize > shardSize) {
-      shardSize = bktPerShard *
-                  bktSize;  // we need large oram to hold these many elements
-    }
-    totalBktNeeded = bktPerShard * shardCount;
-    bktRealSize =
-        divRoundUp(initSize, totalBktNeeded);  // split initial elements evenly
-    if (totalBktNeeded * bktSize < maxBatchSize) {
-      maxBatchSize = totalBktNeeded * bktSize;  // don't waste space
-    }
-    uint64_t parBatchCount = maxBatchSize / minBatchSize;
-    uint64_t bktPerBatch = parBatchCount * shardCount;
-    uint64_t batchSize = bktPerBatch * bktSize;
-    uint64_t perBatchShardSize = parBatchCount * bktSize;
-
-    // buffers for mergesplit
-    Element* batch = new Element[batchSize];
-    Element* tempElements = new Element[batchSize];
-    uint8_t* tempMarks = new uint8_t[batchSize];
-    int butterflyLevel = factors.size();
-    while (!reader.eof()) {
-      // set the first level of the butterfly network
-      for (uint64_t bktIdx = 0; bktIdx < bktPerBatch; ++bktIdx) {
-        uint64_t bktOffset = bktIdx * bktSize;
-        for (uint64_t i = 0; i < bktSize; ++i) {
-          Element& elem = batch[bktOffset + i];
-          if (i < bktRealSize && !reader.eof()) {
-            std::pair<K, V> kvPair = reader.read();
-            elem.v.key = kvPair.first;
-            elem.v.value = kvPair.second;
-            uint64_t hash = secure_hash_with_salt((uint8_t*)&elem.v.key,
-                                                  sizeof(K), randSalt);
-            elem.setTag(getShardByHash(hash));
-          } else {
-            elem.setDummy();
-          }
-        }
-      }
-
-      // route the data through the butterfly network in parallel
-      for (int level = 0, stride = parBatchCount; level < butterflyLevel;
-           ++level) {
-        uint64_t way = factors[level];
-        uint64_t parCount = bktPerBatch / way;
-#pragma omp parallel for schedule(static)
-        for (uint64_t parIdx = 0; parIdx < parCount; ++parIdx) {
-          uint64_t groupIdx = parIdx / stride;
-          uint64_t groupOffset = parIdx % stride;
-          Element* KWayIts[8];
-          for (uint64_t j = 0; j < way; ++j) {
-            KWayIts[j] =
-                batch + ((j + groupIdx * way) * stride + groupOffset) * bktSize;
-          }
-          size_t tempBktsSize = way * bktSize * sizeof(Element);
-          Element* localTempElements = tempElements + parIdx * way * bktSize;
-          uint8_t* localTempMarks = tempMarks + parIdx * way * bktSize;
-          MergeSplitKWay(KWayIts, way, bktSize, localTempElements,
-                         localTempMarks);
-        }
-        stride *= way;
-      }
-
-      // insert the data into the non-oblivious maps in parallel
-#pragma omp parallel for schedule(static)
-      for (uint32_t i = 0; i < shardCount; ++i) {
-        for (uint64_t j = 0; j < perBatchShardSize; ++j) {
-          const Element& elem = batch[i * perBatchShardSize + j];
-          const KVPair& kvPair = elem.v;
-          // insert dummies like normal elements
-          nonOMaps[i].template Insert<true>(kvPair.key, kvPair.value,
-                                            elem.IsDummy());
-          uint64_t hash =
-              secure_hash_with_salt((uint8_t*)&kvPair.key, sizeof(K), randSalt);
-
-          uint32_t correctShard = getShardByHash(hash);
-          if (!elem.IsDummy() && i != correctShard) {
-            printf("wrong shard %u %u\n", i, correctShard);
-            throw std::runtime_error("wrong shard");
-          }
-        }
-      }
-    }
-    delete[] tempElements;
-    delete[] tempMarks;
-    delete[] batch;
-    for (auto& shard : shards) {
-      shard.SetSize(shardSize, cacheBytes / shardCount);
-    }
-    // initialize the oblivious maps from the non-oblivious maps in parallel
-#pragma omp parallel for schedule(static)
-    for (uint32_t i = 0; i < shardCount; ++i) {
-      shards[i].InitFromNonOblivious(nonOMaps[i]);
-    }
-  }
-
   struct InitContext {
     using Element = Algorithm::TaggedT<KVPair>;
     using NonObliviousOHashMap = OHashMap<K, V, false, PositionType>;
-    ParOMap& omap;
-    std::vector<NonObliviousOHashMap*> nonOMaps;
-    std::vector<uint64_t> factors;
-    Element* batch;
-    Element* tempElements;
-    uint8_t* tempMarks;
-    uint64_t shardCount;
-    uint64_t bktSize;
-    uint64_t bktPerBatch;
-    uint64_t bktRealSize;
-    uint64_t parBatchCount;
-    uint64_t batchSize;
-    uint64_t perBatchShardSize;
-    uint64_t cacheBytes;
-    uint64_t currBktIdx;
-    uint64_t currBktOffset;
-    int butterflyLevel;
+    ParOMap& omap;                                // reference to the parent map
+    std::vector<NonObliviousOHashMap*> nonOMaps;  // non-oblivious maps
+    std::vector<uint64_t> factors;  // number of ways in each level of butterfly
+    Element* batch;                 // buffer for the current batches
+    Element* tempElements;          // buffer for mergesplit
+    uint8_t* tempMarks;             // buffer for mergesplit
+    uint64_t shardCount;            // number of shards
+    uint64_t bktSize;               // size of each bucket
+    uint64_t bktPerBatch;           // number of buckets in each batch
+    uint64_t bktRealSize;           // number of real elements in each bucket
+    uint64_t parBatchCount;         // number of batches in parallel
+    uint64_t batchSize;          // size of each batch (in number of elements)
+    uint64_t perBatchShardSize;  // size of each shard in each batch
+    uint64_t cacheBytes;         // cache size available
+    uint64_t currBktIdx;         // current bucket index in the current batch
+    uint64_t currBktOffset;      // current offset in the current bucket
+    uint64_t load;       // number of elements inserted in the current batch
+    K prevKey;           // previous key inserted
+    int butterflyLevel;  // number of levels in the butterfly network
 
+    /**
+     * @brief Route elements in the current batch through the butterfly network,
+     * and insert into the non oblivious map.
+     *
+     */
     void route() {
       // route the data through the butterfly network in parallel
-      printf("routing\n");
       for (int level = 0, stride = parBatchCount; level < butterflyLevel;
            ++level) {
         uint64_t way = factors[level];
@@ -377,7 +260,6 @@ struct ParOMap {
         }
         stride *= way;
       }
-      printf("routed\n");
 
       // insert the data into the non-oblivious maps in parallel
 #pragma omp parallel for schedule(static)
@@ -388,32 +270,29 @@ struct ParOMap {
           // insert dummies like normal elements
           nonOMaps[i]->template Insert<true>(kvPair.key, kvPair.value,
                                              elem.IsDummy());
-          uint64_t hash = secure_hash_with_salt((uint8_t*)&kvPair.key,
-                                                sizeof(K), omap.randSalt);
-
-          uint32_t correctShard = omap.getShardByHash(hash);
-          if (!elem.IsDummy() && i != correctShard) {
-            printf("wrong shard %u %u\n", i, correctShard);
-            throw std::runtime_error("wrong shard");
-          }
         }
       }
-      printf("inserted\n");
     }
 
+    /**
+     * @brief Construct a new InitContext object
+     *
+     * @param omap The parent map
+     * @param initSize The number of elements to be inserted
+     * @param cacheBytes The cache size for all shards
+     */
     InitContext(ParOMap& omap, uint64_t initSize,
                 uint64_t cacheBytes = DEFAULT_HEAP_SIZE)
-        : omap(omap), cacheBytes(cacheBytes), currBktIdx(0), currBktOffset(0) {
+        : omap(omap),
+          cacheBytes(cacheBytes),
+          currBktIdx(0),
+          currBktOffset(0),
+          load(0) {
       shardCount = omap.shards.size();
-      printf("initSize: %lu, shardCount %lu\n", initSize, shardCount);
       uint64_t maxInitSizePerShard =
           maxQueryPerShard(initSize, shardCount, -60);
       using NonObliviousOHashMap = OHashMap<K, V, false, PositionType>;
       nonOMaps.resize(shardCount);
-      for (auto& nonOMapPtr : nonOMaps) {
-        nonOMapPtr = new NonObliviousOHashMap();
-        nonOMapPtr->SetSize(omap.shardSize, 0);
-      }
 
       using Element = Algorithm::TaggedT<KVPair>;
       bktSize = std::min(8192UL, GetNextPowerOfTwo(maxInitSizePerShard));
@@ -433,6 +312,10 @@ struct ParOMap {
             bktPerShard *
             bktSize;  // we need large oram to hold these many elements
       }
+      for (auto& nonOMapPtr : nonOMaps) {
+        nonOMapPtr = new NonObliviousOHashMap();
+        nonOMapPtr->SetSize(omap.shardSize, 0);
+      }
       totalBktNeeded = bktPerShard * shardCount;
       bktRealSize = divRoundUp(
           initSize, totalBktNeeded);  // split initial elements evenly
@@ -451,7 +334,22 @@ struct ParOMap {
       butterflyLevel = factors.size();
     }
 
+    /**
+     * @brief Insert a new key-value pair into the batch. The key must be
+     * strictly increasing. The running time of this function can be unstable.
+     *
+     * @param key
+     * @param value
+     */
     void Insert(const K& key, const V& value) {
+      if (load > 0 && !(prevKey < key)) {
+        throw std::runtime_error(
+            "Keys not strictly increasing during initialization");
+      }
+      if (load >= omap.size()) {
+        throw std::runtime_error("Too many elements inserted during init");
+      }
+      prevKey = key;
       Element& elem = batch[currBktIdx * bktSize + currBktOffset];
       elem.v.key = key;
       elem.v.value = value;
@@ -471,24 +369,35 @@ struct ParOMap {
       }
     }
 
+    template <class Iterator>
+    void InsertBatch(Iterator begin, Iterator end) {
+      for (auto it = begin; it != end; ++it) {
+        Insert(it->first, it->second);
+      }
+    }
+
+    /**
+     * @brief Finished inserting elements. Close the context and initialize the
+     * map.
+     *
+     */
     void Close() {
       // set the rest of buckets to dummy
       uint64_t batchOffset = currBktIdx * bktSize + currBktOffset;
-      for (uint64_t i = batchOffset; i < batchSize; ++i) {
-        batch[i].setDummy();
+      if (batchOffset != 0) {
+        for (uint64_t i = batchOffset; i < batchSize; ++i) {
+          batch[i].setDummy();
+        }
+        route();
       }
-      route();
       delete[] tempElements;
       delete[] tempMarks;
       delete[] batch;
       for (auto& shard : omap.shards) {
         shard.SetSize(omap.shardSize, cacheBytes / shardCount);
       }
-      for (auto* nonOMap : nonOMaps) {
-        std::cout << "load = " << nonOMap->GetLoad() << std::endl;
-      }
       // initialize the oblivious maps from the non-oblivious maps in parallel
-#pragma omp parallel for schedule(static)
+      #pragma omp parallel for schedule(static)
       for (uint32_t i = 0; i < shardCount; ++i) {
         omap.shards[i].InitFromNonOblivious(*nonOMaps[i]);
         delete nonOMaps[i];
@@ -496,17 +405,32 @@ struct ParOMap {
     }
   };
 
-  // template <class Reader>
-  //   requires Readable<Reader, std::pair<K, V>>
-  // void InitFromReader(Reader& reader, uint64_t cacheBytes =
-  // DEFAULT_HEAP_SIZE) {
-  //   InitContext context(*this, reader.size(), cacheBytes);
-  //   while (!reader.eof()) {
-  //     std::pair<K, V> kvPair = reader.read();
-  //     context.Insert(kvPair.first, kvPair.second);
-  //   }
-  //   context.Close();
-  // }
+  InitContext NewInitContext(uint64_t initSize,
+                             uint64_t additionalCacheBytes = 0) {
+    return InitContext(*this, initSize, additionalCacheBytes);
+  }
+
+  /**
+   * @brief Initialize the map from a reader. The data is fetched in batches and
+   * for each batch, we route the data in parallel through a multi-way butterfly
+   * network to load balance them to each shard. Used techniques described in
+   * https://eprint.iacr.org/2023/1258. Might throw error with some negligible
+   * probability (when some bucket overflows), in which case one may retry.
+   *
+   * @tparam Reader The type of the reader
+   * @param reader The reader object
+   * @param cacheBytes
+   */
+  template <class Reader>
+    requires Readable<Reader, std::pair<K, V>>
+  void InitFromReader(Reader& reader, uint64_t cacheBytes = DEFAULT_HEAP_SIZE) {
+    InitContext context(*this, reader.size(), cacheBytes);
+    while (!reader.eof()) {
+      std::pair<K, V> kvPair = reader.read();
+      context.Insert(kvPair.first, kvPair.second);
+    }
+    context.Close();
+  }
 
   /**
    * @brief Find the values associated with a batch of keys. The keys may
