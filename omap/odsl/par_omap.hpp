@@ -308,6 +308,14 @@ struct ParOMap {
           // insert dummies like normal elements
           nonOMaps[i].template Insert<true>(kvPair.key, kvPair.value,
                                             elem.IsDummy());
+          uint64_t hash =
+              secure_hash_with_salt((uint8_t*)&kvPair.key, sizeof(K), randSalt);
+
+          uint32_t correctShard = getShardByHash(hash);
+          if (!elem.IsDummy() && i != correctShard) {
+            printf("wrong shard %u %u\n", i, correctShard);
+            throw std::runtime_error("wrong shard");
+          }
         }
       }
     }
@@ -324,25 +332,201 @@ struct ParOMap {
     }
   }
 
+  struct InitContext {
+    using Element = Algorithm::TaggedT<KVPair>;
+    using NonObliviousOHashMap = OHashMap<K, V, false, PositionType>;
+    ParOMap& omap;
+    std::vector<NonObliviousOHashMap*> nonOMaps;
+    std::vector<uint64_t> factors;
+    Element* batch;
+    Element* tempElements;
+    uint8_t* tempMarks;
+    uint64_t shardCount;
+    uint64_t bktSize;
+    uint64_t bktPerBatch;
+    uint64_t bktRealSize;
+    uint64_t parBatchCount;
+    uint64_t batchSize;
+    uint64_t perBatchShardSize;
+    uint64_t cacheBytes;
+    uint64_t currBktIdx;
+    uint64_t currBktOffset;
+    int butterflyLevel;
+
+    void route() {
+      // route the data through the butterfly network in parallel
+      printf("routing\n");
+      for (int level = 0, stride = parBatchCount; level < butterflyLevel;
+           ++level) {
+        uint64_t way = factors[level];
+        uint64_t parCount = bktPerBatch / way;
+#pragma omp parallel for schedule(static)
+        for (uint64_t parIdx = 0; parIdx < parCount; ++parIdx) {
+          uint64_t groupIdx = parIdx / stride;
+          uint64_t groupOffset = parIdx % stride;
+          Element* KWayIts[8];
+          for (uint64_t j = 0; j < way; ++j) {
+            KWayIts[j] =
+                batch + ((j + groupIdx * way) * stride + groupOffset) * bktSize;
+          }
+          size_t tempBktsSize = way * bktSize * sizeof(Element);
+          Element* localTempElements = tempElements + parIdx * way * bktSize;
+          uint8_t* localTempMarks = tempMarks + parIdx * way * bktSize;
+          MergeSplitKWay(KWayIts, way, bktSize, localTempElements,
+                         localTempMarks);
+        }
+        stride *= way;
+      }
+      printf("routed\n");
+
+      // insert the data into the non-oblivious maps in parallel
+#pragma omp parallel for schedule(static)
+      for (uint32_t i = 0; i < shardCount; ++i) {
+        for (uint64_t j = 0; j < perBatchShardSize; ++j) {
+          const Element& elem = batch[i * perBatchShardSize + j];
+          const KVPair& kvPair = elem.v;
+          // insert dummies like normal elements
+          nonOMaps[i]->template Insert<true>(kvPair.key, kvPair.value,
+                                             elem.IsDummy());
+          uint64_t hash = secure_hash_with_salt((uint8_t*)&kvPair.key,
+                                                sizeof(K), omap.randSalt);
+
+          uint32_t correctShard = omap.getShardByHash(hash);
+          if (!elem.IsDummy() && i != correctShard) {
+            printf("wrong shard %u %u\n", i, correctShard);
+            throw std::runtime_error("wrong shard");
+          }
+        }
+      }
+      printf("inserted\n");
+    }
+
+    InitContext(ParOMap& omap, uint64_t initSize,
+                uint64_t cacheBytes = DEFAULT_HEAP_SIZE)
+        : omap(omap), cacheBytes(cacheBytes), currBktIdx(0), currBktOffset(0) {
+      shardCount = omap.shards.size();
+      printf("initSize: %lu, shardCount %lu\n", initSize, shardCount);
+      uint64_t maxInitSizePerShard =
+          maxQueryPerShard(initSize, shardCount, -60);
+      using NonObliviousOHashMap = OHashMap<K, V, false, PositionType>;
+      nonOMaps.resize(shardCount);
+      for (auto& nonOMapPtr : nonOMaps) {
+        nonOMapPtr = new NonObliviousOHashMap();
+        nonOMapPtr->SetSize(omap.shardSize, 0);
+      }
+
+      using Element = Algorithm::TaggedT<KVPair>;
+      bktSize = std::min(8192UL, GetNextPowerOfTwo(maxInitSizePerShard));
+      bktRealSize = numRealPerBkt(bktSize, shardCount, -60);
+      uint64_t minBatchSize = bktSize * shardCount;
+      uint64_t maxBatchSize = cacheBytes / (sizeof(Element) + 8) / 2;
+      factors = omap.factorizeShardCount(shardCount);
+      if (maxBatchSize < minBatchSize) {
+        throw std::runtime_error("InitFromReader cache size too small");
+      }
+
+      uint64_t totalBktNeeded = divRoundUp(initSize, bktRealSize);
+      // make sure it's a multiple of shardCount
+      uint64_t bktPerShard = divRoundUp(totalBktNeeded, shardCount);
+      if (bktPerShard * bktSize > omap.shardSize) {
+        omap.shardSize =
+            bktPerShard *
+            bktSize;  // we need large oram to hold these many elements
+      }
+      totalBktNeeded = bktPerShard * shardCount;
+      bktRealSize = divRoundUp(
+          initSize, totalBktNeeded);  // split initial elements evenly
+      if (totalBktNeeded * bktSize < maxBatchSize) {
+        maxBatchSize = totalBktNeeded * bktSize;  // don't waste space
+      }
+      parBatchCount = maxBatchSize / minBatchSize;
+      bktPerBatch = parBatchCount * shardCount;
+      batchSize = bktPerBatch * bktSize;
+      perBatchShardSize = parBatchCount * bktSize;
+
+      // buffers for mergesplit
+      batch = new Element[batchSize];
+      tempElements = new Element[batchSize];
+      tempMarks = new uint8_t[batchSize];
+      butterflyLevel = factors.size();
+    }
+
+    void Insert(const K& key, const V& value) {
+      Element& elem = batch[currBktIdx * bktSize + currBktOffset];
+      elem.v.key = key;
+      elem.v.value = value;
+      uint64_t hash = secure_hash_with_salt((uint8_t*)&elem.v.key, sizeof(K),
+                                            omap.randSalt);
+      elem.setTag(omap.getShardByHash(hash));
+      if (++currBktOffset == bktRealSize) {
+        uint64_t baseOffset = currBktIdx * bktSize;
+        for (; currBktOffset < bktSize; ++currBktOffset) {
+          batch[baseOffset + currBktOffset].setDummy();
+        }
+        currBktOffset = 0;
+        if (++currBktIdx == bktPerBatch) {
+          route();
+          currBktIdx = 0;
+        }
+      }
+    }
+
+    void Close() {
+      // set the rest of buckets to dummy
+      uint64_t batchOffset = currBktIdx * bktSize + currBktOffset;
+      for (uint64_t i = batchOffset; i < batchSize; ++i) {
+        batch[i].setDummy();
+      }
+      route();
+      delete[] tempElements;
+      delete[] tempMarks;
+      delete[] batch;
+      for (auto& shard : omap.shards) {
+        shard.SetSize(omap.shardSize, cacheBytes / shardCount);
+      }
+      for (auto* nonOMap : nonOMaps) {
+        std::cout << "load = " << nonOMap->GetLoad() << std::endl;
+      }
+      // initialize the oblivious maps from the non-oblivious maps in parallel
+#pragma omp parallel for schedule(static)
+      for (uint32_t i = 0; i < shardCount; ++i) {
+        omap.shards[i].InitFromNonOblivious(*nonOMaps[i]);
+        delete nonOMaps[i];
+      }
+    }
+  };
+
+  // template <class Reader>
+  //   requires Readable<Reader, std::pair<K, V>>
+  // void InitFromReader(Reader& reader, uint64_t cacheBytes =
+  // DEFAULT_HEAP_SIZE) {
+  //   InitContext context(*this, reader.size(), cacheBytes);
+  //   while (!reader.eof()) {
+  //     std::pair<K, V> kvPair = reader.read();
+  //     context.Insert(kvPair.first, kvPair.second);
+  //   }
+  //   context.Close();
+  // }
+
   /**
    * @brief Find the values associated with a batch of keys. The keys may
-   * contain duplicates and may be arranged in any order. The values are written
-   * in the same order as the keys. Larger batch size will likely increase the
-   * throughput. The writeback process of the internal orams are deferred until
-   * WriteBack is called. The method may leak information with negligible
-   * probability, which happens when the keys are very unbalanced. Since the
-   * keys each shard receives are oblivious, an adversary cannot force such an
-   * unbalanced distribution. This method is ~2x faster than the algorithm
-   * described in the Snoopy's paper. Note: the method is not thread-safe, and
-   * calling it in parallel can cause deadlock.
+   * contain duplicates and may be arranged in any order. The values are
+   * written in the same order as the keys. Larger batch size will likely
+   * increase the throughput. The writeback process of the internal orams are
+   * deferred until WriteBack is called. The method may leak information with
+   * negligible probability, which happens when the keys are very unbalanced.
+   * Since the keys each shard receives are oblivious, an adversary cannot
+   * force such an unbalanced distribution. This method is ~2x faster than the
+   * algorithm described in the Snoopy's paper. Note: the method is not
+   * thread-safe, and calling it in parallel can cause deadlock.
    *
    * @tparam KeyIterator The type of the key iterator
    * @tparam ValueIterator The type of the value iterator
    * @param keyBegin The beginning of the keys
    * @param keyEnd The end of the keys
    * @param valueBegin The beginning of the output values
-   * @return std::vector<uint8_t> A vector of flags indicating whether each key
-   * is found
+   * @return std::vector<uint8_t> A vector of flags indicating whether each
+   * key is found
    */
   template <class KeyIterator, class ValueIterator>
   std::vector<uint8_t> FindBatchDeferWriteBack(const KeyIterator keyBegin,
@@ -425,15 +609,15 @@ struct ParOMap {
             shardLoadPrefixSum[i] + rankInShard;
       }
     }
-    // Distribute the compacted elements so that the elements of shard i starts
-    // at offset shard_size * i.
+    // Distribute the compacted elements so that the elements of shard i
+    // starts at offset shard_size * i.
     Algorithm::OrDistributeSeparateMark(keyVec.begin(), keyVec.end(),
                                         prefixSumSecondCompaction.begin());
     using ValResult = BaseMap::ValResult;
     std::vector<ValResult> resultVec(shardCount * shardSize);
 
-    // Parallel query each shard, and get the result values (along with flags of
-    // existence).
+    // Parallel query each shard, and get the result values (along with flags
+    // of existence).
 #pragma omp parallel for schedule(static)
     for (uint32_t i = 0; i < shardCount; ++i) {
       shards[i].FindBatchDeferWriteBack(keyVec.begin() + i * shardSize,
@@ -441,7 +625,8 @@ struct ParOMap {
                                         resultVec.begin() + i * shardSize);
     }
 
-    // Compact the result values in reverse order of the previous distribution.
+    // Compact the result values in reverse order of the previous
+    // distribution.
     Algorithm::OrCompactSeparateMark(resultVec.begin(), resultVec.end(),
                                      prefixSumSecondCompaction.begin());
 
@@ -491,8 +676,8 @@ struct ParOMap {
    * @param keyBegin The beginning of the keys
    * @param keyEnd The end of the keys
    * @param valueBegin The beginning of the output values
-   * @return std::vector<uint8_t> A vector of flags indicating whether each key
-   * is found
+   * @return std::vector<uint8_t> A vector of flags indicating whether each
+   * key is found
    */
   template <class KeyIterator, class ValueIterator>
   std::vector<uint8_t> FindBatch(const KeyIterator keyBegin,
@@ -514,8 +699,8 @@ struct ParOMap {
    * @param keyBegin The beginning of the keys
    * @param keyEnd The end of the keys
    * @param valueBegin The beginning of the input values
-   * @return std::vector<uint8_t> A vector of flags indicating whether each key
-   * already exists.
+   * @return std::vector<uint8_t> A vector of flags indicating whether each
+   * key already exists.
    */
   template <class KeyIterator, class ValueIterator>
   std::vector<uint8_t> InsertBatch(const KeyIterator keyBegin,
@@ -633,8 +818,8 @@ struct ParOMap {
    * @tparam KeyIterator The type of the key iterator
    * @param keyBegin The beginning of the keys to erase
    * @param keyEnd The end of the keys to erase
-   * @return std::vector<uint8_t> A vector of flags indicating whether each key
-   * existed in the map.
+   * @return std::vector<uint8_t> A vector of flags indicating whether each
+   * key existed in the map.
    */
   template <class KeyIterator>
   std::vector<uint8_t> EraseBatch(const KeyIterator keyBegin,

@@ -816,7 +816,7 @@ struct OHashMap {
 
   const StashType& GetStash() const { return stash; }
 
-  using NonObliviousOHashMap = OHashMap<K, V, false, PositionType>;
+  using NonObliviousHashMap = OHashMap<K, V, false, PositionType>;
 
   /**
    * @brief Initialize the oblivious hash map from another non-oblivious hash
@@ -824,7 +824,7 @@ struct OHashMap {
    *
    * @param other the non-oblivious hash map
    */
-  void InitFromNonOblivious(NonObliviousOHashMap& other) {
+  void InitFromNonOblivious(NonObliviousHashMap& other) {
     static_assert(isOblivious,
                   "Only oblivious hash map can call this function");
     if (_size != other.size()) {
@@ -893,10 +893,48 @@ struct OHashMap {
     } else {
       additionalCacheBytes = std::max(
           additionalCacheBytes, NonObliviousTableType::GetMinMemoryUsage() * 2);
-      NonObliviousOHashMap nonObliviousOHashMap(_size, additionalCacheBytes);
-      nonObliviousOHashMap.InitFromReader(reader);
-      InitFromNonOblivious(nonObliviousOHashMap);
+      NonObliviousHashMap nonObliviousHashMap(_size, additionalCacheBytes);
+      nonObliviousHashMap.InitFromReader(reader);
+      InitFromNonOblivious(nonObliviousHashMap);
     }
+  }
+
+  struct InitContext {
+   private:
+    NonObliviousHashMap* nonObliviousHashMap;
+    OHashMap& oHashMap;
+
+   public:
+    InitContext(OHashMap& map, uint64_t additionalCacheBytes = 0)
+        : oHashMap(map),
+          nonObliviousHashMap(
+              new NonObliviousHashMap(map.size(), additionalCacheBytes)) {}
+
+    void Insert(const K& key, const V& value) {
+      nonObliviousHashMap->Insert(key, value);
+    }
+
+    void Insert(const std::pair<K, V>& entry) {
+      nonObliviousHashMap->Insert(entry.first, entry.second);
+    }
+
+    template <class Iterator>
+    void InsertBatch(Iterator begin, Iterator end) {
+      for (auto it = begin; it != end; ++it) {
+        nonObliviousHashMap->Insert(it->first, it->second);
+      }
+    }
+
+    void Close() {
+      oHashMap.InitFromNonOblivious(*nonObliviousHashMap);
+      delete nonObliviousHashMap;
+    }
+  };
+
+  InitContext NewInitContext(uint64_t additionalCacheBytes = 0) {
+    static_assert(isOblivious,
+                  "Only oblivious hash map can call this function");
+    return InitContext(*this, additionalCacheBytes);
   }
 
   /**

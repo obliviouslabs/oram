@@ -48,9 +48,10 @@ RUN cd /dockerfiles && wget https://download.01.org/intel-sgx/latest/linux-lates
 RUN echo "source /dockerfiles/sgxsdk/environment" > /startsgxenv.sh
 RUN chmod +x /startsgxenv.sh
 
-COPY rocksDBInstall.sh /rocksDBInstall.sh
-RUN chmod +x /rocksDBInstall.sh && \
-    /rocksDBInstall.sh
+# Installing rocksdb takes a long time, uncomment to run the balance checker example
+# COPY rocksDBInstall.sh /rocksDBInstall.sh
+# RUN chmod +x /rocksDBInstall.sh && \
+#     /rocksDBInstall.sh
 
 SHELL ["/bin/bash", "-c"] 
 RUN ln -s /usr/lib/libsgx_urts.so /usr/lib/libsgx_urts.so.2
