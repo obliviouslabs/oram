@@ -6,12 +6,15 @@
 #include "external_memory/server/serverFrontend.hpp"
 /// @brief External memory vector using a direct map / lru cache to swap pages.
 namespace EM::ExtVector {
+using EM::MemoryServer::EncryptType;
 template <typename T,
           uint64_t page_size = std::max((1UL << 12) - 32, sizeof(T)),  // 16kB
-          bool ENCRYPTED = true, bool AUTH = true,
+          const EncryptType enc_type = EncryptType::ENCRYPT_AND_AUTH,
           uint64_t cache_size = SERVER__CACHE_SIZE>
 struct Vector {
   static constexpr uint64_t item_per_page = page_size / sizeof(T);
+  static constexpr bool AUTH = enc_type >= EncryptType::ENCRYPT_AND_AUTH;
+  static constexpr bool ENCRYPTED = enc_type >= EncryptType::ENCRYPT;
   struct Page {
     T pages[item_per_page];
     using Encrypted_t = std::conditional_t<
@@ -26,7 +29,7 @@ struct Vector {
           : std::max(1UL, cache_size - 1);
 
   using Server = EM::MemoryServer::ServerFrontendInstance<
-      Page, ::EM::Backend::MemServerBackend, ENCRYPTED, AUTH, DMCacheSize>;
+      Page, ::EM::Backend::MemServerBackend, enc_type, DMCacheSize>;
 
   uint64_t N;
   Server server;

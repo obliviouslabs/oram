@@ -323,10 +323,12 @@ struct OHashMap {
   using BucketType = OHashMapBucket<K, V, bucketSize>;
   // for oblivious hash map, we use recursive ORAM
   using ObliviousTableType = RecursiveORAM<BucketType, PositionType>;
-  // for non-oblivious hash map, we cache the front of the vector
-  using NonObliviousTableType =
-      EM::CacheFrontVector::Vector<BucketType, sizeof(BucketType), true, true,
-                                   1024>;
+  // for non-oblivious hash map, we cache the front of the vector, for the
+  // remaining data store it encrypted and authenticated in external memory,
+  // check freshness when swapped in.
+  using NonObliviousTableType = EM::CacheFrontVector::Vector<
+      BucketType, sizeof(BucketType),
+      EM::CacheFrontVector::EncryptType::ENCRYPT_AND_AUTH_FRESH, 1024>;
   using TableType = std::conditional_t<isOblivious, ObliviousTableType,
                                        NonObliviousTableType>;
   TableType table0, table1;
@@ -1003,7 +1005,7 @@ struct OHashMap {
    * @brief Initialize an empty hash map
    *
    */
-  void InitDefault() {
+  void Init() {
     if (inited) {
       throw std::runtime_error("OHashMap initialized twice.");
     }
@@ -1025,12 +1027,6 @@ struct OHashMap {
       }
     }
   }
-
-  /**
-   * @brief Initialize an empty hash map
-   *
-   */
-  void Init() { InitDefault(); }
 
   /**
    * @brief Non-oblivious insert, but may hide whether the insertion is dummy.

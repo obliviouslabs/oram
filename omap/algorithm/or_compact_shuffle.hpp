@@ -175,7 +175,8 @@ void OrShuffle(Iterator begin, Iterator end) {
     std::vector<size_t> marks(n + 1);
     OrShuffle(begin, end, marks.begin());
   } else {
-    EM::ExtVector::Vector<size_t, 4096, true, true,
+    EM::ExtVector::Vector<size_t, 4096,
+                          EM::ExtVector::EncryptType::ENCRYPT_AND_AUTH_FRESH,
                           (uint64_t)ENCLAVE_SIZE * 16UL>
         marks(n + 1);
     OrShuffle(begin, end, marks.begin());

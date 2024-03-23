@@ -14,11 +14,18 @@
 namespace EM {
 namespace MemoryServer {
 
+// enumerator for different types of encryption level
+enum class EncryptType {
+  NONE,
+  ENCRYPT,
+  ENCRYPT_AND_AUTH,
+  ENCRYPT_AND_AUTH_FRESH
+};
+
 template <typename T, typename _BackendType = ::EM::Backend::MemServerBackend,
-          bool ENCRYPTED = true, bool AUTH = true, bool LATE_INIT = false>
-#ifndef ENCLAVE_MODE
+          const EncryptType enc_type = EncryptType::ENCRYPT_AND_AUTH,
+          bool LATE_INIT = false>
   requires EM::Backend::BackendServer<_BackendType>
-#endif
 struct NonCachedServerFrontendInstance {
   // Just forwards reads and writes to the server. Call the allocator during
   // construction and resizes.
@@ -26,6 +33,11 @@ struct NonCachedServerFrontendInstance {
 
   using AllocatorSlot = typename EM::LargeBlockAllocator::AllocatorSlot;
   using BackendType = _BackendType;
+
+  static constexpr bool ENCRYPTED = enc_type >= EncryptType::ENCRYPT;
+  static constexpr bool AUTH = enc_type >= EncryptType::ENCRYPT_AND_AUTH;
+  static constexpr bool FRESH_CHECK =
+      enc_type >= EncryptType::ENCRYPT_AND_AUTH_FRESH;
 
   typedef uint64_t IndexType;
   BackendType& backend;
@@ -36,6 +48,9 @@ struct NonCachedServerFrontendInstance {
   T defaultVal;
 
   std::vector<bool> modified;
+
+  // counters for each page
+  std::vector<uint64_t> counters;
 
   AllocatorSlot slot;
 
@@ -61,6 +76,9 @@ struct NonCachedServerFrontendInstance {
     if constexpr (LATE_INIT) {
       std::swap(modified, other.modified);
     }
+    if constexpr (FRESH_CHECK) {
+      std::swap(counters, other.counters);
+    }
   }
 
   NonCachedServerFrontendInstance(BackendType& _backend, uint64_t initialSize,
@@ -78,6 +96,9 @@ struct NonCachedServerFrontendInstance {
       nounce.identifiers.indexPart = UniformRandom();
       nounce.identifiers.counterPart = UniformRandom32();
     }
+    if constexpr (FRESH_CHECK) {
+      counters.resize(initialSize, 0);
+    }
     if constexpr (LATE_INIT) {
       this->defaultVal = _defaultVal;
       modified.resize(initialSize, false);
@@ -89,64 +110,40 @@ struct NonCachedServerFrontendInstance {
   }
 
   NonCachedServerFrontendInstance(BackendType& _backend, uint64_t initialSize)
-      : backend(_backend) {
-    if (initialSize == 0) {
-      slot.base = -1;
-      return;
-    }
-    IndexType requiredSize = initialSize * sizeOfT;
-    slot = backend.Allocate(requiredSize);
-    if constexpr (AUTH) {
-      nounce.identifiers.indexPart = UniformRandom();
-      nounce.identifiers.counterPart = UniformRandom32();
-    }
-  }
+      : NonCachedServerFrontendInstance(_backend, initialSize, T()) {}
 
   ~NonCachedServerFrontendInstance() {
     if (slot.base == (EM::LargeBlockAllocator::Size_t)-1) {
       return;
     }
-    // std::cout << "Freed: " << slot.base << "--" << slot.base + slot.size <<
-    // std::endl;
     backend.Free(slot);
     slot.size = 0;
   }
 
   void Write(const IndexType i, const T& in) {
-    if constexpr (AUTH) {
-      Write(i, in, 0);
-    } else {
-      if constexpr (LATE_INIT) {
-        modified[i] = true;
-      }
-      PERFCTR_INCREMENT(writeCount);
-      if constexpr (ENCRYPTED) {
-        typename T::Encrypted_t inEnc;
-        inEnc.Encrypt(in);
-
-        backend.Write(slot.base + i * sizeOfT, sizeOfT,
-                      reinterpret_cast<const uint8_t*>(&inEnc));
-      } else {
-        backend.Write(slot.base + i * sizeOfT, sizeOfT,
-                      reinterpret_cast<const uint8_t*>(&in));
-      }
-    }
-  }
-
-  void Write(const IndexType i, const T& in, uint32_t counter) {
-    static_assert(AUTH);
     if constexpr (LATE_INIT) {
       modified[i] = true;
     }
     PERFCTR_INCREMENT(writeCount);
+    if constexpr (ENCRYPTED) {
+      typename T::Encrypted_t inEnc;
+      if constexpr (AUTH) {
+        nounce_t nounceCopy = nounce;
+        nounceCopy.identifiers.indexPart ^= i;
+        if constexpr (FRESH_CHECK) {
+          nounceCopy.identifiers.counterPart ^= ++counters[i];
+        }
+        inEnc.Encrypt(in, nounceCopy.bytes);
+      } else {
+        inEnc.Encrypt(in);
+      }
 
-    typename T::Encrypted_t inEnc;
-    nounce_t nounceCopy = nounce;
-    nounceCopy.identifiers.indexPart ^= i;
-    nounceCopy.identifiers.counterPart ^= counter;
-    inEnc.Encrypt(in, nounceCopy.bytes);
-    backend.Write(slot.base + i * sizeOfT, sizeOfT,
-                  reinterpret_cast<const uint8_t*>(&inEnc));
+      backend.Write(slot.base + i * sizeOfT, sizeOfT,
+                    reinterpret_cast<const uint8_t*>(&inEnc));
+    } else {
+      backend.Write(slot.base + i * sizeOfT, sizeOfT,
+                    reinterpret_cast<const uint8_t*>(&in));
+    }
   }
 
   // dummy implementation to be overloaded
@@ -155,37 +152,7 @@ struct NonCachedServerFrontendInstance {
     return 0;
   }
 
-  uint64_t WriteLazy(const IndexType i, const T& in, uint32_t counter) {
-    Write(i, in, counter);
-    return 0;
-  }
-
   void Read(const IndexType i, T& out) {
-    if constexpr (AUTH) {
-      Read(i, out, 0);
-    } else {
-      if constexpr (LATE_INIT) {
-        if (!modified[i]) {
-          out = defaultVal;
-          return;
-        }
-      }
-      PERFCTR_INCREMENT(readCount);
-
-      if constexpr (ENCRYPTED) {
-        typename T::Encrypted_t inEnc;
-        backend.Read(slot.base + i * sizeOfT, sizeOfT,
-                     reinterpret_cast<uint8_t*>(&inEnc));
-        inEnc.Decrypt(out);
-      } else {
-        backend.Read(slot.base + i * sizeOfT, sizeOfT,
-                     reinterpret_cast<uint8_t*>(&out));
-      }
-    }
-  }
-
-  void Read(const IndexType i, T& out, uint32_t counter) {
-    static_assert(AUTH);
     if constexpr (LATE_INIT) {
       if (!modified[i]) {
         out = defaultVal;
@@ -193,22 +160,30 @@ struct NonCachedServerFrontendInstance {
       }
     }
     PERFCTR_INCREMENT(readCount);
-    nounce_t nounceCopy = nounce;
-    nounceCopy.identifiers.indexPart ^= i;
-    nounceCopy.identifiers.counterPart ^= counter;
-    typename T::Encrypted_t inEnc;
-    backend.Read(slot.base + i * sizeOfT, sizeOfT,
-                 reinterpret_cast<uint8_t*>(&inEnc));
-    inEnc.Decrypt(out, nounceCopy.bytes);
+
+    if constexpr (ENCRYPTED) {
+      typename T::Encrypted_t inEnc;
+      backend.Read(slot.base + i * sizeOfT, sizeOfT,
+                   reinterpret_cast<uint8_t*>(&inEnc));
+      if constexpr (AUTH) {
+        nounce_t nounceCopy = nounce;
+        nounceCopy.identifiers.indexPart ^= i;
+        if constexpr (FRESH_CHECK) {
+          nounceCopy.identifiers.counterPart ^= counters[i];
+        }
+
+        inEnc.Decrypt(out, nounceCopy.bytes);
+      } else {
+        inEnc.Decrypt(out);
+      }
+    } else {
+      backend.Read(slot.base + i * sizeOfT, sizeOfT,
+                   reinterpret_cast<uint8_t*>(&out));
+    }
   }
 
   uint64_t ReadLazy(const IndexType i, T& out) {
     Read(i, out);
-    return 0;
-  }
-
-  uint64_t ReadLazy(const IndexType i, T& out, uint32_t counter) {
-    Read(i, out, counter);
     return 0;
   }
 
@@ -222,10 +197,10 @@ struct NonCachedServerFrontendInstance {
 };
 
 template <typename T, typename BackendType = ::EM::Backend::MemServerBackend,
-          bool ENCRYPTED = true, bool AUTH = true,
+          const EncryptType enc_type = EncryptType::ENCRYPT_AND_AUTH,
           uint64_t CACHE_SIZE = SERVER__CACHE_SIZE, uint64_t TLB_SIZE = 2>
 using ServerFrontendInstance = CACHE::Cached<
-    T, NonCachedServerFrontendInstance<T, BackendType, ENCRYPTED, AUTH, false>,
+    T, NonCachedServerFrontendInstance<T, BackendType, enc_type, false>,
     CACHE_SIZE, TLB_SIZE>;
 
 }  // namespace MemoryServer

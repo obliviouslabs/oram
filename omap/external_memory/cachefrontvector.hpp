@@ -7,14 +7,15 @@
 /// in external memory encrypted. When accesses are made to the external
 // memory data, cache the page in internal memory using a direct map cache.
 namespace EM::CacheFrontVector {
+using EM::ExtVector::EncryptType;
 template <typename T,
           uint64_t page_size = std::max((1UL << 14) - 32, sizeof(T)),
-          bool ENCRYPTED = true, bool AUTH = true,
+          const EncryptType enc_type = EncryptType::ENCRYPT_AND_AUTH,
           const uint64_t ext_cache_bytes = (1UL << 16)>
 struct Vector {
  private:
   using ExtVec =
-      EM::ExtVector::Vector<T, page_size, ENCRYPTED, AUTH,
+      EM::ExtVector::Vector<T, page_size, enc_type,
                             std::max(1UL, ext_cache_bytes / page_size)>;
   using IntVec = std::vector<T>;
   using value_type = T;

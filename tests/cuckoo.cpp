@@ -11,7 +11,7 @@ void testOHashMap() {
     int mapSize = 50;
     int keySpace = 100;
     OHashMap<int, int, isOblivious> map(mapSize);
-    map.InitDefault();
+    map.Init();
     std::unordered_map<int, int> std_map;
     for (int r = 0; r < 2 * keySpace; ++r) {
       if (std_map.size() < mapSize) {
@@ -235,7 +235,7 @@ void testReplaceCount() {
   std::vector<uint64_t> stashLoads(30, 0);
   for (int rr = 0; rr < outerRound; ++rr) {
     OHashMap<int, int, false> map(mapSize, 1UL << 62);
-    map.InitDefault();
+    map.Init();
     const auto& stash = map.GetStash();
     for (int i = 0; i < mapSize; ++i) {
       map.Insert(rand(), 0);

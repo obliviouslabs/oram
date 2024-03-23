@@ -50,7 +50,9 @@ struct HeapTree {
   // put several packs to the same page
   static constexpr size_t node_per_page = packed_size << bestLexicoGroupLevel;
   static constexpr size_t actual_page_size = node_per_page * sizeof(T);
-  using Vec = EM::CacheFrontVector::Vector<T, actual_page_size, true, true>;
+  // The actual data array, let freshness be checked at the application level
+  using Vec = EM::CacheFrontVector::Vector<
+      T, actual_page_size, EM::CacheFrontVector::EncryptType::ENCRYPT_AND_AUTH>;
   Vec arr;  // the actual data
   int cacheLevel = 0;
   int totalLevel = 0;
