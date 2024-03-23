@@ -107,7 +107,7 @@ void testOHashMapPushInit() {
         ++it;
       }
     }
-    initContext.Close();
+    initContext.Finalize();
     for (int r = 0; r < 2 * keySpace; ++r) {
       if (std_map.size() < mapSize) {
         int key = rand() % keySpace;

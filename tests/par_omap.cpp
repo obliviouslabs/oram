@@ -106,7 +106,7 @@ TEST(ParOMap, PushInitInsertFind) {
       ++it;
     }
   }
-  initContext.Close();
+  initContext.Finalize();
   std::cout << "omp max threads: " << omp_get_max_threads() << std::endl;
   for (uint64_t r = 0; r < round; ++r) {
     std::vector<uint64_t> keys(batchSize);

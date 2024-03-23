@@ -76,7 +76,11 @@ struct ParOMap {
   // the size of hash range for each shard
   uint64_t shardHashRange;
 
-  PositionType _size;
+  // the capacity of the map
+  PositionType _size = 0;
+
+  // whether the map is initialized
+  bool inited = false;
 
   /**
    * @brief translate a hash to a shard index
@@ -183,6 +187,7 @@ struct ParOMap {
     if (shardCount > 128) {
       throw std::runtime_error("shardCount should be no more than 128");
     }
+    _size = mapSize;
     shards.resize(shardCount);
     shardSize = (PositionType)maxQueryPerShard(mapSize, shardCount, -60);
     read_rand(randSalt, sizeof(randSalt));
@@ -202,6 +207,13 @@ struct ParOMap {
    * @param cacheBytes The cache size in bytes (for all shards in total).
    */
   void Init(size_t cacheBytes = DEFAULT_HEAP_SIZE) {
+    if (_size == 0) {
+      throw std::runtime_error("ParOMap size not set. Call SetSize first.");
+    }
+    if (inited) {
+      throw std::runtime_error("ParOMap double initialization");
+    }
+    inited = true;
 #pragma omp parallel for
     for (auto& shard : shards) {
       shard.SetSize(shardSize, cacheBytes / shards.size());
@@ -209,6 +221,15 @@ struct ParOMap {
     }
   }
 
+  /**
+   * @brief An object that stores the curret state of initialization.
+   * Faciliates initialization in a streaming fashion. We route the data in
+   * parallel through a multi-way butterfly network to load balance them to each
+   * shard. Used techniques described in https://eprint.iacr.org/2023/1258.
+   * Might throw error with some negligible probability (when some bucket
+   * overflows), in which case one may retry.
+   *
+   */
   struct InitContext {
     using Element = Algorithm::TaggedT<KVPair>;
     using NonObliviousOHashMap = OHashMap<K, V, false, PositionType>;
@@ -288,6 +309,12 @@ struct ParOMap {
           currBktIdx(0),
           currBktOffset(0),
           load(0) {
+      if (omap.size() == 0) {
+        throw std::runtime_error("ParOMap size not set. Call SetSize first.");
+      }
+      if (omap.inited) {
+        throw std::runtime_error("ParOMap double initialization");
+      }
       shardCount = omap.shards.size();
       uint64_t maxInitSizePerShard =
           maxQueryPerShard(initSize, shardCount, -60);
@@ -337,6 +364,8 @@ struct ParOMap {
     /**
      * @brief Insert a new key-value pair into the batch. The key must be
      * strictly increasing. The running time of this function can be unstable.
+     * The method may throw error with some negligible probability (when some
+     * bucket overflows), in which case one may retry the initialization.
      *
      * @param key
      * @param value
@@ -369,6 +398,8 @@ struct ParOMap {
       }
     }
 
+    void Insert(std::pair<K, V> kvPair) { Insert(kvPair.first, kvPair.second); }
+
     template <class Iterator>
     void InsertBatch(Iterator begin, Iterator end) {
       for (auto it = begin; it != end; ++it) {
@@ -378,10 +409,11 @@ struct ParOMap {
 
     /**
      * @brief Finished inserting elements. Close the context and initialize the
-     * map.
+     * map. The method may throw error with some negligible probability, in
+     * which case one may retry the initialization.
      *
      */
-    void Close() {
+    void Finalize() {
       // set the rest of buckets to dummy
       uint64_t batchOffset = currBktIdx * bktSize + currBktOffset;
       if (batchOffset != 0) {
@@ -396,8 +428,8 @@ struct ParOMap {
       for (auto& shard : omap.shards) {
         shard.SetSize(omap.shardSize, cacheBytes / shardCount);
       }
-      // initialize the oblivious maps from the non-oblivious maps in parallel
-      #pragma omp parallel for schedule(static)
+// initialize the oblivious maps from the non-oblivious maps in parallel
+#pragma omp parallel for schedule(static)
       for (uint32_t i = 0; i < shardCount; ++i) {
         omap.shards[i].InitFromNonOblivious(*nonOMaps[i]);
         delete nonOMaps[i];
@@ -405,9 +437,25 @@ struct ParOMap {
     }
   };
 
+  /**
+   * @brief Obtain a new context to initialize this map. The initialization data
+   * can be either private or public (the initialization and subsequent accesses
+   * are oblivious). The data needs to be sorted by key strictly increasing.
+   * Example:
+   *  auto initContext = parOMap.NewInitContext(kvMap.size(), 1UL << 28);
+      for (auto it = kvMap.begin(); it != kvMap.end(); ++it;) {
+        initContext.Insert(it->first, it->second);
+      }
+      initContext.Finalize();
+   *
+   * @param initSize The number of elements to be inserted (could be an
+   estimate, but should be no less than the actual number of elements)
+   * @param cacheBytes The cache size for all shards.
+   * @return InitContext The context object
+   */
   InitContext NewInitContext(uint64_t initSize,
-                             uint64_t additionalCacheBytes = 0) {
-    return InitContext(*this, initSize, additionalCacheBytes);
+                             uint64_t cacheBytes = DEFAULT_HEAP_SIZE) {
+    return InitContext(*this, initSize, cacheBytes);
   }
 
   /**
@@ -419,7 +467,7 @@ struct ParOMap {
    *
    * @tparam Reader The type of the reader
    * @param reader The reader object
-   * @param cacheBytes
+   * @param cacheBytes The cache size for all shards
    */
   template <class Reader>
     requires Readable<Reader, std::pair<K, V>>
@@ -429,7 +477,7 @@ struct ParOMap {
       std::pair<K, V> kvPair = reader.read();
       context.Insert(kvPair.first, kvPair.second);
     }
-    context.Close();
+    context.Finalize();
   }
 
   /**
