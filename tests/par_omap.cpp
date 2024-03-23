@@ -8,7 +8,7 @@ using namespace ODSL;
 
 TEST(ParOMap, InitInsertFind) {
   uint64_t mapSize = UniformRandom(100, 5000000);
-  uint64_t shardCount = 32;
+  uint64_t shardCount = 27;
   uint64_t round = 1000;
   uint64_t batchSize = 100;
   ParOMap<uint64_t, uint64_t> parOMap(mapSize, shardCount);

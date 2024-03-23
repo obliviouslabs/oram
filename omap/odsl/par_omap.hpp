@@ -133,26 +133,94 @@ struct ParOMap {
     return bktSize - Algorithm::lowerBound(1UL, bktSize - 1, satisfy);
   }
 
-  // TODO: support more flexible factorization
+  /**
+   * @brief Factorize the number of shards into a list of factors between 2
+   * and 8. We want to have as few factors as possible and the factors should be
+   * close to each other. The method will throw an error if the number of shards
+   * doesn't meet the requirements.
+   *
+   * @param shardCount The number of shards
+   * @return std::vector<uint64_t> The list of factors
+   */
   std::vector<uint64_t> factorizeShardCount(uint64_t shardCount) {
+    if (shardCount == 1) {
+      throw std::runtime_error(
+          "shardCount should be at least 2 for init with "
+          "reader");
+    }
+    if (shardCount > 64) {
+      throw std::runtime_error(
+          "shardCount should be no more than 64 for init with "
+          "reader");
+    }
     switch (shardCount) {
       case 2:
-        return {2};
+      case 3:
       case 4:
-        return {4};
+      case 5:
+      case 6:
+      case 7:
       case 8:
-        return {8};
+        return {shardCount};
+      case 9:
+        return {3, 3};
+      case 10:
+        return {2, 5};
+      case 12:
+        return {3, 4};
+      case 14:
+        return {2, 7};
+      case 15:
+        return {3, 5};
       case 16:
         return {4, 4};
+      case 18:
+        return {3, 6};
+      case 20:
+        return {4, 5};
+      case 21:
+        return {3, 7};
+      case 24:
+        return {3, 8};
+      case 25:
+        return {5, 5};
+      case 27:
+        return {3, 3, 3};
+      case 28:
+        return {4, 7};
+      case 30:
+        return {5, 6};
       case 32:
         return {4, 8};
+      case 35:
+        return {5, 7};
+      case 36:
+        return {6, 6};
+      case 40:
+        return {5, 8};
+      case 42:
+        return {6, 7};
+      case 45:
+        return {3, 3, 5};
+      case 48:
+        return {6, 8};
+      case 49:
+        return {7, 7};
+      case 50:
+        return {2, 5, 5};
+      case 54:
+        return {3, 3, 6};
+      case 56:
+        return {7, 8};
+      case 60:
+        return {3, 4, 5};
+      case 63:
+        return {3, 3, 7};
       case 64:
         return {8, 8};
-      case 128:
-        return {4, 4, 8};
       default:
         throw std::runtime_error(
-            "shardCount should be a power of 2 between 2 and 128 for init with "
+            "shardCount should be a power of 2 between 2 and 64 for init with "
             "reader");
     }
   }
@@ -165,8 +233,9 @@ struct ParOMap {
    * resources. Must call Init or InitFromReader before using the map.
    *
    * @param mapSize The capacity of the map
-   * @param shardCount The number of shards, should be a power of 2 to support
-   * InitFromReader. Suggested to be the number of available threads / 2.
+   * @param shardCount The number of shards, should be between 2 and 64 and be a
+   * factor of numbers between 2 and 8 to support Initialization. Please use
+   * GetSuitableShardCount method to get a suitable shard count.
    */
   ParOMap(uint64_t mapSize, uint64_t shardCount) {
     SetSize(mapSize, shardCount);
@@ -184,14 +253,45 @@ struct ParOMap {
     if (shardCount == 0) {
       throw std::runtime_error("shardCount should be positive");
     }
-    if (shardCount > 128) {
-      throw std::runtime_error("shardCount should be no more than 128");
+    if (shardCount > 64) {
+      throw std::runtime_error("shardCount should be no more than 64");
     }
     _size = mapSize;
     shards.resize(shardCount);
     shardSize = (PositionType)maxQueryPerShard(mapSize, shardCount, -60);
     read_rand(randSalt, sizeof(randSalt));
     shardHashRange = (UINT64_MAX - 1) / shardCount + 1;
+  }
+
+  /**
+   * @brief Get a suitable shard count given the number of threads.
+   *
+   * @param numThreads The number of threads available for parallelization.
+   * @param emptyInit Whether the omap will be initialized with empty data.
+   * @return uint32_t The suitable shard count.
+   */
+  uint32_t GetSuitableShardCount(uint32_t numThreads, bool emptyInit = false) {
+    if (numThreads <= 4) {
+      // too few threads, use 2 shards
+      return 2;
+    }
+    uint32_t suitableShardCount = numThreads / 2;
+    if (suitableShardCount > 64) {
+      suitableShardCount = 64;
+    }
+    if (emptyInit) {
+      // don't need to factorize
+      return suitableShardCount;
+    }
+    for (; suitableShardCount >= 1; --suitableShardCount) {
+      try {
+        factorizeShardCount(suitableShardCount);
+        // if no exception is thrown, then the shard count is valid
+        return suitableShardCount;
+      } catch (const std::runtime_error& e) {
+        continue;
+      }
+    }
   }
 
   /**
