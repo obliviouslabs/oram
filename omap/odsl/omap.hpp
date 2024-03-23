@@ -315,7 +315,7 @@ struct OHashMap {
   // maximum number of elements in the stash
   static constexpr int stash_max_size = 10;
   // the capcity of the hash map
-  PositionType _size;
+  PositionType _size = 0;
   // the number of elements in the hash map
   PositionType load;
   // the size of each hash table
@@ -334,6 +334,7 @@ struct OHashMap {
   using KVEntry = OHashMapEntry<K, V>;
   using StashType = LRUStash<K, V>;
   StashType stash;
+  bool inited = false;
 
   /**
    * @brief Helper function that accesses the hash table.
@@ -816,7 +817,7 @@ struct OHashMap {
 
   const StashType& GetStash() const { return stash; }
 
-  using NonObliviousOHashMap = OHashMap<K, V, false, PositionType>;
+  using NonObliviousHashMap = OHashMap<K, V, false, PositionType>;
 
   /**
    * @brief Initialize the oblivious hash map from another non-oblivious hash
@@ -824,11 +825,15 @@ struct OHashMap {
    *
    * @param other the non-oblivious hash map
    */
-  void InitFromNonOblivious(NonObliviousOHashMap& other) {
+  void InitFromNonOblivious(NonObliviousHashMap& other) {
     static_assert(isOblivious,
                   "Only oblivious hash map can call this function");
     if (_size != other.size()) {
       throw std::runtime_error("OHashMap InitFromNonOblivious failed");
+    }
+    if (_size == 0) {
+      throw std::runtime_error(
+          "OHashMap size not set. Call SetSize before initialization.");
     }
     load = other.GetLoad();
     indexer = other.GetIndexer();
@@ -885,18 +890,113 @@ struct OHashMap {
   template <typename Reader>
     requires Readable<Reader, std::pair<K, V>>
   void InitFromReader(Reader& reader, uint64_t additionalCacheBytes = 0) {
+    if (inited) {
+      throw std::runtime_error("OHashMap initialized twice.");
+    }
+    inited = true;
+    if (_size == 0) {
+      throw std::runtime_error(
+          "OHashMap size not set. Call SetSize before initialization.");
+    }
     if constexpr (!isOblivious) {
       while (!reader.eof()) {
-        std::pair<K, V> entry = reader.read();
+        const std::pair<K, V>& entry = reader.read();
         Insert(entry.first, entry.second);
       }
     } else {
       additionalCacheBytes = std::max(
           additionalCacheBytes, NonObliviousTableType::GetMinMemoryUsage() * 2);
-      NonObliviousOHashMap nonObliviousOHashMap(_size, additionalCacheBytes);
-      nonObliviousOHashMap.InitFromReader(reader);
-      InitFromNonOblivious(nonObliviousOHashMap);
+      NonObliviousHashMap nonObliviousHashMap(_size, additionalCacheBytes);
+      nonObliviousHashMap.InitFromReader(reader);
+      InitFromNonOblivious(nonObliviousHashMap);
     }
+  }
+
+  /**
+   * @brief An object that stores the curret state of initialization. Faciliates
+   * initialization in a streaming fashion.
+   *
+   */
+  struct InitContext {
+   private:
+    NonObliviousHashMap* nonObliviousHashMap;
+    OHashMap& oHashMap;  // the parent map
+
+   public:
+    /**
+     * @brief Construct a new InitContext object
+     *
+     * @param omap The parent map
+     * @param additionalCacheBytes the size of additional available cache for
+     * initialization
+     */
+    InitContext(OHashMap& map, uint64_t additionalCacheBytes = 0)
+        : oHashMap(map),
+          nonObliviousHashMap(
+              new NonObliviousHashMap(map.size(), additionalCacheBytes)) {
+      if (map.inited) {
+        throw std::runtime_error("OHashMap initialized twice.");
+      }
+      map.inited = true;
+      if (map.size() == 0) {
+        throw std::runtime_error(
+            "OHashMap size not set. Call SetSize before initialization.");
+      }
+    }
+
+    /**
+     * @brief Insert a new key value pair for initialization. The method will
+     * reveal whether the key has been inserted before. But if all the keys are
+     * distinct, the operation is oblivious. The method will throw an exception
+     * if too many keys are inserted.
+     *
+     * @param key
+     * @param value
+     */
+    void Insert(const K& key, const V& value) {
+      nonObliviousHashMap->Insert(key, value);
+    }
+
+    void Insert(const std::pair<K, V>& entry) {
+      nonObliviousHashMap->Insert(entry.first, entry.second);
+    }
+
+    template <class Iterator>
+    void InsertBatch(Iterator begin, Iterator end) {
+      for (auto it = begin; it != end; ++it) {
+        nonObliviousHashMap->Insert(it->first, it->second);
+      }
+    }
+
+    /**
+     * @brief Finalize the initialization. The method will copy the data from
+     * the non-oblivious hash map to the oblivious hash map.
+     *
+     */
+    void Finalize() {
+      oHashMap.InitFromNonOblivious(*nonObliviousHashMap);
+      delete nonObliviousHashMap;
+    }
+  };
+
+  /**
+   * @brief Obtain a new context to initialize this map. The initialization data
+   * can be either private or public (the initialization and subsequent accesses
+   * are oblivious).
+   * Example:
+   *  auto initContext = oMap.NewInitContext(1UL << 28);
+      for (auto it = kvMap.begin(); it != kvMap.end(); ++it;) {
+        initContext.Insert(it->first, it->second);
+      }
+      initContext.Finalize();
+   *
+   * @param additionalCacheBytes
+   * @return InitContext
+   */
+  InitContext NewInitContext(uint64_t additionalCacheBytes = 0) {
+    static_assert(isOblivious,
+                  "Only oblivious hash map can call this function");
+    return InitContext(*this, additionalCacheBytes);
   }
 
   /**
@@ -904,6 +1004,14 @@ struct OHashMap {
    *
    */
   void InitDefault() {
+    if (inited) {
+      throw std::runtime_error("OHashMap initialized twice.");
+    }
+    inited = true;
+    if (_size == 0) {
+      throw std::runtime_error(
+          "OHashMap size not set. Call SetSize before initialization.");
+    }
     if constexpr (isOblivious) {
       if constexpr (parallel_init) {
 #pragma omp task
