@@ -19,7 +19,7 @@ struct ORAM {
   ORAM_* treeOram = NULL;
   UidType nextUid = 0;  // uid 0 is reserved for dummy
   bool isLinear = false;
-  static constexpr PositionType linear_oram_threshold = 400;
+  static constexpr PositionType linear_oram_threshold = 500;
 
   ORAM() {}
 
