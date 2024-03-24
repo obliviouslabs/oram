@@ -2,22 +2,20 @@ extern crate bindgen;
 extern crate cmake;
 
 use cmake::Config;
-use std::{
-    env,
-    path::PathBuf,
-};
+use std::{env, path::PathBuf};
 
 fn main() {
     let dst = Config::new("../../")
         .generator("Ninja")
         .define("CMAKE_BUILD_TYPE", "Release")
         .build();
-    
+
     let bindings = bindgen::Builder::default()
         .header("wrapper.h")
-        .clang_arg("-x").clang_arg("c++")
+        .clang_arg("-x")
+        .clang_arg("c++")
         .clang_arg("-std=c++20")
-        .clang_arg("-I../../osort")
+        .clang_arg("-I../../omap")
         .parse_callbacks(Box::new(bindgen::CargoCallbacks::new()))
         .generate()
         .expect("Failed to generate bindings");
@@ -36,7 +34,10 @@ fn main() {
     println!("cargo:rustc-link-lib=crypto");
     println!("cargo:rustc-link-lib=gomp");
 
-    println!("cargo:rustc-link-search=native={}/build/osort", dst.display());
+    println!(
+        "cargo:rustc-link-search=native={}/build/omap",
+        dst.display()
+    );
     println!("cargo:rustc-link-lib=static=common");
     println!("cargo:rustc-link-lib=static=oraminterface");
 }

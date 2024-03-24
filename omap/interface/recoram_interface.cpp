@@ -1,19 +1,21 @@
-#include "oram/omap.hpp"
-#include "oram/par_omap.hpp"
-#include "oram/recursive_oram.hpp"
 #include "interface/recoram_interface.hpp"
+
+#include "odsl/omap.hpp"
+#include "odsl/par_omap.hpp"
+#include "odsl/recursive_oram.hpp"
 
 using namespace ODSL;
 
-ORAMBindingSingleton::ORAMBindingSingleton() {    
+ORAMBindingSingleton::ORAMBindingSingleton() {
   uint64_t BackendSize = 1e10;
-  EM::Backend::g_DefaultBackend = new EM::Backend::MemServerBackend(BackendSize);
+  EM::Backend::g_DefaultBackend =
+      new EM::Backend::MemServerBackend(BackendSize);
   oram = nullptr;
 }
 
 void ORAMBindingSingleton::InitORAM(uint64_t size) {
   // ASSERT(oram == nullptr);
-  oram = (void*) (new RecursiveORAM<uint64_t, uint32_t>(size));
+  oram = (void*)(new RecursiveORAM<uint64_t, uint32_t>(size));
   ((RecursiveORAM<uint64_t, uint32_t>*)oram)->InitDefault(0);
 }
 
@@ -26,4 +28,3 @@ uint64_t ORAMBindingSingleton::Read(uint32_t addr) {
   ((RecursiveORAM<uint64_t, uint32_t>*)oram)->Read(addr, ret);
   return ret;
 }
-
