@@ -6,7 +6,8 @@
 
 /**
  * @brief An ORAM manager that switches between linear and tree ORAM based on
- * size.
+ * size. It also decides whether to check freshness based on whether the entire
+ * ORAM can be cached in the enclave.
  *
  */
 namespace ODSL::AdaptiveORAM {
@@ -14,11 +15,20 @@ template <typename T, typename PositionType = uint64_t,
           typename UidType = uint64_t>
 struct ORAM {
   using LinearORAM_ = LinearORAM::ORAM<T, UidType>;
-  using ORAM_ = CircuitORAM::ORAM<T, 2, 20, PositionType, UidType, 4096, 2>;
+  // cached oram means the entire oram is cached in the enclave, so we don't
+  // need to add checks for freshness
+  using CachedORAM_ =
+      CircuitORAM::ORAM<T, 2, 20, PositionType, UidType, 4096, 2, false>;
+  using ORAM_ =
+      CircuitORAM::ORAM<T, 2, 20, PositionType, UidType, 4096, 2, true>;
+
   LinearORAM_* linearOram = NULL;
+  CachedORAM_* cachedTreeOram = NULL;
   ORAM_* treeOram = NULL;
-  UidType nextUid = 0;  // uid 0 is reserved for dummy
+
+  UidType nextUid = 0;
   bool isLinear = false;
+  bool isCached = false;
   static constexpr PositionType linear_oram_threshold = 500;
 
   ORAM() {}
@@ -31,6 +41,10 @@ struct ORAM {
     if (linearOram) {
       delete linearOram;
       linearOram = NULL;
+    }
+    if (cachedTreeOram) {
+      delete cachedTreeOram;
+      cachedTreeOram = NULL;
     }
     if (treeOram) {
       delete treeOram;
@@ -51,6 +65,8 @@ struct ORAM {
     nextUid = reader.size();
     if (isLinear) {
       linearOram->InitFromReader(reader);
+    } else if (isCached) {
+      cachedTreeOram->InitFromReader(reader, writer);
     } else {
       treeOram->InitFromReader(reader, writer);
     }
@@ -60,6 +76,9 @@ struct ORAM {
     if (isLinear) {
       Assert(linearOram);
       return linearOram->size();
+    } else if (isCached) {
+      Assert(cachedTreeOram);
+      return cachedTreeOram->size();
     } else {
       Assert(treeOram);
       return treeOram->size();
@@ -67,16 +86,19 @@ struct ORAM {
   }
 
   void SetSize(PositionType size, size_t cacheBytes = 1UL << 62) {
-    if (linearOram || treeOram) {
+    if (linearOram || treeOram || cachedTreeOram) {
       throw std::runtime_error("SetSize can only be called on empty oram");
     }
     isLinear = size <= linear_oram_threshold;
+    isCached = CachedORAM_::GetMemoryUsage(size, cacheBytes) <= cacheBytes;
     if (isLinear) {
       if (LinearORAM_::GetMemoryUsage(size) > cacheBytes) {
         throw std::runtime_error(
             "LinearORAM_::GetMemoryUsage(size) > cacheBytes");
       }
       linearOram = new LinearORAM_(size);
+    } else if (isCached) {
+      cachedTreeOram = new CachedORAM_(size, cacheBytes);
     } else {
       treeOram = new ORAM_(size, cacheBytes);
     }
@@ -86,7 +108,12 @@ struct ORAM {
     if (size <= linear_oram_threshold) {
       return LinearORAM_::GetMemoryUsage(size);
     } else {
-      return ORAM_::GetMemoryUsage(size, cacheBytes);
+      size_t cachedUsage = CachedORAM_::GetMemoryUsage(size, cacheBytes);
+      if (cachedUsage <= cacheBytes) {
+        return cachedUsage;
+      } else {
+        return ORAM_::GetMemoryUsage(size, cacheBytes);
+      }
     }
   }
 
@@ -94,8 +121,13 @@ struct ORAM {
     if (isLinear) {
       Assert(linearOram);
       return linearOram->GetMemoryUsage();
+    } else if (isCached) {
+      Assert(cachedTreeOram);
+      return cachedTreeOram->GetMemoryUsage();
     } else {
-      Assert(treeOram);
+      if (!treeOram) {
+        throw std::runtime_error("ORAM size has not been set.");
+      }
       return treeOram->GetMemoryUsage();
     }
   }
@@ -112,6 +144,8 @@ struct ORAM {
     if (isLinear) {
       linearOram->Read(uid, out);
       return 0;
+    } else if (isCached) {
+      return cachedTreeOram->Read(pos, uid, out);
     } else {
       return treeOram->Read(pos, uid, out);
     }
@@ -128,6 +162,8 @@ struct ORAM {
     if (isLinear) {
       linearOram->Write(uid, in);
       return 0;
+    } else if (isCached) {
+      return cachedTreeOram->Write(uid, in);
     } else {
       return treeOram->Write(uid, in);
     }
@@ -147,6 +183,8 @@ struct ORAM {
     if (isLinear) {
       linearOram->Read(uid, out);
       return 0;
+    } else if (isCached) {
+      return cachedTreeOram->Read(pos, uid, out, newPos);
     } else {
       return treeOram->Read(pos, uid, out, newPos);
     }
@@ -164,6 +202,8 @@ struct ORAM {
     if (isLinear) {
       linearOram->Write(uid, in);
       return 0;
+    } else if (isCached) {
+      return cachedTreeOram->Write(uid, in, newPos);
     } else {
       return treeOram->Write(uid, in, newPos);
     }
@@ -187,6 +227,8 @@ struct ORAM {
     if (isLinear) {
       linearOram->Update(uid, updateFunc);
       return 0;
+    } else if (isCached) {
+      return cachedTreeOram->Read(pos, uid, updateFunc);
     } else {
       return treeOram->Update(pos, uid, updateFunc);
     }
@@ -211,6 +253,8 @@ struct ORAM {
     if (isLinear) {
       linearOram->Update(uid, updateFunc, out);
       return 0;
+    } else if (isCached) {
+      return cachedTreeOram->Update(pos, uid, updateFunc, out);
     } else {
       return treeOram->Update(pos, uid, updateFunc, out);
     }
@@ -238,6 +282,8 @@ struct ORAM {
     if (isLinear) {
       linearOram->Update(uid, updateFunc, out, updatedUid);
       return 0;
+    } else if (isCached) {
+      return cachedTreeOram->Update(pos, uid, updateFunc, out, updatedUid);
     } else {
       return treeOram->Update(pos, uid, updateFunc, out, updatedUid);
     }
@@ -262,6 +308,8 @@ struct ORAM {
     if (isLinear) {
       linearOram->Update(uid, updateFunc);
       return 0;
+    } else if (isCached) {
+      return cachedTreeOram->Update(pos, uid, newPos, updateFunc);
     } else {
       return treeOram->Update(pos, uid, newPos, updateFunc);
     }
@@ -287,6 +335,8 @@ struct ORAM {
     if (isLinear) {
       linearOram->Update(uid, updateFunc, out);
       return 0;
+    } else if (isCached) {
+      return cachedTreeOram->Update(pos, uid, newPos, updateFunc, out);
     } else {
       return treeOram->Update(pos, uid, newPos, updateFunc, out);
     }
@@ -315,6 +365,9 @@ struct ORAM {
     if (isLinear) {
       linearOram->Update(uid, updateFunc, out, updatedUid);
       return 0;
+    } else if (isCached) {
+      return cachedTreeOram->Update(pos, uid, newPos, updateFunc, out,
+                                    updatedUid);
     } else {
       return treeOram->Update(pos, uid, newPos, updateFunc, out, updatedUid);
     }
@@ -333,6 +386,8 @@ struct ORAM {
                           const UidType* uid, T* out) {
     if (isLinear) {
       linearOram->BatchRead(batchSize, uid, out);
+    } else if (isCached) {
+      cachedTreeOram->BatchReadAndRemove(batchSize, pos, uid, out);
     } else {
       treeOram->BatchReadAndRemove(batchSize, pos, uid, out);
     }
@@ -354,6 +409,9 @@ struct ORAM {
                       const std::vector<bool>& writeBackFlags) {
     if (isLinear) {
       linearOram->BatchWriteBack(batchSize, uid, in, writeBackFlags);
+    } else if (isCached) {
+      cachedTreeOram->BatchWriteBack(batchSize, uid, newPos, in,
+                                     writeBackFlags);
     } else {
       treeOram->BatchWriteBack(batchSize, uid, newPos, in, writeBackFlags);
     }
@@ -380,6 +438,8 @@ struct ORAM {
                    const PositionType* newPos, const Func& updateFunc, T* out) {
     if (isLinear) {
       linearOram->BatchUpdate(batchSize, uid, updateFunc, out);
+    } else if (isCached) {
+      cachedTreeOram->BatchUpdate(batchSize, pos, uid, newPos, updateFunc, out);
     } else {
       treeOram->BatchUpdate(batchSize, pos, uid, newPos, updateFunc, out);
     }
@@ -405,6 +465,8 @@ struct ORAM {
                    const PositionType* newPos, const Func& updateFunc) {
     if (isLinear) {
       linearOram->BatchUpdate(batchSize, uid, updateFunc);
+    } else if (isCached) {
+      cachedTreeOram->BatchUpdate(batchSize, pos, uid, newPos, updateFunc);
     } else {
       treeOram->BatchUpdate(batchSize, pos, uid, newPos, updateFunc);
     }
@@ -433,12 +495,19 @@ struct ORAM {
     if (isLinear) {
       linearOram->BatchUpdate(batchSize, uid, updateFunc);
       return std::vector<PositionType>(batchSize, 0);
+    } else if (isCached) {
+      return cachedTreeOram->BatchUpdate(batchSize, pos, uid, updateFunc);
     } else {
       return treeOram->BatchUpdate(batchSize, pos, uid, updateFunc);
     }
   }
 
-  // returns the next unique id, if real is false, returns the dummy id
+  /**
+   * @brief Returns the next unique id, if real is false, returns the dummy uid
+   *
+   * @param real
+   * @return UidType
+   */
   UidType GetNextUid(bool real = true) {
     UidType res = DUMMY<UidType>();
     obliMove(real, res, nextUid);

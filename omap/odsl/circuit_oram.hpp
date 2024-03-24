@@ -480,7 +480,7 @@ struct ORAM {
   static uint64_t GetMemoryUsage(PositionType size,
                                  uint64_t cacheBytes = 1UL << 62) {
     return sizeof(Stash) +
-           HeapTree_::getMemoryUsage(
+           HeapTree_::GetMemoryUsage(
                size, GetMaxCacheLevel<T, Z, stashSize, PositionType, UidType>(
                          size, cacheBytes));
   }
