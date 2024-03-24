@@ -1,8 +1,7 @@
 #include <gtest/gtest.h>
 
 #include "common/mov_intrinsics.hpp"
-#include "common/probability.hpp"
-#include "oram/heap_tree.hpp"
+#include "odsl/heap_tree.hpp"
 #include "testutils.hpp"
 
 template <const uint64_t size>
@@ -176,32 +175,6 @@ TEST(Basic, MovPerf) { testObliMovPerf<200>(); }
 
 TEST(Basic, SwapPerf) { testObliSwapPerf<200>(); }
 
-TEST(Basic, TestHeapTree) {
-  size_t size = 11;
-  int maxLevel = GetLogBaseTwo(size - 1) + 2;
-  for (int level = 0; level < maxLevel; ++level) {
-    for (int i = 0; i < size; ++i) {
-      size_t idx = HeapTree<int>::GetIdx(i, size, level, maxLevel, maxLevel);
-      printf("level: %d, i: %d, idx: %lu\n", level, i, idx);
-    }
-  }
-}
-
-TEST(Basic, TestHeapTree2) {
-  size_t size = 13;
-  int maxLevel = GetLogBaseTwo(size - 1) + 2;
-  std::vector<size_t> pathIdxs(maxLevel);
-  for (size_t i = 0; i < size; ++i) {
-    int level = HeapTree<int, uint64_t, 32>::GetPathIdx(
-        pathIdxs.begin(), pathIdxs.end(), i, size, 1);
-    printf("Path %lu:\n", i);
-    for (int j = 0; j < level; ++j) {
-      printf("%lu ", pathIdxs[j]);
-    }
-    printf("\n");
-  }
-}
-
 template <const size_t page_size>
 void testHeapTreeCorrectness() {
   // printf(
@@ -209,6 +182,7 @@ void testHeapTreeCorrectness() {
   //     levels\n", page_size, HeapTree<int, uint64_t, page_size>::packLevel);
   using HeapTree_ = HeapTree<int, uint64_t, page_size>;
   for (size_t size = 2; size < 100000; size = 1.05 * size + 1) {
+    int totalLevel = GetLogBaseTwo(size - 1) + 2;
     for (int cacheLevel = 1; cacheLevel < GetLogBaseTwo(size) + 2;
          ++cacheLevel) {
       int maxLevel = GetLogBaseTwo(size - 1) + 2;
@@ -221,18 +195,16 @@ void testHeapTreeCorrectness() {
           continue;
         }
         int commonSuffixLen = std::countr_zero(path1 ^ path2);
-        int level1 = HeapTree_::GetPathIdx(pathIdxs1.begin(), pathIdxs1.end(),
-                                           path1, size, cacheLevel);
+        int level1 = HeapTree_::GetNodeIdxArr(pathIdxs1.begin(), path1, size,
+                                              totalLevel, cacheLevel);
         for (int i = 0; i < level1; ++i) {
-          ASSERT_EQ(pathIdxs1[i],
-                    HeapTree_::GetIdx(path1, size, i, maxLevel, cacheLevel));
           ASSERT_LT(pathIdxs1[i], size * 2 - 1);
           if (i > 0) {
             ASSERT_LT(pathIdxs1[i - 1], pathIdxs1[i]);
           }
         }
-        int level2 = HeapTree_::GetPathIdx(pathIdxs2.begin(), pathIdxs2.end(),
-                                           path2, size, cacheLevel);
+        int level2 = HeapTree_::GetNodeIdxArr(pathIdxs2.begin(), path2, size,
+                                              totalLevel, cacheLevel);
         for (int i = 0; i < level2; ++i) {
           ASSERT_LT(pathIdxs2[i], size * 2 - 1);
           if (i > 0) {
@@ -265,92 +237,4 @@ TEST(Basic, TestHeapTreeCorrectness) {
   testHeapTreeCorrectness<100>();
   testHeapTreeCorrectness<500>();
   testHeapTreeCorrectness<4096>();
-}
-
-TEST(Basic, testSamplingExpectation) {
-  size_t size = 100;
-  std::vector<size_t> counts(size);
-
-  SampleFromPoisson(1.0, counts.begin(), counts.end());
-  // SampleFromBinomial(1e-5, 1e5, counts.begin(), counts.end());
-  // sum counts
-  size_t sum = 0;
-  for (size_t i = 0; i < size; ++i) {
-    sum += counts[i];
-  }
-  printf("sum: %lu\n", sum);
-
-  // for (size_t i = 0; i < size; ++i) {
-  //   printf("%lu ", counts[i]);
-  // }
-  // printf("\n");
-}
-
-TEST(Basic, testSamplingPerf) {
-  size_t size = 1e8;
-  size_t sum = 0;
-  NoReplaceSampler sampler(size);
-  auto start = std::chrono::system_clock::now();
-  for (size_t i = 0; i < size; ++i) {
-    sum += sampler.Sample();
-  }
-  auto end = std::chrono::system_clock::now();
-  std::chrono::duration<double> diff = end - start;
-  ASSERT_EQ(sum, size);
-  printf("Time: %f ms\n", diff.count() * 1e3);
-}
-
-TEST(Basic, testSampler) {
-  size_t size = 166667;
-  size_t expectedSum = 83334;
-  NoReplaceSampler sampler(expectedSum, size);
-
-  size_t sum = 0;
-  for (size_t i = 0; i < size; ++i) {
-    sum += sampler.Sample();
-  }
-  ASSERT_EQ(sum, expectedSum);
-}
-
-TEST(Basic, testBuildBottomUp) {
-  for (size_t leafCount = 71429; leafCount <= 71429; ++leafCount) {
-    int totalLevel = GetLogBaseTwo(leafCount - 1) + 2;
-    for (int cacheLevel = 1; cacheLevel <= totalLevel; ++cacheLevel) {
-      // printf("leafCount: %lu, cacheLevel: %d, packLevel: %d\n", leafCount,
-      //        cacheLevel, packLevel);
-      HeapTree<uint64_t, uint64_t, 72> heapTree(leafCount, cacheLevel);
-      for (auto it = heapTree.beginInternal(); it != heapTree.endInternal();
-           ++it) {
-        *it = 0;
-      }
-      size_t size = leafCount * 2 - 1;
-      std::function<uint64_t(uint64_t&, const uint64_t&, const uint64_t&)>
-          reduceFunc =
-              [](uint64_t& val, const uint64_t& i,
-                 const uint64_t& j) -> uint64_t { return val = i + j; };
-      std::function<uint64_t(uint64_t&, size_t)> leafFunc =
-          [](uint64_t& i, size_t idx) { return i = idx + 1; };
-      ASSERT_EQ(heapTree.BuildBottomUp<uint64_t>(reduceFunc, leafFunc),
-                leafCount * (leafCount + 1) / 2);
-      for (auto it = heapTree.beginInternal(); it != heapTree.endInternal();
-           ++it) {
-        ASSERT_NE(*it, 0);
-      }
-    }
-  }
-}
-
-TEST(Basic, testBuildBottomUpPerf) {
-  for (size_t leafCount = 10000; leafCount < 100000000;
-       leafCount = leafCount * 5 / 4) {
-    int totalLevel = GetLogBaseTwo(leafCount - 1) + 2;
-    size_t size = leafCount * 2 - 1;
-    HeapTree<uint64_t> heapTree(leafCount);
-    std::function<uint64_t(uint64_t&, const uint64_t&, const uint64_t&)>
-        reduceFunc = [](uint64_t& val, const uint64_t& i,
-                        const uint64_t& j) -> uint64_t { return val = i + j; };
-    std::function<uint64_t(uint64_t&, size_t)> leafFunc =
-        [](uint64_t& i, size_t idx) { return i = 1UL; };
-    ASSERT_EQ(heapTree.BuildBottomUp(reduceFunc, leafFunc), leafCount);
-  }
 }

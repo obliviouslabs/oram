@@ -1,0 +1,1865 @@
+mapSize = 100000, threadCount = 1, batchSize = 1
+oram init time 0.312021 s
+oram insert time 22.741879 us
+oram find time 21.776734 us
+oram erase time 21.599045 us
+mapSize = 200000, threadCount = 1, batchSize = 1
+oram init time 0.655446 s
+oram insert time 22.767815 us
+oram find time 22.909287 us
+oram erase time 22.690901 us
+mapSize = 500000, threadCount = 1, batchSize = 1
+oram init time 1.763373 s
+oram insert time 24.734756 us
+oram find time 24.869702 us
+oram erase time 24.621800 us
+mapSize = 1000000, threadCount = 1, batchSize = 1
+oram init time 3.645635 s
+oram insert time 26.320362 us
+oram find time 26.680198 us
+oram erase time 26.231365 us
+mapSize = 2000000, threadCount = 1, batchSize = 1
+oram init time 7.509643 s
+oram insert time 32.431116 us
+oram find time 32.399544 us
+oram erase time 32.403806 us
+mapSize = 5000000, threadCount = 1, batchSize = 1
+oram init time 19.739165 s
+oram insert time 35.207169 us
+oram find time 35.274760 us
+oram erase time 35.149657 us
+mapSize = 10000000, threadCount = 1, batchSize = 1
+oram init time 40.123137 s
+oram insert time 36.571680 us
+oram find time 36.713813 us
+oram erase time 36.576261 us
+mapSize = 20000000, threadCount = 1, batchSize = 1
+oram init time 83.697901 s
+oram insert time 43.833172 us
+oram find time 44.035137 us
+oram erase time 43.886472 us
+mapSize = 50000000, threadCount = 1, batchSize = 1
+oram init time 214.035604 s
+oram insert time 46.871881 us
+oram find time 46.990704 us
+oram erase time 46.668854 us
+mapSize = 100000000, threadCount = 1, batchSize = 1
+oram init time 453.496285 s
+oram insert time 56.359480 us
+oram find time 56.403967 us
+oram erase time 56.210470 us
+mapSize = 100000, threadCount = 2, batchSize = 100
+oram init time 0.194055 s
+oram find time 12.734648 us
+mapSize = 100000, threadCount = 2, batchSize = 200
+oram init time 0.194055 s
+oram find time 12.200044 us
+mapSize = 100000, threadCount = 2, batchSize = 500
+oram init time 0.194055 s
+oram find time 11.827789 us
+mapSize = 100000, threadCount = 2, batchSize = 1000
+oram init time 0.194055 s
+oram find time 11.734161 us
+mapSize = 100000, threadCount = 2, batchSize = 2000
+oram init time 0.194055 s
+oram find time 11.661683 us
+mapSize = 100000, threadCount = 2, batchSize = 5000
+oram init time 0.194055 s
+oram find time 11.826066 us
+mapSize = 100000, threadCount = 2, batchSize = 10000
+oram init time 0.194055 s
+oram find time 11.795063 us
+mapSize = 100000, threadCount = 4, batchSize = 100
+oram init time 0.118511 s
+oram find time 11.073369 us
+mapSize = 100000, threadCount = 4, batchSize = 200
+oram init time 0.118511 s
+oram find time 9.263036 us
+mapSize = 100000, threadCount = 4, batchSize = 500
+oram init time 0.118511 s
+oram find time 7.981116 us
+mapSize = 100000, threadCount = 4, batchSize = 1000
+oram init time 0.118511 s
+oram find time 7.609960 us
+mapSize = 100000, threadCount = 4, batchSize = 2000
+oram init time 0.118511 s
+oram find time 6.877473 us
+mapSize = 100000, threadCount = 4, batchSize = 5000
+oram init time 0.118511 s
+oram find time 6.440432 us
+mapSize = 100000, threadCount = 4, batchSize = 10000
+oram init time 0.118511 s
+oram find time 6.607623 us
+mapSize = 100000, threadCount = 8, batchSize = 100
+oram init time 0.038925 s
+oram find time 10.087096 us
+mapSize = 100000, threadCount = 8, batchSize = 200
+oram init time 0.038925 s
+oram find time 7.585222 us
+mapSize = 100000, threadCount = 8, batchSize = 500
+oram init time 0.038925 s
+oram find time 6.259580 us
+mapSize = 100000, threadCount = 8, batchSize = 1000
+oram init time 0.038925 s
+oram find time 5.216728 us
+mapSize = 100000, threadCount = 8, batchSize = 2000
+oram init time 0.038925 s
+oram find time 4.603531 us
+mapSize = 100000, threadCount = 8, batchSize = 5000
+oram init time 0.038925 s
+oram find time 4.280381 us
+mapSize = 100000, threadCount = 8, batchSize = 10000
+oram init time 0.038925 s
+oram find time 4.067102 us
+mapSize = 100000, threadCount = 16, batchSize = 100
+oram init time 0.023475 s
+oram find time 15.039735 us
+mapSize = 100000, threadCount = 16, batchSize = 200
+oram init time 0.023475 s
+oram find time 11.005118 us
+mapSize = 100000, threadCount = 16, batchSize = 500
+oram init time 0.023475 s
+oram find time 7.921604 us
+mapSize = 100000, threadCount = 16, batchSize = 1000
+oram init time 0.023475 s
+oram find time 6.615603 us
+mapSize = 100000, threadCount = 16, batchSize = 2000
+oram init time 0.023475 s
+oram find time 5.804555 us
+mapSize = 100000, threadCount = 16, batchSize = 5000
+oram init time 0.023475 s
+oram find time 5.200253 us
+mapSize = 100000, threadCount = 16, batchSize = 10000
+oram init time 0.023475 s
+oram find time 4.828092 us
+mapSize = 100000, threadCount = 32, batchSize = 100
+oram init time 0.012485 s
+oram find time 21.203528 us
+mapSize = 100000, threadCount = 32, batchSize = 200
+oram init time 0.012485 s
+oram find time 14.330149 us
+mapSize = 100000, threadCount = 32, batchSize = 500
+oram init time 0.012485 s
+oram find time 9.848746 us
+mapSize = 100000, threadCount = 32, batchSize = 1000
+oram init time 0.012485 s
+oram find time 7.268832 us
+mapSize = 100000, threadCount = 32, batchSize = 2000
+oram init time 0.012485 s
+oram find time 6.172039 us
+mapSize = 100000, threadCount = 32, batchSize = 5000
+oram init time 0.012485 s
+oram find time 5.550507 us
+mapSize = 100000, threadCount = 32, batchSize = 10000
+oram init time 0.012485 s
+oram find time 4.962190 us
+mapSize = 200000, threadCount = 2, batchSize = 100
+oram init time 0.320998 s
+oram find time 13.768058 us
+mapSize = 200000, threadCount = 2, batchSize = 200
+oram init time 0.320998 s
+oram find time 13.080354 us
+mapSize = 200000, threadCount = 2, batchSize = 500
+oram init time 0.320998 s
+oram find time 12.725617 us
+mapSize = 200000, threadCount = 2, batchSize = 1000
+oram init time 0.320998 s
+oram find time 12.672784 us
+mapSize = 200000, threadCount = 2, batchSize = 2000
+oram init time 0.320998 s
+oram find time 12.792580 us
+mapSize = 200000, threadCount = 2, batchSize = 5000
+oram init time 0.320998 s
+oram find time 12.714263 us
+mapSize = 200000, threadCount = 2, batchSize = 10000
+oram init time 0.320998 s
+oram find time 12.743177 us
+mapSize = 200000, threadCount = 4, batchSize = 100
+oram init time 0.160690 s
+oram find time 14.295861 us
+mapSize = 200000, threadCount = 4, batchSize = 200
+oram init time 0.160690 s
+oram find time 11.815951 us
+mapSize = 200000, threadCount = 4, batchSize = 500
+oram init time 0.160690 s
+oram find time 9.748155 us
+mapSize = 200000, threadCount = 4, batchSize = 1000
+oram init time 0.160690 s
+oram find time 8.928047 us
+mapSize = 200000, threadCount = 4, batchSize = 2000
+oram init time 0.160690 s
+oram find time 8.336772 us
+mapSize = 200000, threadCount = 4, batchSize = 5000
+oram init time 0.160690 s
+oram find time 8.040546 us
+mapSize = 200000, threadCount = 4, batchSize = 10000
+oram init time 0.160690 s
+oram find time 7.785063 us
+mapSize = 200000, threadCount = 8, batchSize = 100
+oram init time 0.077808 s
+oram find time 10.630729 us
+mapSize = 200000, threadCount = 8, batchSize = 200
+oram init time 0.077808 s
+oram find time 8.128125 us
+mapSize = 200000, threadCount = 8, batchSize = 500
+oram init time 0.077808 s
+oram find time 6.081255 us
+mapSize = 200000, threadCount = 8, batchSize = 1000
+oram init time 0.077808 s
+oram find time 5.545441 us
+mapSize = 200000, threadCount = 8, batchSize = 2000
+oram init time 0.077808 s
+oram find time 4.892300 us
+mapSize = 200000, threadCount = 8, batchSize = 5000
+oram init time 0.077808 s
+oram find time 4.729951 us
+mapSize = 200000, threadCount = 8, batchSize = 10000
+oram init time 0.077808 s
+oram find time 4.318682 us
+mapSize = 200000, threadCount = 16, batchSize = 100
+oram init time 0.039182 s
+oram find time 15.080143 us
+mapSize = 200000, threadCount = 16, batchSize = 200
+oram init time 0.039182 s
+oram find time 10.996257 us
+mapSize = 200000, threadCount = 16, batchSize = 500
+oram init time 0.039182 s
+oram find time 7.892673 us
+mapSize = 200000, threadCount = 16, batchSize = 1000
+oram init time 0.039182 s
+oram find time 6.520795 us
+mapSize = 200000, threadCount = 16, batchSize = 2000
+oram init time 0.039182 s
+oram find time 5.689476 us
+mapSize = 200000, threadCount = 16, batchSize = 5000
+oram init time 0.039182 s
+oram find time 5.095380 us
+mapSize = 200000, threadCount = 16, batchSize = 10000
+oram init time 0.039182 s
+oram find time 4.829613 us
+mapSize = 200000, threadCount = 32, batchSize = 100
+oram init time 0.025897 s
+oram find time 21.266510 us
+mapSize = 200000, threadCount = 32, batchSize = 200
+oram init time 0.025897 s
+oram find time 14.270150 us
+mapSize = 200000, threadCount = 32, batchSize = 500
+oram init time 0.025897 s
+oram find time 9.575771 us
+mapSize = 200000, threadCount = 32, batchSize = 1000
+oram init time 0.025897 s
+oram find time 7.452316 us
+mapSize = 200000, threadCount = 32, batchSize = 2000
+oram init time 0.025897 s
+oram find time 6.388900 us
+mapSize = 200000, threadCount = 32, batchSize = 5000
+oram init time 0.025897 s
+oram find time 5.585687 us
+mapSize = 200000, threadCount = 32, batchSize = 10000
+oram init time 0.025897 s
+oram find time 5.050060 us
+mapSize = 500000, threadCount = 2, batchSize = 100
+oram init time 0.859250 s
+oram find time 14.973942 us
+mapSize = 500000, threadCount = 2, batchSize = 200
+oram init time 0.859250 s
+oram find time 14.323994 us
+mapSize = 500000, threadCount = 2, batchSize = 500
+oram init time 0.859250 s
+oram find time 13.877768 us
+mapSize = 500000, threadCount = 2, batchSize = 1000
+oram init time 0.859250 s
+oram find time 14.193969 us
+mapSize = 500000, threadCount = 2, batchSize = 2000
+oram init time 0.859250 s
+oram find time 14.212292 us
+mapSize = 500000, threadCount = 2, batchSize = 5000
+oram init time 0.859250 s
+oram find time 14.088274 us
+mapSize = 500000, threadCount = 2, batchSize = 10000
+oram init time 0.859250 s
+oram find time 14.180138 us
+mapSize = 500000, threadCount = 4, batchSize = 100
+oram init time 0.419022 s
+oram find time 14.174113 us
+mapSize = 500000, threadCount = 4, batchSize = 200
+oram init time 0.419022 s
+oram find time 11.948850 us
+mapSize = 500000, threadCount = 4, batchSize = 500
+oram init time 0.419022 s
+oram find time 10.555830 us
+mapSize = 500000, threadCount = 4, batchSize = 1000
+oram init time 0.419022 s
+oram find time 9.341812 us
+mapSize = 500000, threadCount = 4, batchSize = 2000
+oram init time 0.419022 s
+oram find time 9.280104 us
+mapSize = 500000, threadCount = 4, batchSize = 5000
+oram init time 0.419022 s
+oram find time 8.717217 us
+mapSize = 500000, threadCount = 4, batchSize = 10000
+oram init time 0.419022 s
+oram find time 8.216461 us
+mapSize = 500000, threadCount = 8, batchSize = 100
+oram init time 0.205987 s
+oram find time 12.585252 us
+mapSize = 500000, threadCount = 8, batchSize = 200
+oram init time 0.205987 s
+oram find time 9.503719 us
+mapSize = 500000, threadCount = 8, batchSize = 500
+oram init time 0.205987 s
+oram find time 7.395166 us
+mapSize = 500000, threadCount = 8, batchSize = 1000
+oram init time 0.205987 s
+oram find time 6.348538 us
+mapSize = 500000, threadCount = 8, batchSize = 2000
+oram init time 0.205987 s
+oram find time 5.692869 us
+mapSize = 500000, threadCount = 8, batchSize = 5000
+oram init time 0.205987 s
+oram find time 5.207811 us
+mapSize = 500000, threadCount = 8, batchSize = 10000
+oram init time 0.205987 s
+oram find time 5.111000 us
+mapSize = 500000, threadCount = 16, batchSize = 100
+oram init time 0.101424 s
+oram find time 15.264857 us
+mapSize = 500000, threadCount = 16, batchSize = 200
+oram init time 0.101424 s
+oram find time 10.938325 us
+mapSize = 500000, threadCount = 16, batchSize = 500
+oram init time 0.101424 s
+oram find time 7.873447 us
+mapSize = 500000, threadCount = 16, batchSize = 1000
+oram init time 0.101424 s
+oram find time 6.648885 us
+mapSize = 500000, threadCount = 16, batchSize = 2000
+oram init time 0.101424 s
+oram find time 5.733421 us
+mapSize = 500000, threadCount = 16, batchSize = 5000
+oram init time 0.101424 s
+oram find time 5.062483 us
+mapSize = 500000, threadCount = 16, batchSize = 10000
+oram init time 0.101424 s
+oram find time 4.859071 us
+mapSize = 500000, threadCount = 32, batchSize = 100
+oram init time 0.058543 s
+oram find time 20.856169 us
+mapSize = 500000, threadCount = 32, batchSize = 200
+oram init time 0.058543 s
+oram find time 14.834717 us
+mapSize = 500000, threadCount = 32, batchSize = 500
+oram init time 0.058543 s
+oram find time 10.123718 us
+mapSize = 500000, threadCount = 32, batchSize = 1000
+oram init time 0.058543 s
+oram find time 7.981287 us
+mapSize = 500000, threadCount = 32, batchSize = 2000
+oram init time 0.058543 s
+oram find time 6.773493 us
+mapSize = 500000, threadCount = 32, batchSize = 5000
+oram init time 0.058543 s
+oram find time 5.731824 us
+mapSize = 500000, threadCount = 32, batchSize = 10000
+oram init time 0.058543 s
+oram find time 5.034441 us
+mapSize = 1000000, threadCount = 2, batchSize = 100
+oram init time 1.774657 s
+oram find time 16.050680 us
+mapSize = 1000000, threadCount = 2, batchSize = 200
+oram init time 1.774657 s
+oram find time 15.622316 us
+mapSize = 1000000, threadCount = 2, batchSize = 500
+oram init time 1.774657 s
+oram find time 15.312819 us
+mapSize = 1000000, threadCount = 2, batchSize = 1000
+oram init time 1.774657 s
+oram find time 15.112984 us
+mapSize = 1000000, threadCount = 2, batchSize = 2000
+oram init time 1.774657 s
+oram find time 15.094745 us
+mapSize = 1000000, threadCount = 2, batchSize = 5000
+oram init time 1.774657 s
+oram find time 15.139042 us
+mapSize = 1000000, threadCount = 2, batchSize = 10000
+oram init time 1.774657 s
+oram find time 15.165448 us
+mapSize = 1000000, threadCount = 4, batchSize = 100
+oram init time 0.892964 s
+oram find time 15.106126 us
+mapSize = 1000000, threadCount = 4, batchSize = 200
+oram init time 0.892964 s
+oram find time 13.086861 us
+mapSize = 1000000, threadCount = 4, batchSize = 500
+oram init time 0.892964 s
+oram find time 11.410076 us
+mapSize = 1000000, threadCount = 4, batchSize = 1000
+oram init time 0.892964 s
+oram find time 10.296653 us
+mapSize = 1000000, threadCount = 4, batchSize = 2000
+oram init time 0.892964 s
+oram find time 9.980091 us
+mapSize = 1000000, threadCount = 4, batchSize = 5000
+oram init time 0.892964 s
+oram find time 9.385332 us
+mapSize = 1000000, threadCount = 4, batchSize = 10000
+oram init time 0.892964 s
+oram find time 9.175535 us
+mapSize = 1000000, threadCount = 8, batchSize = 100
+oram init time 0.421681 s
+oram find time 12.681235 us
+mapSize = 1000000, threadCount = 8, batchSize = 200
+oram init time 0.421681 s
+oram find time 10.004852 us
+mapSize = 1000000, threadCount = 8, batchSize = 500
+oram init time 0.421681 s
+oram find time 7.676623 us
+mapSize = 1000000, threadCount = 8, batchSize = 1000
+oram init time 0.421681 s
+oram find time 6.616138 us
+mapSize = 1000000, threadCount = 8, batchSize = 2000
+oram init time 0.421681 s
+oram find time 6.229640 us
+mapSize = 1000000, threadCount = 8, batchSize = 5000
+oram init time 0.421681 s
+oram find time 5.530614 us
+mapSize = 1000000, threadCount = 8, batchSize = 10000
+oram init time 0.421681 s
+oram find time 5.270214 us
+mapSize = 1000000, threadCount = 16, batchSize = 100
+oram init time 0.208356 s
+oram find time 15.148433 us
+mapSize = 1000000, threadCount = 16, batchSize = 200
+oram init time 0.208356 s
+oram find time 11.011072 us
+mapSize = 1000000, threadCount = 16, batchSize = 500
+oram init time 0.208356 s
+oram find time 8.050439 us
+mapSize = 1000000, threadCount = 16, batchSize = 1000
+oram init time 0.208356 s
+oram find time 6.437147 us
+mapSize = 1000000, threadCount = 16, batchSize = 2000
+oram init time 0.208356 s
+oram find time 5.674002 us
+mapSize = 1000000, threadCount = 16, batchSize = 5000
+oram init time 0.208356 s
+oram find time 5.120374 us
+mapSize = 1000000, threadCount = 16, batchSize = 10000
+oram init time 0.208356 s
+oram find time 4.753147 us
+mapSize = 1000000, threadCount = 32, batchSize = 100
+oram init time 0.117749 s
+oram find time 21.266721 us
+mapSize = 1000000, threadCount = 32, batchSize = 200
+oram init time 0.117749 s
+oram find time 14.548326 us
+mapSize = 1000000, threadCount = 32, batchSize = 500
+oram init time 0.117749 s
+oram find time 9.544485 us
+mapSize = 1000000, threadCount = 32, batchSize = 1000
+oram init time 0.117749 s
+oram find time 7.887960 us
+mapSize = 1000000, threadCount = 32, batchSize = 2000
+oram init time 0.117749 s
+oram find time 6.621999 us
+mapSize = 1000000, threadCount = 32, batchSize = 5000
+oram init time 0.117749 s
+oram find time 5.713239 us
+mapSize = 1000000, threadCount = 32, batchSize = 10000
+oram init time 0.117749 s
+oram find time 5.048630 us
+mapSize = 2000000, threadCount = 2, batchSize = 100
+oram init time 3.649454 s
+oram find time 19.612872 us
+mapSize = 2000000, threadCount = 2, batchSize = 200
+oram init time 3.649454 s
+oram find time 18.980614 us
+mapSize = 2000000, threadCount = 2, batchSize = 500
+oram init time 3.649454 s
+oram find time 18.762697 us
+mapSize = 2000000, threadCount = 2, batchSize = 1000
+oram init time 3.649454 s
+oram find time 18.407240 us
+mapSize = 2000000, threadCount = 2, batchSize = 2000
+oram init time 3.649454 s
+oram find time 18.461794 us
+mapSize = 2000000, threadCount = 2, batchSize = 5000
+oram init time 3.649454 s
+oram find time 18.532948 us
+mapSize = 2000000, threadCount = 2, batchSize = 10000
+oram init time 3.649454 s
+oram find time 18.581911 us
+mapSize = 2000000, threadCount = 4, batchSize = 100
+oram init time 1.770149 s
+oram find time 16.036471 us
+mapSize = 2000000, threadCount = 4, batchSize = 200
+oram init time 1.770149 s
+oram find time 13.412470 us
+mapSize = 2000000, threadCount = 4, batchSize = 500
+oram init time 1.770149 s
+oram find time 11.592406 us
+mapSize = 2000000, threadCount = 4, batchSize = 1000
+oram init time 1.770149 s
+oram find time 10.787820 us
+mapSize = 2000000, threadCount = 4, batchSize = 2000
+oram init time 1.770149 s
+oram find time 9.859395 us
+mapSize = 2000000, threadCount = 4, batchSize = 5000
+oram init time 1.770149 s
+oram find time 9.426809 us
+mapSize = 2000000, threadCount = 4, batchSize = 10000
+oram init time 1.770149 s
+oram find time 9.323758 us
+mapSize = 2000000, threadCount = 8, batchSize = 100
+oram init time 0.871643 s
+oram find time 13.659232 us
+mapSize = 2000000, threadCount = 8, batchSize = 200
+oram init time 0.871643 s
+oram find time 10.495133 us
+mapSize = 2000000, threadCount = 8, batchSize = 500
+oram init time 0.871643 s
+oram find time 8.058141 us
+mapSize = 2000000, threadCount = 8, batchSize = 1000
+oram init time 0.871643 s
+oram find time 6.859663 us
+mapSize = 2000000, threadCount = 8, batchSize = 2000
+oram init time 0.871643 s
+oram find time 6.145114 us
+mapSize = 2000000, threadCount = 8, batchSize = 5000
+oram init time 0.871643 s
+oram find time 5.729842 us
+mapSize = 2000000, threadCount = 8, batchSize = 10000
+oram init time 0.871643 s
+oram find time 5.366349 us
+mapSize = 2000000, threadCount = 16, batchSize = 100
+oram init time 0.473435 s
+oram find time 14.981922 us
+mapSize = 2000000, threadCount = 16, batchSize = 200
+oram init time 0.473435 s
+oram find time 11.180503 us
+mapSize = 2000000, threadCount = 16, batchSize = 500
+oram init time 0.473435 s
+oram find time 7.998821 us
+mapSize = 2000000, threadCount = 16, batchSize = 1000
+oram init time 0.473435 s
+oram find time 6.530975 us
+mapSize = 2000000, threadCount = 16, batchSize = 2000
+oram init time 0.473435 s
+oram find time 5.669850 us
+mapSize = 2000000, threadCount = 16, batchSize = 5000
+oram init time 0.473435 s
+oram find time 5.079477 us
+mapSize = 2000000, threadCount = 16, batchSize = 10000
+oram init time 0.473435 s
+oram find time 4.830032 us
+mapSize = 2000000, threadCount = 32, batchSize = 100
+oram init time 0.225276 s
+oram find time 22.068530 us
+mapSize = 2000000, threadCount = 32, batchSize = 200
+oram init time 0.225276 s
+oram find time 14.943520 us
+mapSize = 2000000, threadCount = 32, batchSize = 500
+oram init time 0.225276 s
+oram find time 10.189407 us
+mapSize = 2000000, threadCount = 32, batchSize = 1000
+oram init time 0.225276 s
+oram find time 8.089468 us
+mapSize = 2000000, threadCount = 32, batchSize = 2000
+oram init time 0.225276 s
+oram find time 6.930078 us
+mapSize = 2000000, threadCount = 32, batchSize = 5000
+oram init time 0.225276 s
+oram find time 5.750567 us
+mapSize = 2000000, threadCount = 32, batchSize = 10000
+oram init time 0.225276 s
+oram find time 5.334353 us
+mapSize = 5000000, threadCount = 2, batchSize = 100
+oram init time 9.578957 s
+oram find time 21.348696 us
+mapSize = 5000000, threadCount = 2, batchSize = 200
+oram init time 9.578957 s
+oram find time 20.978444 us
+mapSize = 5000000, threadCount = 2, batchSize = 500
+oram init time 9.578957 s
+oram find time 20.288017 us
+mapSize = 5000000, threadCount = 2, batchSize = 1000
+oram init time 9.578957 s
+oram find time 20.357193 us
+mapSize = 5000000, threadCount = 2, batchSize = 2000
+oram init time 9.578957 s
+oram find time 20.390834 us
+mapSize = 5000000, threadCount = 2, batchSize = 5000
+oram init time 9.578957 s
+oram find time 20.354121 us
+mapSize = 5000000, threadCount = 2, batchSize = 10000
+oram init time 9.578957 s
+oram find time 20.404729 us
+mapSize = 5000000, threadCount = 4, batchSize = 100
+oram init time 4.631413 s
+oram find time 19.168118 us
+mapSize = 5000000, threadCount = 4, batchSize = 200
+oram init time 4.631413 s
+oram find time 16.799805 us
+mapSize = 5000000, threadCount = 4, batchSize = 500
+oram init time 4.631413 s
+oram find time 14.154401 us
+mapSize = 5000000, threadCount = 4, batchSize = 1000
+oram init time 4.631413 s
+oram find time 13.026800 us
+mapSize = 5000000, threadCount = 4, batchSize = 2000
+oram init time 4.631413 s
+oram find time 12.138990 us
+mapSize = 5000000, threadCount = 4, batchSize = 5000
+oram init time 4.631413 s
+oram find time 11.829442 us
+mapSize = 5000000, threadCount = 4, batchSize = 10000
+oram init time 4.631413 s
+oram find time 11.206119 us
+mapSize = 5000000, threadCount = 8, batchSize = 100
+oram init time 2.341260 s
+oram find time 16.091181 us
+mapSize = 5000000, threadCount = 8, batchSize = 200
+oram init time 2.341260 s
+oram find time 12.225849 us
+mapSize = 5000000, threadCount = 8, batchSize = 500
+oram init time 2.341260 s
+oram find time 9.665383 us
+mapSize = 5000000, threadCount = 8, batchSize = 1000
+oram init time 2.341260 s
+oram find time 8.304695 us
+mapSize = 5000000, threadCount = 8, batchSize = 2000
+oram init time 2.341260 s
+oram find time 7.356749 us
+mapSize = 5000000, threadCount = 8, batchSize = 5000
+oram init time 2.341260 s
+oram find time 6.874110 us
+mapSize = 5000000, threadCount = 8, batchSize = 10000
+oram init time 2.341260 s
+oram find time 6.518235 us
+mapSize = 5000000, threadCount = 16, batchSize = 100
+oram init time 1.099483 s
+oram find time 15.118437 us
+mapSize = 5000000, threadCount = 16, batchSize = 200
+oram init time 1.099483 s
+oram find time 11.156636 us
+mapSize = 5000000, threadCount = 16, batchSize = 500
+oram init time 1.099483 s
+oram find time 8.035339 us
+mapSize = 5000000, threadCount = 16, batchSize = 1000
+oram init time 1.099483 s
+oram find time 6.495925 us
+mapSize = 5000000, threadCount = 16, batchSize = 2000
+oram init time 1.099483 s
+oram find time 5.705818 us
+mapSize = 5000000, threadCount = 16, batchSize = 5000
+oram init time 1.099483 s
+oram find time 5.170621 us
+mapSize = 5000000, threadCount = 16, batchSize = 10000
+oram init time 1.099483 s
+oram find time 4.733197 us
+mapSize = 5000000, threadCount = 32, batchSize = 100
+oram init time 0.562858 s
+oram find time 22.143359 us
+mapSize = 5000000, threadCount = 32, batchSize = 200
+oram init time 0.562858 s
+oram find time 15.581466 us
+mapSize = 5000000, threadCount = 32, batchSize = 500
+oram init time 0.562858 s
+oram find time 10.441908 us
+mapSize = 5000000, threadCount = 32, batchSize = 1000
+oram init time 0.562858 s
+oram find time 8.226425 us
+mapSize = 5000000, threadCount = 32, batchSize = 2000
+oram init time 0.562858 s
+oram find time 6.936038 us
+mapSize = 5000000, threadCount = 32, batchSize = 5000
+oram init time 0.562858 s
+oram find time 5.799678 us
+mapSize = 5000000, threadCount = 32, batchSize = 10000
+oram init time 0.562858 s
+oram find time 5.212309 us
+mapSize = 10000000, threadCount = 2, batchSize = 100
+oram init time 19.493939 s
+oram find time 22.475520 us
+mapSize = 10000000, threadCount = 2, batchSize = 200
+oram init time 19.493939 s
+oram find time 21.772132 us
+mapSize = 10000000, threadCount = 2, batchSize = 500
+oram init time 19.493939 s
+oram find time 21.736470 us
+mapSize = 10000000, threadCount = 2, batchSize = 1000
+oram init time 19.493939 s
+oram find time 21.458100 us
+mapSize = 10000000, threadCount = 2, batchSize = 2000
+oram init time 19.493939 s
+oram find time 21.522764 us
+mapSize = 10000000, threadCount = 2, batchSize = 5000
+oram init time 19.493939 s
+oram find time 21.506373 us
+mapSize = 10000000, threadCount = 2, batchSize = 10000
+oram init time 19.493939 s
+oram find time 21.788622 us
+mapSize = 10000000, threadCount = 4, batchSize = 100
+oram init time 9.716820 s
+oram find time 20.303842 us
+mapSize = 10000000, threadCount = 4, batchSize = 200
+oram init time 9.716820 s
+oram find time 17.586017 us
+mapSize = 10000000, threadCount = 4, batchSize = 500
+oram init time 9.716820 s
+oram find time 15.316617 us
+mapSize = 10000000, threadCount = 4, batchSize = 1000
+oram init time 9.716820 s
+oram find time 13.784764 us
+mapSize = 10000000, threadCount = 4, batchSize = 2000
+oram init time 9.716820 s
+oram find time 13.199907 us
+mapSize = 10000000, threadCount = 4, batchSize = 5000
+oram init time 9.716820 s
+oram find time 12.576811 us
+mapSize = 10000000, threadCount = 4, batchSize = 10000
+oram init time 9.716820 s
+oram find time 12.121550 us
+mapSize = 10000000, threadCount = 8, batchSize = 100
+oram init time 4.642415 s
+oram find time 16.217633 us
+mapSize = 10000000, threadCount = 8, batchSize = 200
+oram init time 4.642415 s
+oram find time 12.547302 us
+mapSize = 10000000, threadCount = 8, batchSize = 500
+oram init time 4.642415 s
+oram find time 9.803350 us
+mapSize = 10000000, threadCount = 8, batchSize = 1000
+oram init time 4.642415 s
+oram find time 8.547814 us
+mapSize = 10000000, threadCount = 8, batchSize = 2000
+oram init time 4.642415 s
+oram find time 7.630999 us
+mapSize = 10000000, threadCount = 8, batchSize = 5000
+oram init time 4.642415 s
+oram find time 6.981806 us
+mapSize = 10000000, threadCount = 8, batchSize = 10000
+oram init time 4.642415 s
+oram find time 6.776121 us
+mapSize = 10000000, threadCount = 16, batchSize = 100
+oram init time 2.308543 s
+oram find time 15.591731 us
+mapSize = 10000000, threadCount = 16, batchSize = 200
+oram init time 2.308543 s
+oram find time 11.455206 us
+mapSize = 10000000, threadCount = 16, batchSize = 500
+oram init time 2.308543 s
+oram find time 8.262942 us
+mapSize = 10000000, threadCount = 16, batchSize = 1000
+oram init time 2.308543 s
+oram find time 6.707276 us
+mapSize = 10000000, threadCount = 16, batchSize = 2000
+oram init time 2.308543 s
+oram find time 5.665289 us
+mapSize = 10000000, threadCount = 16, batchSize = 5000
+oram init time 2.308543 s
+oram find time 4.997634 us
+mapSize = 10000000, threadCount = 16, batchSize = 10000
+oram init time 2.308543 s
+oram find time 4.842284 us
+mapSize = 10000000, threadCount = 32, batchSize = 100
+oram init time 1.121354 s
+oram find time 22.346691 us
+mapSize = 10000000, threadCount = 32, batchSize = 200
+oram init time 1.121354 s
+oram find time 15.290391 us
+mapSize = 10000000, threadCount = 32, batchSize = 500
+oram init time 1.121354 s
+oram find time 10.366959 us
+mapSize = 10000000, threadCount = 32, batchSize = 1000
+oram init time 1.121354 s
+oram find time 8.184595 us
+mapSize = 10000000, threadCount = 32, batchSize = 2000
+oram init time 1.121354 s
+oram find time 6.897612 us
+mapSize = 10000000, threadCount = 32, batchSize = 5000
+oram init time 1.121354 s
+oram find time 6.024856 us
+mapSize = 10000000, threadCount = 32, batchSize = 10000
+oram init time 1.121354 s
+oram find time 5.458744 us
+mapSize = 20000000, threadCount = 2, batchSize = 100
+oram init time 40.918382 s
+oram find time 26.236697 us
+mapSize = 20000000, threadCount = 2, batchSize = 200
+oram init time 40.918382 s
+oram find time 25.701066 us
+mapSize = 20000000, threadCount = 2, batchSize = 500
+oram init time 40.918382 s
+oram find time 25.325494 us
+mapSize = 20000000, threadCount = 2, batchSize = 1000
+oram init time 40.918382 s
+oram find time 24.996428 us
+mapSize = 20000000, threadCount = 2, batchSize = 2000
+oram init time 40.918382 s
+oram find time 25.518412 us
+mapSize = 20000000, threadCount = 2, batchSize = 5000
+oram init time 40.918382 s
+oram find time 25.697655 us
+mapSize = 20000000, threadCount = 2, batchSize = 10000
+oram init time 40.918382 s
+oram find time 25.720504 us
+mapSize = 20000000, threadCount = 4, batchSize = 100
+oram init time 19.679764 s
+oram find time 21.256017 us
+mapSize = 20000000, threadCount = 4, batchSize = 200
+oram init time 19.679764 s
+oram find time 18.422156 us
+mapSize = 20000000, threadCount = 4, batchSize = 500
+oram init time 19.679764 s
+oram find time 15.738845 us
+mapSize = 20000000, threadCount = 4, batchSize = 1000
+oram init time 19.679764 s
+oram find time 14.636140 us
+mapSize = 20000000, threadCount = 4, batchSize = 2000
+oram init time 19.679764 s
+oram find time 13.588322 us
+mapSize = 20000000, threadCount = 4, batchSize = 5000
+oram init time 19.679764 s
+oram find time 12.905449 us
+mapSize = 20000000, threadCount = 4, batchSize = 10000
+oram init time 19.679764 s
+oram find time 12.386296 us
+mapSize = 20000000, threadCount = 8, batchSize = 100
+oram init time 10.562845 s
+oram find time 16.944643 us
+mapSize = 20000000, threadCount = 8, batchSize = 200
+oram init time 10.562845 s
+oram find time 13.254928 us
+mapSize = 20000000, threadCount = 8, batchSize = 500
+oram init time 10.562845 s
+oram find time 10.623182 us
+mapSize = 20000000, threadCount = 8, batchSize = 1000
+oram init time 10.562845 s
+oram find time 9.127318 us
+mapSize = 20000000, threadCount = 8, batchSize = 2000
+oram init time 10.562845 s
+oram find time 8.191598 us
+mapSize = 20000000, threadCount = 8, batchSize = 5000
+oram init time 10.562845 s
+oram find time 7.764767 us
+mapSize = 20000000, threadCount = 8, batchSize = 10000
+oram init time 10.562845 s
+oram find time 7.251064 us
+mapSize = 20000000, threadCount = 16, batchSize = 100
+oram init time 4.738016 s
+oram find time 15.567101 us
+mapSize = 20000000, threadCount = 16, batchSize = 200
+oram init time 4.738016 s
+oram find time 11.744614 us
+mapSize = 20000000, threadCount = 16, batchSize = 500
+oram init time 4.738016 s
+oram find time 8.135886 us
+mapSize = 20000000, threadCount = 16, batchSize = 1000
+oram init time 4.738016 s
+oram find time 6.837316 us
+mapSize = 20000000, threadCount = 16, batchSize = 2000
+oram init time 4.738016 s
+oram find time 5.934663 us
+mapSize = 20000000, threadCount = 16, batchSize = 5000
+oram init time 4.738016 s
+oram find time 5.250316 us
+mapSize = 20000000, threadCount = 16, batchSize = 10000
+oram init time 4.738016 s
+oram find time 4.994182 us
+mapSize = 20000000, threadCount = 32, batchSize = 100
+oram init time 2.365475 s
+oram find time 22.375722 us
+mapSize = 20000000, threadCount = 32, batchSize = 200
+oram init time 2.365475 s
+oram find time 15.445414 us
+mapSize = 20000000, threadCount = 32, batchSize = 500
+oram init time 2.365475 s
+oram find time 10.450975 us
+mapSize = 20000000, threadCount = 32, batchSize = 1000
+oram init time 2.365475 s
+oram find time 8.272805 us
+mapSize = 20000000, threadCount = 32, batchSize = 2000
+oram init time 2.365475 s
+oram find time 6.900213 us
+mapSize = 20000000, threadCount = 32, batchSize = 5000
+oram init time 2.365475 s
+oram find time 5.870058 us
+mapSize = 20000000, threadCount = 32, batchSize = 10000
+oram init time 2.365475 s
+oram find time 5.328979 us
+mapSize = 50000000, threadCount = 2, batchSize = 100
+oram init time 105.843122 s
+oram find time 28.631893 us
+mapSize = 50000000, threadCount = 2, batchSize = 200
+oram init time 105.843122 s
+oram find time 27.733498 us
+mapSize = 50000000, threadCount = 2, batchSize = 500
+oram init time 105.843122 s
+oram find time 27.156780 us
+mapSize = 50000000, threadCount = 2, batchSize = 1000
+oram init time 105.843122 s
+oram find time 26.921222 us
+mapSize = 50000000, threadCount = 2, batchSize = 2000
+oram init time 105.843122 s
+oram find time 26.850630 us
+mapSize = 50000000, threadCount = 2, batchSize = 5000
+oram init time 105.843122 s
+oram find time 26.865926 us
+mapSize = 50000000, threadCount = 2, batchSize = 10000
+oram init time 105.843122 s
+oram find time 27.056224 us
+mapSize = 50000000, threadCount = 4, batchSize = 100
+oram init time 51.879691 s
+oram find time 25.571586 us
+mapSize = 50000000, threadCount = 4, batchSize = 200
+oram init time 51.879691 s
+oram find time 22.100182 us
+mapSize = 50000000, threadCount = 4, batchSize = 500
+oram init time 51.879691 s
+oram find time 18.853862 us
+mapSize = 50000000, threadCount = 4, batchSize = 1000
+oram init time 51.879691 s
+oram find time 17.282466 us
+mapSize = 50000000, threadCount = 4, batchSize = 2000
+oram init time 51.879691 s
+oram find time 16.480253 us
+mapSize = 50000000, threadCount = 4, batchSize = 5000
+oram init time 51.879691 s
+oram find time 15.753299 us
+mapSize = 50000000, threadCount = 4, batchSize = 10000
+oram init time 51.879691 s
+oram find time 15.162654 us
+mapSize = 50000000, threadCount = 8, batchSize = 100
+oram init time 24.976715 s
+oram find time 18.525688 us
+mapSize = 50000000, threadCount = 8, batchSize = 200
+oram init time 24.976715 s
+oram find time 14.247290 us
+mapSize = 50000000, threadCount = 8, batchSize = 500
+oram init time 24.976715 s
+oram find time 11.206833 us
+mapSize = 50000000, threadCount = 8, batchSize = 1000
+oram init time 24.976715 s
+oram find time 9.669312 us
+mapSize = 50000000, threadCount = 8, batchSize = 2000
+oram init time 24.976715 s
+oram find time 8.682218 us
+mapSize = 50000000, threadCount = 8, batchSize = 5000
+oram init time 24.976715 s
+oram find time 7.974685 us
+mapSize = 50000000, threadCount = 8, batchSize = 10000
+oram init time 24.976715 s
+oram find time 7.721562 us
+mapSize = 50000000, threadCount = 16, batchSize = 100
+oram init time 12.889598 s
+oram find time 16.263491 us
+mapSize = 50000000, threadCount = 16, batchSize = 200
+oram init time 12.889598 s
+oram find time 11.872956 us
+mapSize = 50000000, threadCount = 16, batchSize = 500
+oram init time 12.889598 s
+oram find time 8.407662 us
+mapSize = 50000000, threadCount = 16, batchSize = 1000
+oram init time 12.889598 s
+oram find time 6.816695 us
+mapSize = 50000000, threadCount = 16, batchSize = 2000
+oram init time 12.889598 s
+oram find time 6.123286 us
+mapSize = 50000000, threadCount = 16, batchSize = 5000
+oram init time 12.889598 s
+oram find time 5.259848 us
+mapSize = 50000000, threadCount = 16, batchSize = 10000
+oram init time 12.889598 s
+oram find time 4.961338 us
+mapSize = 50000000, threadCount = 32, batchSize = 100
+oram init time 6.203778 s
+oram find time 23.069418 us
+mapSize = 50000000, threadCount = 32, batchSize = 200
+oram init time 6.203778 s
+oram find time 16.721643 us
+mapSize = 50000000, threadCount = 32, batchSize = 500
+oram init time 6.203778 s
+oram find time 11.423987 us
+mapSize = 50000000, threadCount = 32, batchSize = 1000
+oram init time 6.203778 s
+oram find time 8.602558 us
+mapSize = 50000000, threadCount = 32, batchSize = 2000
+oram init time 6.203778 s
+oram find time 7.228500 us
+mapSize = 50000000, threadCount = 32, batchSize = 5000
+oram init time 6.203778 s
+oram find time 6.151011 us
+mapSize = 50000000, threadCount = 32, batchSize = 10000
+oram init time 6.203778 s
+oram find time 5.587825 us
+mapSize = 100000000, threadCount = 2, batchSize = 100
+oram init time 219.689467 s
+oram find time 30.958543 us
+mapSize = 100000000, threadCount = 2, batchSize = 200
+oram init time 219.689467 s
+oram find time 30.467741 us
+mapSize = 100000000, threadCount = 2, batchSize = 500
+oram init time 219.689467 s
+oram find time 30.081152 us
+mapSize = 100000000, threadCount = 2, batchSize = 1000
+oram init time 219.689467 s
+oram find time 29.792000 us
+mapSize = 100000000, threadCount = 2, batchSize = 2000
+oram init time 219.689467 s
+oram find time 29.957891 us
+mapSize = 100000000, threadCount = 2, batchSize = 5000
+oram init time 219.689467 s
+oram find time 29.890987 us
+mapSize = 100000000, threadCount = 2, batchSize = 10000
+oram init time 219.689467 s
+oram find time 29.943241 us
+mapSize = 100000000, threadCount = 4, batchSize = 100
+oram init time 109.004376 s
+oram find time 27.062268 us
+mapSize = 100000000, threadCount = 4, batchSize = 200
+oram init time 109.004376 s
+oram find time 23.224391 us
+mapSize = 100000000, threadCount = 4, batchSize = 500
+oram init time 109.004376 s
+oram find time 20.366917 us
+mapSize = 100000000, threadCount = 4, batchSize = 1000
+oram init time 109.004376 s
+oram find time 18.578136 us
+mapSize = 100000000, threadCount = 4, batchSize = 2000
+oram init time 109.004376 s
+oram find time 17.381456 us
+mapSize = 100000000, threadCount = 4, batchSize = 5000
+oram init time 109.004376 s
+oram find time 16.642307 us
+mapSize = 100000000, threadCount = 4, batchSize = 10000
+oram init time 109.004376 s
+oram find time 16.193886 us
+mapSize = 100000000, threadCount = 8, batchSize = 100
+oram init time 52.049124 s
+oram find time 21.109561 us
+mapSize = 100000000, threadCount = 8, batchSize = 200
+oram init time 52.049124 s
+oram find time 16.533546 us
+mapSize = 100000000, threadCount = 8, batchSize = 500
+oram init time 52.049124 s
+oram find time 12.974129 us
+mapSize = 100000000, threadCount = 8, batchSize = 1000
+oram init time 52.049124 s
+oram find time 11.240921 us
+mapSize = 100000000, threadCount = 8, batchSize = 2000
+oram init time 52.049124 s
+oram find time 10.076348 us
+mapSize = 100000000, threadCount = 8, batchSize = 5000
+oram init time 52.049124 s
+oram find time 9.280313 us
+mapSize = 100000000, threadCount = 8, batchSize = 10000
+oram init time 52.049124 s
+oram find time 8.803274 us
+mapSize = 100000000, threadCount = 16, batchSize = 100
+oram init time 25.848792 s
+oram find time 17.601714 us
+mapSize = 100000000, threadCount = 16, batchSize = 200
+oram init time 25.848792 s
+oram find time 12.723020 us
+mapSize = 100000000, threadCount = 16, batchSize = 500
+oram init time 25.848792 s
+oram find time 9.130330 us
+mapSize = 100000000, threadCount = 16, batchSize = 1000
+oram init time 25.848792 s
+oram find time 7.424563 us
+mapSize = 100000000, threadCount = 16, batchSize = 2000
+oram init time 25.848792 s
+oram find time 6.526543 us
+mapSize = 100000000, threadCount = 16, batchSize = 5000
+oram init time 25.848792 s
+oram find time 5.660468 us
+mapSize = 100000000, threadCount = 16, batchSize = 10000
+oram init time 25.848792 s
+oram find time 5.267734 us
+mapSize = 100000000, threadCount = 32, batchSize = 100
+oram init time 13.327423 s
+oram find time 23.327762 us
+mapSize = 100000000, threadCount = 32, batchSize = 200
+oram init time 13.327423 s
+oram find time 16.434399 us
+mapSize = 100000000, threadCount = 32, batchSize = 500
+oram init time 13.327423 s
+oram find time 10.734364 us
+mapSize = 100000000, threadCount = 32, batchSize = 1000
+oram init time 13.327423 s
+oram find time 8.554521 us
+mapSize = 100000000, threadCount = 32, batchSize = 2000
+oram init time 13.327423 s
+oram find time 7.254304 us
+mapSize = 100000000, threadCount = 32, batchSize = 5000
+oram init time 13.327423 s
+oram find time 6.079884 us
+mapSize = 100000000, threadCount = 32, batchSize = 10000
+oram init time 13.327423 s
+oram find time 5.493978 us
+mapSize = 200000000, threadCount = 2, batchSize = 100
+oram init time 448.492494 s
+oram find time 32.913174 us
+mapSize = 200000000, threadCount = 2, batchSize = 200
+oram init time 448.492494 s
+oram find time 32.276360 us
+mapSize = 200000000, threadCount = 2, batchSize = 500
+oram init time 448.492494 s
+oram find time 31.933479 us
+mapSize = 200000000, threadCount = 2, batchSize = 1000
+oram init time 448.492494 s
+oram find time 32.038454 us
+mapSize = 200000000, threadCount = 2, batchSize = 2000
+oram init time 448.492494 s
+oram find time 32.090479 us
+mapSize = 200000000, threadCount = 2, batchSize = 5000
+oram init time 448.492494 s
+oram find time 31.972927 us
+mapSize = 200000000, threadCount = 2, batchSize = 10000
+oram init time 448.492494 s
+oram find time 31.958017 us
+mapSize = 200000000, threadCount = 4, batchSize = 100
+oram init time 223.499935 s
+oram find time 28.837797 us
+mapSize = 200000000, threadCount = 4, batchSize = 200
+oram init time 223.499935 s
+oram find time 24.796945 us
+mapSize = 200000000, threadCount = 4, batchSize = 500
+oram init time 223.499935 s
+oram find time 21.839948 us
+mapSize = 200000000, threadCount = 4, batchSize = 1000
+oram init time 223.499935 s
+oram find time 20.055032 us
+mapSize = 200000000, threadCount = 4, batchSize = 2000
+oram init time 223.499935 s
+oram find time 18.852023 us
+mapSize = 200000000, threadCount = 4, batchSize = 5000
+oram init time 223.499935 s
+oram find time 17.919168 us
+mapSize = 200000000, threadCount = 4, batchSize = 10000
+oram init time 223.499935 s
+oram find time 17.399260 us
+mapSize = 200000000, threadCount = 8, batchSize = 100
+oram init time 109.137562 s
+oram find time 21.883078 us
+mapSize = 200000000, threadCount = 8, batchSize = 200
+oram init time 109.137562 s
+oram find time 17.289389 us
+mapSize = 200000000, threadCount = 8, batchSize = 500
+oram init time 109.137562 s
+oram find time 13.567882 us
+mapSize = 200000000, threadCount = 8, batchSize = 1000
+oram init time 109.137562 s
+oram find time 11.684546 us
+mapSize = 200000000, threadCount = 8, batchSize = 2000
+oram init time 109.137562 s
+oram find time 10.503834 us
+mapSize = 200000000, threadCount = 8, batchSize = 5000
+oram init time 109.137562 s
+oram find time 9.703613 us
+mapSize = 200000000, threadCount = 8, batchSize = 10000
+oram init time 109.137562 s
+oram find time 9.238034 us
+mapSize = 200000000, threadCount = 16, batchSize = 100
+oram init time 53.626263 s
+oram find time 19.713321 us
+mapSize = 200000000, threadCount = 16, batchSize = 200
+oram init time 53.626263 s
+oram find time 14.370042 us
+mapSize = 200000000, threadCount = 16, batchSize = 500
+oram init time 53.626263 s
+oram find time 10.049462 us
+mapSize = 200000000, threadCount = 16, batchSize = 1000
+oram init time 53.626263 s
+oram find time 7.882321 us
+mapSize = 200000000, threadCount = 16, batchSize = 2000
+oram init time 53.626263 s
+oram find time 6.912753 us
+mapSize = 200000000, threadCount = 16, batchSize = 5000
+oram init time 53.626263 s
+oram find time 6.092241 us
+mapSize = 200000000, threadCount = 16, batchSize = 10000
+oram init time 53.626263 s
+oram find time 5.691852 us
+mapSize = 200000000, threadCount = 32, batchSize = 100
+oram init time 26.779572 s
+oram find time 23.474732 us
+mapSize = 200000000, threadCount = 32, batchSize = 200
+oram init time 26.779572 s
+oram find time 16.295491 us
+mapSize = 200000000, threadCount = 32, batchSize = 500
+oram init time 26.779572 s
+oram find time 10.804679 us
+mapSize = 200000000, threadCount = 32, batchSize = 1000
+oram init time 26.779572 s
+oram find time 8.466837 us
+mapSize = 200000000, threadCount = 32, batchSize = 2000
+oram init time 26.779572 s
+oram find time 7.235608 us
+mapSize = 200000000, threadCount = 32, batchSize = 5000
+oram init time 26.779572 s
+oram find time 6.080063 us
+mapSize = 200000000, threadCount = 32, batchSize = 10000
+oram init time 26.779572 s
+oram find time 5.439939 us
+mapSize = 100000, threadCount = 2, batchSize = 20000
+oram init time 0.164109 s
+oram find time 11.742136 us
+mapSize = 100000, threadCount = 2, batchSize = 50000
+oram init time 0.164109 s
+oram find time 11.757132 us
+mapSize = 100000, threadCount = 2, batchSize = 100000
+oram init time 0.164109 s
+oram find time 11.795260 us
+mapSize = 100000, threadCount = 2, batchSize = 200000
+oram init time 0.164109 s
+oram find time 11.856463 us
+mapSize = 100000, threadCount = 4, batchSize = 20000
+oram init time 0.076402 s
+oram find time 6.163183 us
+mapSize = 100000, threadCount = 4, batchSize = 50000
+oram init time 0.076402 s
+oram find time 5.820636 us
+mapSize = 100000, threadCount = 4, batchSize = 100000
+oram init time 0.076402 s
+oram find time 5.849193 us
+mapSize = 100000, threadCount = 4, batchSize = 200000
+oram init time 0.076402 s
+oram find time 5.883427 us
+mapSize = 100000, threadCount = 8, batchSize = 20000
+oram init time 0.038965 s
+oram find time 4.397027 us
+mapSize = 100000, threadCount = 8, batchSize = 50000
+oram init time 0.038965 s
+oram find time 4.352923 us
+mapSize = 100000, threadCount = 8, batchSize = 100000
+oram init time 0.038965 s
+oram find time 4.343934 us
+mapSize = 100000, threadCount = 8, batchSize = 200000
+oram init time 0.038965 s
+oram find time 4.328289 us
+mapSize = 100000, threadCount = 16, batchSize = 20000
+oram init time 0.019329 s
+oram find time 4.306484 us
+mapSize = 100000, threadCount = 16, batchSize = 50000
+oram init time 0.019329 s
+oram find time 4.189801 us
+mapSize = 100000, threadCount = 16, batchSize = 100000
+oram init time 0.019329 s
+oram find time 4.136243 us
+mapSize = 100000, threadCount = 16, batchSize = 200000
+oram init time 0.019329 s
+oram find time 4.068996 us
+mapSize = 100000, threadCount = 32, batchSize = 20000
+oram init time 0.012775 s
+oram find time 3.664841 us
+mapSize = 100000, threadCount = 32, batchSize = 50000
+oram init time 0.012775 s
+oram find time 3.478191 us
+mapSize = 100000, threadCount = 32, batchSize = 100000
+oram init time 0.012775 s
+oram find time 3.428423 us
+mapSize = 100000, threadCount = 32, batchSize = 200000
+oram init time 0.012775 s
+oram find time 3.440162 us
+mapSize = 200000, threadCount = 2, batchSize = 20000
+oram init time 0.323565 s
+oram find time 14.015341 us
+mapSize = 200000, threadCount = 2, batchSize = 50000
+oram init time 0.323565 s
+oram find time 13.984975 us
+mapSize = 200000, threadCount = 2, batchSize = 100000
+oram init time 0.323565 s
+oram find time 14.057780 us
+mapSize = 200000, threadCount = 2, batchSize = 200000
+oram init time 0.323565 s
+oram find time 14.094809 us
+mapSize = 200000, threadCount = 4, batchSize = 20000
+oram init time 0.162744 s
+oram find time 8.301170 us
+mapSize = 200000, threadCount = 4, batchSize = 50000
+oram init time 0.162744 s
+oram find time 8.145638 us
+mapSize = 200000, threadCount = 4, batchSize = 100000
+oram init time 0.162744 s
+oram find time 7.712684 us
+mapSize = 200000, threadCount = 4, batchSize = 200000
+oram init time 0.162744 s
+oram find time 8.100874 us
+mapSize = 200000, threadCount = 8, batchSize = 20000
+oram init time 0.078684 s
+oram find time 4.154968 us
+mapSize = 200000, threadCount = 8, batchSize = 50000
+oram init time 0.078684 s
+oram find time 3.982141 us
+mapSize = 200000, threadCount = 8, batchSize = 100000
+oram init time 0.078684 s
+oram find time 4.101996 us
+mapSize = 200000, threadCount = 8, batchSize = 200000
+oram init time 0.078684 s
+oram find time 4.088575 us
+mapSize = 200000, threadCount = 16, batchSize = 20000
+oram init time 0.039939 s
+oram find time 4.319022 us
+mapSize = 200000, threadCount = 16, batchSize = 50000
+oram init time 0.039939 s
+oram find time 4.199322 us
+mapSize = 200000, threadCount = 16, batchSize = 100000
+oram init time 0.039939 s
+oram find time 4.182369 us
+mapSize = 200000, threadCount = 16, batchSize = 200000
+oram init time 0.039939 s
+oram find time 4.167036 us
+mapSize = 200000, threadCount = 32, batchSize = 20000
+oram init time 0.019796 s
+oram find time 3.637427 us
+mapSize = 200000, threadCount = 32, batchSize = 50000
+oram init time 0.019796 s
+oram find time 3.500470 us
+mapSize = 200000, threadCount = 32, batchSize = 100000
+oram init time 0.019796 s
+oram find time 3.414610 us
+mapSize = 200000, threadCount = 32, batchSize = 200000
+oram init time 0.019796 s
+oram find time 3.391413 us
+mapSize = 500000, threadCount = 2, batchSize = 20000
+oram init time 0.849858 s
+oram find time 14.569044 us
+mapSize = 500000, threadCount = 2, batchSize = 50000
+oram init time 0.849858 s
+oram find time 14.587324 us
+mapSize = 500000, threadCount = 2, batchSize = 100000
+oram init time 0.849858 s
+oram find time 14.670892 us
+mapSize = 500000, threadCount = 2, batchSize = 200000
+oram init time 0.849858 s
+oram find time 14.733389 us
+mapSize = 500000, threadCount = 4, batchSize = 20000
+oram init time 0.418635 s
+oram find time 8.073612 us
+mapSize = 500000, threadCount = 4, batchSize = 50000
+oram init time 0.418635 s
+oram find time 7.943221 us
+mapSize = 500000, threadCount = 4, batchSize = 100000
+oram init time 0.418635 s
+oram find time 7.914624 us
+mapSize = 500000, threadCount = 4, batchSize = 200000
+oram init time 0.418635 s
+oram find time 7.873198 us
+mapSize = 500000, threadCount = 8, batchSize = 20000
+oram init time 0.236507 s
+oram find time 4.828890 us
+mapSize = 500000, threadCount = 8, batchSize = 50000
+oram init time 0.236507 s
+oram find time 4.766962 us
+mapSize = 500000, threadCount = 8, batchSize = 100000
+oram init time 0.236507 s
+oram find time 4.532594 us
+mapSize = 500000, threadCount = 8, batchSize = 200000
+oram init time 0.236507 s
+oram find time 4.621791 us
+mapSize = 500000, threadCount = 16, batchSize = 20000
+oram init time 0.103265 s
+oram find time 4.469590 us
+mapSize = 500000, threadCount = 16, batchSize = 50000
+oram init time 0.103265 s
+oram find time 4.397546 us
+mapSize = 500000, threadCount = 16, batchSize = 100000
+oram init time 0.103265 s
+oram find time 4.341706 us
+mapSize = 500000, threadCount = 16, batchSize = 200000
+oram init time 0.103265 s
+oram find time 4.188295 us
+mapSize = 500000, threadCount = 32, batchSize = 20000
+oram init time 0.056156 s
+oram find time 3.677128 us
+mapSize = 500000, threadCount = 32, batchSize = 50000
+oram init time 0.056156 s
+oram find time 3.521819 us
+mapSize = 500000, threadCount = 32, batchSize = 100000
+oram init time 0.056156 s
+oram find time 3.394665 us
+mapSize = 500000, threadCount = 32, batchSize = 200000
+oram init time 0.056156 s
+oram find time 3.411175 us
+mapSize = 1000000, threadCount = 2, batchSize = 20000
+oram init time 1.791095 s
+oram find time 16.091834 us
+mapSize = 1000000, threadCount = 2, batchSize = 50000
+oram init time 1.791095 s
+oram find time 16.174429 us
+mapSize = 1000000, threadCount = 2, batchSize = 100000
+oram init time 1.791095 s
+oram find time 16.178673 us
+mapSize = 1000000, threadCount = 2, batchSize = 200000
+oram init time 1.791095 s
+oram find time 16.207806 us
+mapSize = 1000000, threadCount = 4, batchSize = 20000
+oram init time 0.854563 s
+oram find time 8.710411 us
+mapSize = 1000000, threadCount = 4, batchSize = 50000
+oram init time 0.854563 s
+oram find time 8.487593 us
+mapSize = 1000000, threadCount = 4, batchSize = 100000
+oram init time 0.854563 s
+oram find time 8.437595 us
+mapSize = 1000000, threadCount = 4, batchSize = 200000
+oram init time 0.854563 s
+oram find time 8.430185 us
+mapSize = 1000000, threadCount = 8, batchSize = 20000
+oram init time 0.424363 s
+oram find time 4.941669 us
+mapSize = 1000000, threadCount = 8, batchSize = 50000
+oram init time 0.424363 s
+oram find time 4.822915 us
+mapSize = 1000000, threadCount = 8, batchSize = 100000
+oram init time 0.424363 s
+oram find time 4.815425 us
+mapSize = 1000000, threadCount = 8, batchSize = 200000
+oram init time 0.424363 s
+oram find time 4.754120 us
+mapSize = 1000000, threadCount = 16, batchSize = 20000
+oram init time 0.211765 s
+oram find time 4.831971 us
+mapSize = 1000000, threadCount = 16, batchSize = 50000
+oram init time 0.211765 s
+oram find time 4.651672 us
+mapSize = 1000000, threadCount = 16, batchSize = 100000
+oram init time 0.211765 s
+oram find time 4.483711 us
+mapSize = 1000000, threadCount = 16, batchSize = 200000
+oram init time 0.211765 s
+oram find time 4.626212 us
+mapSize = 1000000, threadCount = 32, batchSize = 20000
+oram init time 0.102722 s
+oram find time 3.615414 us
+mapSize = 1000000, threadCount = 32, batchSize = 50000
+oram init time 0.102722 s
+oram find time 3.456354 us
+mapSize = 1000000, threadCount = 32, batchSize = 100000
+oram init time 0.102722 s
+oram find time 3.430809 us
+mapSize = 1000000, threadCount = 32, batchSize = 200000
+oram init time 0.102722 s
+oram find time 3.429991 us
+mapSize = 2000000, threadCount = 2, batchSize = 20000
+oram init time 3.643194 s
+oram find time 20.010777 us
+mapSize = 2000000, threadCount = 2, batchSize = 50000
+oram init time 3.643194 s
+oram find time 20.030555 us
+mapSize = 2000000, threadCount = 2, batchSize = 100000
+oram init time 3.643194 s
+oram find time 20.092334 us
+mapSize = 2000000, threadCount = 2, batchSize = 200000
+oram init time 3.643194 s
+oram find time 20.203732 us
+mapSize = 2000000, threadCount = 4, batchSize = 20000
+oram init time 1.786921 s
+oram find time 9.156995 us
+mapSize = 2000000, threadCount = 4, batchSize = 50000
+oram init time 1.786921 s
+oram find time 9.040408 us
+mapSize = 2000000, threadCount = 4, batchSize = 100000
+oram init time 1.786921 s
+oram find time 9.087410 us
+mapSize = 2000000, threadCount = 4, batchSize = 200000
+oram init time 1.786921 s
+oram find time 9.048247 us
+mapSize = 2000000, threadCount = 8, batchSize = 20000
+oram init time 0.909649 s
+oram find time 5.382040 us
+mapSize = 2000000, threadCount = 8, batchSize = 50000
+oram init time 0.909649 s
+oram find time 5.200956 us
+mapSize = 2000000, threadCount = 8, batchSize = 100000
+oram init time 0.909649 s
+oram find time 5.100813 us
+mapSize = 2000000, threadCount = 8, batchSize = 200000
+oram init time 0.909649 s
+oram find time 5.222714 us
+mapSize = 2000000, threadCount = 16, batchSize = 20000
+oram init time 0.430786 s
+oram find time 4.835536 us
+mapSize = 2000000, threadCount = 16, batchSize = 50000
+oram init time 0.430786 s
+oram find time 4.703649 us
+mapSize = 2000000, threadCount = 16, batchSize = 100000
+oram init time 0.430786 s
+oram find time 4.617911 us
+mapSize = 2000000, threadCount = 16, batchSize = 200000
+oram init time 0.430786 s
+oram find time 4.596726 us
+mapSize = 2000000, threadCount = 32, batchSize = 20000
+oram init time 0.216118 s
+oram find time 3.793444 us
+mapSize = 2000000, threadCount = 32, batchSize = 50000
+oram init time 0.216118 s
+oram find time 3.599015 us
+mapSize = 2000000, threadCount = 32, batchSize = 100000
+oram init time 0.216118 s
+oram find time 3.500819 us
+mapSize = 2000000, threadCount = 32, batchSize = 200000
+oram init time 0.216118 s
+oram find time 3.455476 us
+mapSize = 5000000, threadCount = 2, batchSize = 20000
+oram init time 9.584531 s
+oram find time 22.571896 us
+mapSize = 5000000, threadCount = 2, batchSize = 50000
+oram init time 9.584531 s
+oram find time 22.510939 us
+mapSize = 5000000, threadCount = 2, batchSize = 100000
+oram init time 9.584531 s
+oram find time 22.631520 us
+mapSize = 5000000, threadCount = 2, batchSize = 200000
+oram init time 9.584531 s
+oram find time 22.652815 us
+mapSize = 5000000, threadCount = 4, batchSize = 20000
+oram init time 4.603081 s
+oram find time 11.142089 us
+mapSize = 5000000, threadCount = 4, batchSize = 50000
+oram init time 4.603081 s
+oram find time 10.822334 us
+mapSize = 5000000, threadCount = 4, batchSize = 100000
+oram init time 4.603081 s
+oram find time 10.643012 us
+mapSize = 5000000, threadCount = 4, batchSize = 200000
+oram init time 4.603081 s
+oram find time 10.692911 us
+mapSize = 5000000, threadCount = 8, batchSize = 20000
+oram init time 2.257774 s
+oram find time 6.192040 us
+mapSize = 5000000, threadCount = 8, batchSize = 50000
+oram init time 2.257774 s
+oram find time 6.025371 us
+mapSize = 5000000, threadCount = 8, batchSize = 100000
+oram init time 2.257774 s
+oram find time 5.958825 us
+mapSize = 5000000, threadCount = 8, batchSize = 200000
+oram init time 2.257774 s
+oram find time 5.957346 us
+mapSize = 5000000, threadCount = 16, batchSize = 20000
+oram init time 1.089131 s
+oram find time 4.737272 us
+mapSize = 5000000, threadCount = 16, batchSize = 50000
+oram init time 1.089131 s
+oram find time 4.634101 us
+mapSize = 5000000, threadCount = 16, batchSize = 100000
+oram init time 1.089131 s
+oram find time 4.612471 us
+mapSize = 5000000, threadCount = 16, batchSize = 200000
+oram init time 1.089131 s
+oram find time 4.640519 us
+mapSize = 5000000, threadCount = 32, batchSize = 20000
+oram init time 0.575807 s
+oram find time 3.886165 us
+mapSize = 5000000, threadCount = 32, batchSize = 50000
+oram init time 0.575807 s
+oram find time 3.713751 us
+mapSize = 5000000, threadCount = 32, batchSize = 100000
+oram init time 0.575807 s
+oram find time 3.640736 us
+mapSize = 5000000, threadCount = 32, batchSize = 200000
+oram init time 0.575807 s
+oram find time 3.600721 us
+mapSize = 10000000, threadCount = 2, batchSize = 20000
+oram init time 19.554815 s
+oram find time 23.691388 us
+mapSize = 10000000, threadCount = 2, batchSize = 50000
+oram init time 19.554815 s
+oram find time 23.884853 us
+mapSize = 10000000, threadCount = 2, batchSize = 100000
+oram init time 19.554815 s
+oram find time 23.798355 us
+mapSize = 10000000, threadCount = 2, batchSize = 200000
+oram init time 19.554815 s
+oram find time 24.002067 us
+mapSize = 10000000, threadCount = 4, batchSize = 20000
+oram init time 9.602554 s
+oram find time 11.394546 us
+mapSize = 10000000, threadCount = 4, batchSize = 50000
+oram init time 9.602554 s
+oram find time 11.423558 us
+mapSize = 10000000, threadCount = 4, batchSize = 100000
+oram init time 9.602554 s
+oram find time 11.245766 us
+mapSize = 10000000, threadCount = 4, batchSize = 200000
+oram init time 9.602554 s
+oram find time 11.000654 us
+mapSize = 10000000, threadCount = 8, batchSize = 20000
+oram init time 4.990336 s
+oram find time 6.504225 us
+mapSize = 10000000, threadCount = 8, batchSize = 50000
+oram init time 4.990336 s
+oram find time 6.322681 us
+mapSize = 10000000, threadCount = 8, batchSize = 100000
+oram init time 4.990336 s
+oram find time 6.215713 us
+mapSize = 10000000, threadCount = 8, batchSize = 200000
+oram init time 4.990336 s
+oram find time 6.262338 us
+mapSize = 10000000, threadCount = 16, batchSize = 20000
+oram init time 2.410490 s
+oram find time 4.809948 us
+mapSize = 10000000, threadCount = 16, batchSize = 50000
+oram init time 2.410490 s
+oram find time 4.644392 us
+mapSize = 10000000, threadCount = 16, batchSize = 100000
+oram init time 2.410490 s
+oram find time 4.587928 us
+mapSize = 10000000, threadCount = 16, batchSize = 200000
+oram init time 2.410490 s
+oram find time 4.611332 us
+mapSize = 10000000, threadCount = 32, batchSize = 20000
+oram init time 1.116390 s
+oram find time 3.996231 us
+mapSize = 10000000, threadCount = 32, batchSize = 50000
+oram init time 1.116390 s
+oram find time 3.794218 us
+mapSize = 10000000, threadCount = 32, batchSize = 100000
+oram init time 1.116390 s
+oram find time 3.693283 us
+mapSize = 10000000, threadCount = 32, batchSize = 200000
+oram init time 1.116390 s
+oram find time 3.651934 us
+mapSize = 20000000, threadCount = 2, batchSize = 20000
+oram init time 40.609941 s
+oram find time 27.062043 us
+mapSize = 20000000, threadCount = 2, batchSize = 50000
+oram init time 40.609941 s
+oram find time 26.692850 us
+mapSize = 20000000, threadCount = 2, batchSize = 100000
+oram init time 40.609941 s
+oram find time 27.042660 us
+mapSize = 20000000, threadCount = 2, batchSize = 200000
+oram init time 40.609941 s
+oram find time 27.302322 us
+mapSize = 20000000, threadCount = 4, batchSize = 20000
+oram init time 19.513109 s
+oram find time 12.871914 us
+mapSize = 20000000, threadCount = 4, batchSize = 50000
+oram init time 19.513109 s
+oram find time 12.061812 us
+mapSize = 20000000, threadCount = 4, batchSize = 100000
+oram init time 19.513109 s
+oram find time 12.541056 us
+mapSize = 20000000, threadCount = 4, batchSize = 200000
+oram init time 19.513109 s
+oram find time 12.249868 us
+mapSize = 20000000, threadCount = 8, batchSize = 20000
+oram init time 9.645610 s
+oram find time 6.942518 us
+mapSize = 20000000, threadCount = 8, batchSize = 50000
+oram init time 9.645610 s
+oram find time 6.748448 us
+mapSize = 20000000, threadCount = 8, batchSize = 100000
+oram init time 9.645610 s
+oram find time 6.858325 us
+mapSize = 20000000, threadCount = 8, batchSize = 200000
+oram init time 9.645610 s
+oram find time 6.741742 us
+mapSize = 20000000, threadCount = 16, batchSize = 20000
+oram init time 6.013226 s
+oram find time 4.949112 us
+mapSize = 20000000, threadCount = 16, batchSize = 50000
+oram init time 6.013226 s
+oram find time 4.732432 us
+mapSize = 20000000, threadCount = 16, batchSize = 100000
+oram init time 6.013226 s
+oram find time 4.694665 us
+mapSize = 20000000, threadCount = 16, batchSize = 200000
+oram init time 6.013226 s
+oram find time 4.642675 us
+mapSize = 20000000, threadCount = 32, batchSize = 20000
+oram init time 2.324887 s
+oram find time 4.408936 us
+mapSize = 20000000, threadCount = 32, batchSize = 50000
+oram init time 2.324887 s
+oram find time 4.172254 us
+mapSize = 20000000, threadCount = 32, batchSize = 100000
+oram init time 2.324887 s
+oram find time 4.112432 us
+mapSize = 20000000, threadCount = 32, batchSize = 200000
+oram init time 2.324887 s
+oram find time 4.015342 us
+mapSize = 50000000, threadCount = 2, batchSize = 20000
+oram init time 105.210694 s
+oram find time 28.913121 us
+mapSize = 50000000, threadCount = 2, batchSize = 50000
+oram init time 105.210694 s
+oram find time 28.744555 us
+mapSize = 50000000, threadCount = 2, batchSize = 100000
+oram init time 105.210694 s
+oram find time 28.761800 us
+mapSize = 50000000, threadCount = 2, batchSize = 200000
+oram init time 105.210694 s
+oram find time 28.762062 us
+mapSize = 50000000, threadCount = 4, batchSize = 20000
+oram init time 51.711038 s
+oram find time 15.329818 us
+mapSize = 50000000, threadCount = 4, batchSize = 50000
+oram init time 51.711038 s
+oram find time 14.243864 us
+mapSize = 50000000, threadCount = 4, batchSize = 100000
+oram init time 51.711038 s
+oram find time 15.069538 us
+mapSize = 50000000, threadCount = 4, batchSize = 200000
+oram init time 51.711038 s
+oram find time 14.683826 us
+mapSize = 50000000, threadCount = 8, batchSize = 20000
+oram init time 25.066665 s
+oram find time 7.452586 us
+mapSize = 50000000, threadCount = 8, batchSize = 50000
+oram init time 25.066665 s
+oram find time 7.233279 us
+mapSize = 50000000, threadCount = 8, batchSize = 100000
+oram init time 25.066665 s
+oram find time 7.264809 us
+mapSize = 50000000, threadCount = 8, batchSize = 200000
+oram init time 25.066665 s
+oram find time 7.221853 us
+mapSize = 50000000, threadCount = 16, batchSize = 20000
+oram init time 12.347634 s
+oram find time 4.990062 us
+mapSize = 50000000, threadCount = 16, batchSize = 50000
+oram init time 12.347634 s
+oram find time 4.819057 us
+mapSize = 50000000, threadCount = 16, batchSize = 100000
+oram init time 12.347634 s
+oram find time 4.766918 us
+mapSize = 50000000, threadCount = 16, batchSize = 200000
+oram init time 12.347634 s
+oram find time 4.746251 us
+mapSize = 50000000, threadCount = 32, batchSize = 20000
+oram init time 6.096754 s
+oram find time 4.673190 us
+mapSize = 50000000, threadCount = 32, batchSize = 50000
+oram init time 6.096754 s
+oram find time 4.377509 us
+mapSize = 50000000, threadCount = 32, batchSize = 100000
+oram init time 6.096754 s
+oram find time 4.271116 us
+mapSize = 50000000, threadCount = 32, batchSize = 200000
+oram init time 6.096754 s
+oram find time 4.236737 us
+mapSize = 100000000, threadCount = 2, batchSize = 20000
+oram init time 219.276341 s
+oram find time 31.284967 us
+mapSize = 100000000, threadCount = 2, batchSize = 50000
+oram init time 219.276341 s
+oram find time 31.125526 us
+mapSize = 100000000, threadCount = 2, batchSize = 100000
+oram init time 219.276341 s
+oram find time 31.128998 us
+mapSize = 100000000, threadCount = 2, batchSize = 200000
+oram init time 219.276341 s
+oram find time 31.209056 us
+mapSize = 100000000, threadCount = 4, batchSize = 20000
+oram init time 105.714509 s
+oram find time 15.470469 us
+mapSize = 100000000, threadCount = 4, batchSize = 50000
+oram init time 105.714509 s
+oram find time 15.078801 us
+mapSize = 100000000, threadCount = 4, batchSize = 100000
+oram init time 105.714509 s
+oram find time 15.225728 us
+mapSize = 100000000, threadCount = 4, batchSize = 200000
+oram init time 105.714509 s
+oram find time 14.919408 us
+mapSize = 100000000, threadCount = 8, batchSize = 20000
+oram init time 51.833207 s
+oram find time 8.527875 us
+mapSize = 100000000, threadCount = 8, batchSize = 50000
+oram init time 51.833207 s
+oram find time 8.214986 us
+mapSize = 100000000, threadCount = 8, batchSize = 100000
+oram init time 51.833207 s
+oram find time 8.087353 us
+mapSize = 100000000, threadCount = 8, batchSize = 200000
+oram init time 51.833207 s
+oram find time 8.068076 us
+mapSize = 100000000, threadCount = 16, batchSize = 20000
+oram init time 25.518678 s
+oram find time 4.983296 us
+mapSize = 100000000, threadCount = 16, batchSize = 50000
+oram init time 25.518678 s
+oram find time 4.873463 us
+mapSize = 100000000, threadCount = 16, batchSize = 100000
+oram init time 25.518678 s
+oram find time 4.839606 us
+mapSize = 100000000, threadCount = 16, batchSize = 200000
+oram init time 25.518678 s
+oram find time 4.768566 us
+mapSize = 100000000, threadCount = 32, batchSize = 20000
+oram init time 12.869774 s
+oram find time 4.768851 us
+mapSize = 100000000, threadCount = 32, batchSize = 50000
+oram init time 12.869774 s
+oram find time 4.507344 us
+mapSize = 100000000, threadCount = 32, batchSize = 100000
+oram init time 12.869774 s
+oram find time 4.402859 us
+mapSize = 100000000, threadCount = 32, batchSize = 200000
+oram init time 12.869774 s
+oram find time 4.357520 us
+mapSize = 200000000, threadCount = 2, batchSize = 20000
+oram init time 445.069782 s
+oram find time 28.131968 us
+mapSize = 200000000, threadCount = 2, batchSize = 50000
+oram init time 445.069782 s
+oram find time 28.049894 us
+mapSize = 200000000, threadCount = 2, batchSize = 100000
+oram init time 445.069782 s
+oram find time 30.303674 us
+mapSize = 200000000, threadCount = 2, batchSize = 200000
+oram init time 445.069782 s
+oram find time 28.026375 us
+mapSize = 200000000, threadCount = 4, batchSize = 20000
+oram init time 218.739674 s
+oram find time 16.929096 us
+mapSize = 200000000, threadCount = 4, batchSize = 50000
+oram init time 218.739674 s
+oram find time 16.668760 us
+mapSize = 200000000, threadCount = 4, batchSize = 100000
+oram init time 218.739674 s
+oram find time 16.423471 us
+mapSize = 200000000, threadCount = 4, batchSize = 200000
+oram init time 218.739674 s
+oram find time 16.282596 us
+mapSize = 200000000, threadCount = 8, batchSize = 20000
+oram init time 105.210306 s
+oram find time 9.078841 us
+mapSize = 200000000, threadCount = 8, batchSize = 50000
+oram init time 105.210306 s
+oram find time 9.059803 us
+mapSize = 200000000, threadCount = 8, batchSize = 100000
+oram init time 105.210306 s
+oram find time 8.903933 us
+mapSize = 200000000, threadCount = 8, batchSize = 200000
+oram init time 105.210306 s
+oram find time 8.874362 us
+mapSize = 200000000, threadCount = 16, batchSize = 20000
+oram init time 52.531024 s
+oram find time 5.675136 us
+mapSize = 200000000, threadCount = 16, batchSize = 50000
+oram init time 52.531024 s
+oram find time 5.449636 us
+mapSize = 200000000, threadCount = 16, batchSize = 100000
+oram init time 52.531024 s
+oram find time 5.376863 us
+mapSize = 200000000, threadCount = 16, batchSize = 200000
+oram init time 52.531024 s
+oram find time 5.046341 us
+mapSize = 200000000, threadCount = 32, batchSize = 20000
+oram init time 26.881881 s
+oram find time 4.868159 us
+mapSize = 200000000, threadCount = 32, batchSize = 50000
+oram init time 26.881881 s
+oram find time 4.627020 us
+mapSize = 200000000, threadCount = 32, batchSize = 100000
+oram init time 26.881881 s
+oram find time 4.518498 us
+mapSize = 200000000, threadCount = 32, batchSize = 200000
+oram init time 26.881881 s
+oram find time 4.486874 us

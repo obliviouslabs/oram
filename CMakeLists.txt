@@ -23,26 +23,16 @@ FetchContent_Declare(
 set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(googletest)
 
-# If you don't want to install openssl, uncommenting the following lines should work:
-# FetchContent_Declare(
-#   ssl_content
-#   GIT_REPOSITORY https://github.com/janbar/openssl-cmake.git
-#   GIT_TAG "1.1.1k-20210430"
-# )
-# FetchContent_MakeAvailable(ssl_content)
-# add_library(OpenSSL::SSL ALIAS ssl)
-# add_library(OpenSSL::Crypto ALIAS crypto)
-
-find_package(OpenSSL REQUIRED)
 find_package (Boost REQUIRED)
 find_package(OpenMP REQUIRED)
 
 include(cmake/searchfiles.cmake)
 include(cmake/boost.cmake)
+include(cmake/bearssl.cmake)
 
 
 
-add_subdirectory(osort)
+add_subdirectory(omap)
 
 
 enable_testing()

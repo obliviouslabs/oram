@@ -1,5 +1,5 @@
 ---------------------------------------------
-How to Build/Execute the OSort sample program
+How to Build/Execute the OMap sample program
 ---------------------------------------------
 1. Install Intel(R) Software Guard Extensions (Intel(R) SGX) SDK for Linux* OS
 2. Make sure your environment is set:
@@ -30,7 +30,7 @@ sgx_launch_token_t launch_token = {0};
 sgx_create_enclave(ENCLAVE_FILENAME, SGX_DEBUG_FLAG, launch_token, NULL, &global_eid, NULL);
 
 -------------------------------------------------
-Run Example Testcases for OSort algorithms
+Run Example Testcases for OMap algorithms
 -------------------------------------------------
 ./algo_runner.sh
 or to output directly to terminal

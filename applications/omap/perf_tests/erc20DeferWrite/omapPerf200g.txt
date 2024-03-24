@@ -1,0 +1,2200 @@
+mapSize = 100000, threadCount = 2, batchSize = 100
+oram init time 0.149467 s
+oram find time 8.779547 us
+oram find and evict time 20.268137 us
+mapSize = 100000, threadCount = 2, batchSize = 200
+oram init time 0.149467 s
+oram find time 7.673355 us
+oram find and evict time 17.247150 us
+mapSize = 100000, threadCount = 2, batchSize = 500
+oram init time 0.149467 s
+oram find time 6.769487 us
+oram find and evict time 15.049275 us
+mapSize = 100000, threadCount = 2, batchSize = 1000
+oram init time 0.149467 s
+oram find time 5.530503 us
+oram find and evict time 13.008915 us
+mapSize = 100000, threadCount = 2, batchSize = 2000
+oram init time 0.149467 s
+oram find time 5.748440 us
+oram find and evict time 13.095075 us
+mapSize = 100000, threadCount = 2, batchSize = 5000
+oram init time 0.149467 s
+oram find time 5.848439 us
+oram find and evict time 13.136455 us
+mapSize = 100000, threadCount = 2, batchSize = 10000
+oram init time 0.149467 s
+oram find time 5.942550 us
+oram find and evict time 13.276214 us
+mapSize = 100000, threadCount = 2, batchSize = 20000
+oram init time 0.149467 s
+oram find time 6.172582 us
+oram find and evict time 13.538179 us
+mapSize = 100000, threadCount = 2, batchSize = 50000
+oram init time 0.149467 s
+oram find time 6.591867 us
+oram find and evict time 13.915722 us
+mapSize = 100000, threadCount = 2, batchSize = 100000
+oram init time 0.149467 s
+oram find time 6.780876 us
+oram find and evict time 14.156471 us
+mapSize = 100000, threadCount = 4, batchSize = 100
+oram init time 0.078343 s
+oram find time 8.835081 us
+oram find and evict time 18.953943 us
+mapSize = 100000, threadCount = 4, batchSize = 200
+oram init time 0.078343 s
+oram find time 6.547233 us
+oram find and evict time 12.944801 us
+mapSize = 100000, threadCount = 4, batchSize = 500
+oram init time 0.078343 s
+oram find time 4.903129 us
+oram find and evict time 9.507570 us
+mapSize = 100000, threadCount = 4, batchSize = 1000
+oram init time 0.078343 s
+oram find time 4.404475 us
+oram find and evict time 8.390315 us
+mapSize = 100000, threadCount = 4, batchSize = 2000
+oram init time 0.078343 s
+oram find time 3.790240 us
+oram find and evict time 7.185299 us
+mapSize = 100000, threadCount = 4, batchSize = 5000
+oram init time 0.078343 s
+oram find time 3.581056 us
+oram find and evict time 6.551968 us
+mapSize = 100000, threadCount = 4, batchSize = 10000
+oram init time 0.078343 s
+oram find time 3.497482 us
+oram find and evict time 6.528501 us
+mapSize = 100000, threadCount = 4, batchSize = 20000
+oram init time 0.078343 s
+oram find time 3.609948 us
+oram find and evict time 6.593998 us
+mapSize = 100000, threadCount = 4, batchSize = 50000
+oram init time 0.078343 s
+oram find time 3.675413 us
+oram find and evict time 6.686185 us
+mapSize = 100000, threadCount = 4, batchSize = 100000
+oram init time 0.078343 s
+oram find time 3.907479 us
+oram find and evict time 6.826310 us
+mapSize = 100000, threadCount = 8, batchSize = 100
+oram init time 0.034692 s
+oram find time 5.199374 us
+oram find and evict time 10.430282 us
+mapSize = 100000, threadCount = 8, batchSize = 200
+oram init time 0.034692 s
+oram find time 3.917776 us
+oram find and evict time 7.361345 us
+mapSize = 100000, threadCount = 8, batchSize = 500
+oram init time 0.034692 s
+oram find time 4.407038 us
+oram find and evict time 7.604512 us
+mapSize = 100000, threadCount = 8, batchSize = 1000
+oram init time 0.034692 s
+oram find time 2.888953 us
+oram find and evict time 5.288899 us
+mapSize = 100000, threadCount = 8, batchSize = 2000
+oram init time 0.034692 s
+oram find time 2.886981 us
+oram find and evict time 4.895000 us
+mapSize = 100000, threadCount = 8, batchSize = 5000
+oram init time 0.034692 s
+oram find time 2.541146 us
+oram find and evict time 4.323299 us
+mapSize = 100000, threadCount = 8, batchSize = 10000
+oram init time 0.034692 s
+oram find time 2.305681 us
+oram find and evict time 3.951634 us
+mapSize = 100000, threadCount = 8, batchSize = 20000
+oram init time 0.034692 s
+oram find time 2.301493 us
+oram find and evict time 3.724280 us
+mapSize = 100000, threadCount = 8, batchSize = 50000
+oram init time 0.034692 s
+oram find time 2.444667 us
+oram find and evict time 4.008138 us
+mapSize = 100000, threadCount = 8, batchSize = 100000
+oram init time 0.034692 s
+oram find time 2.544571 us
+oram find and evict time 4.016896 us
+mapSize = 100000, threadCount = 16, batchSize = 100
+oram init time 0.018086 s
+oram find time 4.862616 us
+oram find and evict time 9.623720 us
+mapSize = 100000, threadCount = 16, batchSize = 200
+oram init time 0.018086 s
+oram find time 3.284492 us
+oram find and evict time 6.212648 us
+mapSize = 100000, threadCount = 16, batchSize = 500
+oram init time 0.018086 s
+oram find time 3.524156 us
+oram find and evict time 5.559733 us
+mapSize = 100000, threadCount = 16, batchSize = 1000
+oram init time 0.018086 s
+oram find time 2.721868 us
+oram find and evict time 4.387034 us
+mapSize = 100000, threadCount = 16, batchSize = 2000
+oram init time 0.018086 s
+oram find time 2.189095 us
+oram find and evict time 3.414288 us
+mapSize = 100000, threadCount = 16, batchSize = 5000
+oram init time 0.018086 s
+oram find time 1.895604 us
+oram find and evict time 2.829663 us
+mapSize = 100000, threadCount = 16, batchSize = 10000
+oram init time 0.018086 s
+oram find time 1.778002 us
+oram find and evict time 2.679544 us
+mapSize = 100000, threadCount = 16, batchSize = 20000
+oram init time 0.018086 s
+oram find time 1.787733 us
+oram find and evict time 2.598183 us
+mapSize = 100000, threadCount = 16, batchSize = 50000
+oram init time 0.018086 s
+oram find time 1.880292 us
+oram find and evict time 2.629892 us
+mapSize = 100000, threadCount = 16, batchSize = 100000
+oram init time 0.018086 s
+oram find time 1.984278 us
+oram find and evict time 2.749575 us
+mapSize = 100000, threadCount = 32, batchSize = 100
+oram init time 0.009380 s
+oram find time 6.894878 us
+oram find and evict time 11.900758 us
+mapSize = 100000, threadCount = 32, batchSize = 200
+oram init time 0.009380 s
+oram find time 4.015419 us
+oram find and evict time 6.806036 us
+mapSize = 100000, threadCount = 32, batchSize = 500
+oram init time 0.009380 s
+oram find time 3.213224 us
+oram find and evict time 5.019706 us
+mapSize = 100000, threadCount = 32, batchSize = 1000
+oram init time 0.009380 s
+oram find time 2.388907 us
+oram find and evict time 3.684871 us
+mapSize = 100000, threadCount = 32, batchSize = 2000
+oram init time 0.009380 s
+oram find time 1.836998 us
+oram find and evict time 2.747875 us
+mapSize = 100000, threadCount = 32, batchSize = 5000
+oram init time 0.009380 s
+oram find time 1.495151 us
+oram find and evict time 2.100185 us
+mapSize = 100000, threadCount = 32, batchSize = 10000
+oram init time 0.009380 s
+oram find time 1.455773 us
+oram find and evict time 1.974187 us
+mapSize = 100000, threadCount = 32, batchSize = 20000
+oram init time 0.009380 s
+oram find time 1.475226 us
+oram find and evict time 1.960252 us
+mapSize = 100000, threadCount = 32, batchSize = 50000
+oram init time 0.009380 s
+oram find time 1.544938 us
+oram find and evict time 1.943487 us
+mapSize = 100000, threadCount = 32, batchSize = 100000
+oram init time 0.009380 s
+oram find time 1.608798 us
+oram find and evict time 1.986053 us
+mapSize = 200000, threadCount = 2, batchSize = 100
+oram init time 0.294149 s
+oram find time 7.388831 us
+oram find and evict time 16.247579 us
+mapSize = 200000, threadCount = 2, batchSize = 200
+oram init time 0.294149 s
+oram find time 6.665494 us
+oram find and evict time 14.568779 us
+mapSize = 200000, threadCount = 2, batchSize = 500
+oram init time 0.294149 s
+oram find time 6.362248 us
+oram find and evict time 14.177390 us
+mapSize = 200000, threadCount = 2, batchSize = 1000
+oram init time 0.294149 s
+oram find time 6.398028 us
+oram find and evict time 14.018462 us
+mapSize = 200000, threadCount = 2, batchSize = 2000
+oram init time 0.294149 s
+oram find time 6.451524 us
+oram find and evict time 14.130351 us
+mapSize = 200000, threadCount = 2, batchSize = 5000
+oram init time 0.294149 s
+oram find time 6.654433 us
+oram find and evict time 14.227072 us
+mapSize = 200000, threadCount = 2, batchSize = 10000
+oram init time 0.294149 s
+oram find time 6.960194 us
+oram find and evict time 14.656526 us
+mapSize = 200000, threadCount = 2, batchSize = 20000
+oram init time 0.294149 s
+oram find time 7.187879 us
+oram find and evict time 14.997802 us
+mapSize = 200000, threadCount = 2, batchSize = 50000
+oram init time 0.294149 s
+oram find time 7.270755 us
+oram find and evict time 15.021473 us
+mapSize = 200000, threadCount = 2, batchSize = 100000
+oram init time 0.294149 s
+oram find time 7.390087 us
+oram find and evict time 15.061529 us
+mapSize = 200000, threadCount = 4, batchSize = 100
+oram init time 0.145033 s
+oram find time 9.607399 us
+oram find and evict time 21.418323 us
+mapSize = 200000, threadCount = 4, batchSize = 200
+oram init time 0.145033 s
+oram find time 6.721596 us
+oram find and evict time 14.353302 us
+mapSize = 200000, threadCount = 4, batchSize = 500
+oram init time 0.145033 s
+oram find time 5.094794 us
+oram find and evict time 10.730801 us
+mapSize = 200000, threadCount = 4, batchSize = 1000
+oram init time 0.145033 s
+oram find time 4.470015 us
+oram find and evict time 9.638463 us
+mapSize = 200000, threadCount = 4, batchSize = 2000
+oram init time 0.145033 s
+oram find time 4.208532 us
+oram find and evict time 9.083072 us
+mapSize = 200000, threadCount = 4, batchSize = 5000
+oram init time 0.145033 s
+oram find time 3.960863 us
+oram find and evict time 8.147616 us
+mapSize = 200000, threadCount = 4, batchSize = 10000
+oram init time 0.145033 s
+oram find time 3.921188 us
+oram find and evict time 8.156507 us
+mapSize = 200000, threadCount = 4, batchSize = 20000
+oram init time 0.145033 s
+oram find time 3.926293 us
+oram find and evict time 7.787565 us
+mapSize = 200000, threadCount = 4, batchSize = 50000
+oram init time 0.145033 s
+oram find time 4.029623 us
+oram find and evict time 7.954520 us
+mapSize = 200000, threadCount = 4, batchSize = 100000
+oram init time 0.145033 s
+oram find time 4.024220 us
+oram find and evict time 8.002072 us
+mapSize = 200000, threadCount = 8, batchSize = 100
+oram init time 0.070366 s
+oram find time 5.249892 us
+oram find and evict time 10.807411 us
+mapSize = 200000, threadCount = 8, batchSize = 200
+oram init time 0.070366 s
+oram find time 3.935193 us
+oram find and evict time 7.545028 us
+mapSize = 200000, threadCount = 8, batchSize = 500
+oram init time 0.070366 s
+oram find time 4.006804 us
+oram find and evict time 7.168511 us
+mapSize = 200000, threadCount = 8, batchSize = 1000
+oram init time 0.070366 s
+oram find time 3.029726 us
+oram find and evict time 5.419070 us
+mapSize = 200000, threadCount = 8, batchSize = 2000
+oram init time 0.070366 s
+oram find time 2.752278 us
+oram find and evict time 4.817655 us
+mapSize = 200000, threadCount = 8, batchSize = 5000
+oram init time 0.070366 s
+oram find time 2.480458 us
+oram find and evict time 4.291790 us
+mapSize = 200000, threadCount = 8, batchSize = 10000
+oram init time 0.070366 s
+oram find time 2.415660 us
+oram find and evict time 4.117327 us
+mapSize = 200000, threadCount = 8, batchSize = 20000
+oram init time 0.070366 s
+oram find time 2.453689 us
+oram find and evict time 4.084571 us
+mapSize = 200000, threadCount = 8, batchSize = 50000
+oram init time 0.070366 s
+oram find time 2.555178 us
+oram find and evict time 4.166166 us
+mapSize = 200000, threadCount = 8, batchSize = 100000
+oram init time 0.070366 s
+oram find time 2.586741 us
+oram find and evict time 4.089626 us
+mapSize = 200000, threadCount = 16, batchSize = 100
+oram init time 0.035404 s
+oram find time 4.970871 us
+oram find and evict time 9.738490 us
+mapSize = 200000, threadCount = 16, batchSize = 200
+oram init time 0.035404 s
+oram find time 3.445279 us
+oram find and evict time 6.445168 us
+mapSize = 200000, threadCount = 16, batchSize = 500
+oram init time 0.035404 s
+oram find time 3.626850 us
+oram find and evict time 5.777073 us
+mapSize = 200000, threadCount = 16, batchSize = 1000
+oram init time 0.035404 s
+oram find time 2.786811 us
+oram find and evict time 4.515369 us
+mapSize = 200000, threadCount = 16, batchSize = 2000
+oram init time 0.035404 s
+oram find time 2.319736 us
+oram find and evict time 3.643287 us
+mapSize = 200000, threadCount = 16, batchSize = 5000
+oram init time 0.035404 s
+oram find time 1.948774 us
+oram find and evict time 2.969972 us
+mapSize = 200000, threadCount = 16, batchSize = 10000
+oram init time 0.035404 s
+oram find time 1.841060 us
+oram find and evict time 2.796655 us
+mapSize = 200000, threadCount = 16, batchSize = 20000
+oram init time 0.035404 s
+oram find time 1.860437 us
+oram find and evict time 2.705996 us
+mapSize = 200000, threadCount = 16, batchSize = 50000
+oram init time 0.035404 s
+oram find time 1.932596 us
+oram find and evict time 2.727340 us
+mapSize = 200000, threadCount = 16, batchSize = 100000
+oram init time 0.035404 s
+oram find time 2.003462 us
+oram find and evict time 2.807670 us
+mapSize = 200000, threadCount = 32, batchSize = 100
+oram init time 0.018222 s
+oram find time 6.942842 us
+oram find and evict time 12.304777 us
+mapSize = 200000, threadCount = 32, batchSize = 200
+oram init time 0.018222 s
+oram find time 4.230969 us
+oram find and evict time 7.354443 us
+mapSize = 200000, threadCount = 32, batchSize = 500
+oram init time 0.018222 s
+oram find time 3.156647 us
+oram find and evict time 4.918372 us
+mapSize = 200000, threadCount = 32, batchSize = 1000
+oram init time 0.018222 s
+oram find time 2.464520 us
+oram find and evict time 3.867729 us
+mapSize = 200000, threadCount = 32, batchSize = 2000
+oram init time 0.018222 s
+oram find time 1.937872 us
+oram find and evict time 2.862188 us
+mapSize = 200000, threadCount = 32, batchSize = 5000
+oram init time 0.018222 s
+oram find time 1.537406 us
+oram find and evict time 2.160257 us
+mapSize = 200000, threadCount = 32, batchSize = 10000
+oram init time 0.018222 s
+oram find time 1.522874 us
+oram find and evict time 2.055528 us
+mapSize = 200000, threadCount = 32, batchSize = 20000
+oram init time 0.018222 s
+oram find time 1.534974 us
+oram find and evict time 2.020654 us
+mapSize = 200000, threadCount = 32, batchSize = 50000
+oram init time 0.018222 s
+oram find time 1.589439 us
+oram find and evict time 2.005411 us
+mapSize = 200000, threadCount = 32, batchSize = 100000
+oram init time 0.018222 s
+oram find time 1.660156 us
+oram find and evict time 2.059970 us
+mapSize = 500000, threadCount = 2, batchSize = 100
+oram init time 0.782187 s
+oram find time 8.178994 us
+oram find and evict time 17.586297 us
+mapSize = 500000, threadCount = 2, batchSize = 200
+oram init time 0.782187 s
+oram find time 7.423575 us
+oram find and evict time 16.030903 us
+mapSize = 500000, threadCount = 2, batchSize = 500
+oram init time 0.782187 s
+oram find time 7.128235 us
+oram find and evict time 15.805339 us
+mapSize = 500000, threadCount = 2, batchSize = 1000
+oram init time 0.782187 s
+oram find time 7.253285 us
+oram find and evict time 15.613358 us
+mapSize = 500000, threadCount = 2, batchSize = 2000
+oram init time 0.782187 s
+oram find time 7.230128 us
+oram find and evict time 15.824738 us
+mapSize = 500000, threadCount = 2, batchSize = 5000
+oram init time 0.782187 s
+oram find time 7.418445 us
+oram find and evict time 15.958396 us
+mapSize = 500000, threadCount = 2, batchSize = 10000
+oram init time 0.782187 s
+oram find time 7.939092 us
+oram find and evict time 16.314049 us
+mapSize = 500000, threadCount = 2, batchSize = 20000
+oram init time 0.782187 s
+oram find time 8.028162 us
+oram find and evict time 16.532466 us
+mapSize = 500000, threadCount = 2, batchSize = 50000
+oram init time 0.782187 s
+oram find time 7.968797 us
+oram find and evict time 16.455254 us
+mapSize = 500000, threadCount = 2, batchSize = 100000
+oram init time 0.782187 s
+oram find time 8.216322 us
+oram find and evict time 16.595001 us
+mapSize = 500000, threadCount = 4, batchSize = 100
+oram init time 0.388018 s
+oram find time 10.401978 us
+oram find and evict time 22.260011 us
+mapSize = 500000, threadCount = 4, batchSize = 200
+oram init time 0.388018 s
+oram find time 7.558645 us
+oram find and evict time 15.933482 us
+mapSize = 500000, threadCount = 4, batchSize = 500
+oram init time 0.388018 s
+oram find time 5.918722 us
+oram find and evict time 12.337353 us
+mapSize = 500000, threadCount = 4, batchSize = 1000
+oram init time 0.388018 s
+oram find time 5.278362 us
+oram find and evict time 11.021900 us
+mapSize = 500000, threadCount = 4, batchSize = 2000
+oram init time 0.388018 s
+oram find time 4.733059 us
+oram find and evict time 10.428536 us
+mapSize = 500000, threadCount = 4, batchSize = 5000
+oram init time 0.388018 s
+oram find time 4.497181 us
+oram find and evict time 9.796483 us
+mapSize = 500000, threadCount = 4, batchSize = 10000
+oram init time 0.388018 s
+oram find time 4.556333 us
+oram find and evict time 9.584888 us
+mapSize = 500000, threadCount = 4, batchSize = 20000
+oram init time 0.388018 s
+oram find time 4.455354 us
+oram find and evict time 9.177366 us
+mapSize = 500000, threadCount = 4, batchSize = 50000
+oram init time 0.388018 s
+oram find time 4.499999 us
+oram find and evict time 9.282865 us
+mapSize = 500000, threadCount = 4, batchSize = 100000
+oram init time 0.388018 s
+oram find time 4.610663 us
+oram find and evict time 8.933113 us
+mapSize = 500000, threadCount = 8, batchSize = 100
+oram init time 0.195034 s
+oram find time 6.092526 us
+oram find and evict time 13.074386 us
+mapSize = 500000, threadCount = 8, batchSize = 200
+oram init time 0.195034 s
+oram find time 5.047466 us
+oram find and evict time 10.088904 us
+mapSize = 500000, threadCount = 8, batchSize = 500
+oram init time 0.195034 s
+oram find time 4.628690 us
+oram find and evict time 8.751692 us
+mapSize = 500000, threadCount = 8, batchSize = 1000
+oram init time 0.195034 s
+oram find time 3.443639 us
+oram find and evict time 6.814146 us
+mapSize = 500000, threadCount = 8, batchSize = 2000
+oram init time 0.195034 s
+oram find time 3.192654 us
+oram find and evict time 6.167548 us
+mapSize = 500000, threadCount = 8, batchSize = 5000
+oram init time 0.195034 s
+oram find time 2.852947 us
+oram find and evict time 5.723240 us
+mapSize = 500000, threadCount = 8, batchSize = 10000
+oram init time 0.195034 s
+oram find time 2.713169 us
+oram find and evict time 5.218896 us
+mapSize = 500000, threadCount = 8, batchSize = 20000
+oram init time 0.195034 s
+oram find time 2.758499 us
+oram find and evict time 5.093528 us
+mapSize = 500000, threadCount = 8, batchSize = 50000
+oram init time 0.195034 s
+oram find time 2.840603 us
+oram find and evict time 5.148155 us
+mapSize = 500000, threadCount = 8, batchSize = 100000
+oram init time 0.195034 s
+oram find time 2.917246 us
+oram find and evict time 5.253457 us
+mapSize = 500000, threadCount = 16, batchSize = 100
+oram init time 0.092149 s
+oram find time 5.242730 us
+oram find and evict time 10.230938 us
+mapSize = 500000, threadCount = 16, batchSize = 200
+oram init time 0.092149 s
+oram find time 3.742901 us
+oram find and evict time 6.870899 us
+mapSize = 500000, threadCount = 16, batchSize = 500
+oram init time 0.092149 s
+oram find time 3.923481 us
+oram find and evict time 6.310788 us
+mapSize = 500000, threadCount = 16, batchSize = 1000
+oram init time 0.092149 s
+oram find time 2.768392 us
+oram find and evict time 4.625323 us
+mapSize = 500000, threadCount = 16, batchSize = 2000
+oram init time 0.092149 s
+oram find time 2.251790 us
+oram find and evict time 3.760924 us
+mapSize = 500000, threadCount = 16, batchSize = 5000
+oram init time 0.092149 s
+oram find time 1.994553 us
+oram find and evict time 3.196676 us
+mapSize = 500000, threadCount = 16, batchSize = 10000
+oram init time 0.092149 s
+oram find time 1.969026 us
+oram find and evict time 3.077096 us
+mapSize = 500000, threadCount = 16, batchSize = 20000
+oram init time 0.092149 s
+oram find time 1.917730 us
+oram find and evict time 2.903285 us
+mapSize = 500000, threadCount = 16, batchSize = 50000
+oram init time 0.092149 s
+oram find time 2.019492 us
+oram find and evict time 2.994740 us
+mapSize = 500000, threadCount = 16, batchSize = 100000
+oram init time 0.092149 s
+oram find time 2.111395 us
+oram find and evict time 3.057831 us
+mapSize = 500000, threadCount = 32, batchSize = 100
+oram init time 0.044993 s
+oram find time 6.985114 us
+oram find and evict time 12.473129 us
+mapSize = 500000, threadCount = 32, batchSize = 200
+oram init time 0.044993 s
+oram find time 4.179340 us
+oram find and evict time 7.296150 us
+mapSize = 500000, threadCount = 32, batchSize = 500
+oram init time 0.044993 s
+oram find time 3.221015 us
+oram find and evict time 5.090712 us
+mapSize = 500000, threadCount = 32, batchSize = 1000
+oram init time 0.044993 s
+oram find time 2.568448 us
+oram find and evict time 4.076251 us
+mapSize = 500000, threadCount = 32, batchSize = 2000
+oram init time 0.044993 s
+oram find time 1.881584 us
+oram find and evict time 2.868991 us
+mapSize = 500000, threadCount = 32, batchSize = 5000
+oram init time 0.044993 s
+oram find time 1.593985 us
+oram find and evict time 2.293350 us
+mapSize = 500000, threadCount = 32, batchSize = 10000
+oram init time 0.044993 s
+oram find time 1.568009 us
+oram find and evict time 2.197976 us
+mapSize = 500000, threadCount = 32, batchSize = 20000
+oram init time 0.044993 s
+oram find time 1.576190 us
+oram find and evict time 2.162056 us
+mapSize = 500000, threadCount = 32, batchSize = 50000
+oram init time 0.044993 s
+oram find time 1.637781 us
+oram find and evict time 2.128541 us
+mapSize = 500000, threadCount = 32, batchSize = 100000
+oram init time 0.044993 s
+oram find time 1.716517 us
+oram find and evict time 2.198348 us
+mapSize = 1000000, threadCount = 2, batchSize = 100
+oram init time 1.607200 s
+oram find time 9.522910 us
+oram find and evict time 19.187100 us
+mapSize = 1000000, threadCount = 2, batchSize = 200
+oram init time 1.607200 s
+oram find time 8.632252 us
+oram find and evict time 17.928736 us
+mapSize = 1000000, threadCount = 2, batchSize = 500
+oram init time 1.607200 s
+oram find time 8.231719 us
+oram find and evict time 17.505970 us
+mapSize = 1000000, threadCount = 2, batchSize = 1000
+oram init time 1.607200 s
+oram find time 8.122905 us
+oram find and evict time 17.152035 us
+mapSize = 1000000, threadCount = 2, batchSize = 2000
+oram init time 1.607200 s
+oram find time 8.281409 us
+oram find and evict time 17.598748 us
+mapSize = 1000000, threadCount = 2, batchSize = 5000
+oram init time 1.607200 s
+oram find time 8.619904 us
+oram find and evict time 17.645087 us
+mapSize = 1000000, threadCount = 2, batchSize = 10000
+oram init time 1.607200 s
+oram find time 8.759568 us
+oram find and evict time 17.838196 us
+mapSize = 1000000, threadCount = 2, batchSize = 20000
+oram init time 1.607200 s
+oram find time 8.750209 us
+oram find and evict time 17.953578 us
+mapSize = 1000000, threadCount = 2, batchSize = 50000
+oram init time 1.607200 s
+oram find time 8.533203 us
+oram find and evict time 17.626601 us
+mapSize = 1000000, threadCount = 2, batchSize = 100000
+oram init time 1.607200 s
+oram find time 8.758847 us
+oram find and evict time 17.776918 us
+mapSize = 1000000, threadCount = 4, batchSize = 100
+oram init time 0.779901 s
+oram find time 11.128868 us
+oram find and evict time 23.046644 us
+mapSize = 1000000, threadCount = 4, batchSize = 200
+oram init time 0.779901 s
+oram find time 8.609431 us
+oram find and evict time 17.461531 us
+mapSize = 1000000, threadCount = 4, batchSize = 500
+oram init time 0.779901 s
+oram find time 6.406764 us
+oram find and evict time 12.961494 us
+mapSize = 1000000, threadCount = 4, batchSize = 1000
+oram init time 0.779901 s
+oram find time 5.658484 us
+oram find and evict time 11.650911 us
+mapSize = 1000000, threadCount = 4, batchSize = 2000
+oram init time 0.779901 s
+oram find time 5.244380 us
+oram find and evict time 11.087715 us
+mapSize = 1000000, threadCount = 4, batchSize = 5000
+oram init time 0.779901 s
+oram find time 4.961672 us
+oram find and evict time 9.973830 us
+mapSize = 1000000, threadCount = 4, batchSize = 10000
+oram init time 0.779901 s
+oram find time 4.965419 us
+oram find and evict time 10.051305 us
+mapSize = 1000000, threadCount = 4, batchSize = 20000
+oram init time 0.779901 s
+oram find time 4.970092 us
+oram find and evict time 9.843090 us
+mapSize = 1000000, threadCount = 4, batchSize = 50000
+oram init time 0.779901 s
+oram find time 4.803305 us
+oram find and evict time 9.997935 us
+mapSize = 1000000, threadCount = 4, batchSize = 100000
+oram init time 0.779901 s
+oram find time 4.911989 us
+oram find and evict time 9.590703 us
+mapSize = 1000000, threadCount = 8, batchSize = 100
+oram init time 0.389079 s
+oram find time 6.885377 us
+oram find and evict time 13.877786 us
+mapSize = 1000000, threadCount = 8, batchSize = 200
+oram init time 0.389079 s
+oram find time 5.523189 us
+oram find and evict time 10.831666 us
+mapSize = 1000000, threadCount = 8, batchSize = 500
+oram init time 0.389079 s
+oram find time 4.728718 us
+oram find and evict time 9.116467 us
+mapSize = 1000000, threadCount = 8, batchSize = 1000
+oram init time 0.389079 s
+oram find time 3.734783 us
+oram find and evict time 7.375655 us
+mapSize = 1000000, threadCount = 8, batchSize = 2000
+oram init time 0.389079 s
+oram find time 3.422983 us
+oram find and evict time 6.593881 us
+mapSize = 1000000, threadCount = 8, batchSize = 5000
+oram init time 0.389079 s
+oram find time 3.135032 us
+oram find and evict time 6.195369 us
+mapSize = 1000000, threadCount = 8, batchSize = 10000
+oram init time 0.389079 s
+oram find time 2.991374 us
+oram find and evict time 5.925254 us
+mapSize = 1000000, threadCount = 8, batchSize = 20000
+oram init time 0.389079 s
+oram find time 2.979951 us
+oram find and evict time 5.639205 us
+mapSize = 1000000, threadCount = 8, batchSize = 50000
+oram init time 0.389079 s
+oram find time 3.089691 us
+oram find and evict time 5.727944 us
+mapSize = 1000000, threadCount = 8, batchSize = 100000
+oram init time 0.389079 s
+oram find time 3.123071 us
+oram find and evict time 5.519467 us
+mapSize = 1000000, threadCount = 16, batchSize = 100
+oram init time 0.188211 s
+oram find time 5.895846 us
+oram find and evict time 11.929110 us
+mapSize = 1000000, threadCount = 16, batchSize = 200
+oram init time 0.188211 s
+oram find time 4.024996 us
+oram find and evict time 7.810216 us
+mapSize = 1000000, threadCount = 16, batchSize = 500
+oram init time 0.188211 s
+oram find time 4.005817 us
+oram find and evict time 7.010775 us
+mapSize = 1000000, threadCount = 16, batchSize = 1000
+oram init time 0.188211 s
+oram find time 3.251711 us
+oram find and evict time 5.647807 us
+mapSize = 1000000, threadCount = 16, batchSize = 2000
+oram init time 0.188211 s
+oram find time 2.638281 us
+oram find and evict time 4.483079 us
+mapSize = 1000000, threadCount = 16, batchSize = 5000
+oram init time 0.188211 s
+oram find time 2.228220 us
+oram find and evict time 3.948299 us
+mapSize = 1000000, threadCount = 16, batchSize = 10000
+oram init time 0.188211 s
+oram find time 2.135913 us
+oram find and evict time 3.622325 us
+mapSize = 1000000, threadCount = 16, batchSize = 20000
+oram init time 0.188211 s
+oram find time 2.076447 us
+oram find and evict time 3.543401 us
+mapSize = 1000000, threadCount = 16, batchSize = 50000
+oram init time 0.188211 s
+oram find time 2.173189 us
+oram find and evict time 3.478073 us
+mapSize = 1000000, threadCount = 16, batchSize = 100000
+oram init time 0.188211 s
+oram find time 2.234282 us
+oram find and evict time 3.435054 us
+mapSize = 1000000, threadCount = 32, batchSize = 100
+oram init time 0.091620 s
+oram find time 6.970991 us
+oram find and evict time 12.569418 us
+mapSize = 1000000, threadCount = 32, batchSize = 200
+oram init time 0.091620 s
+oram find time 4.161858 us
+oram find and evict time 7.366804 us
+mapSize = 1000000, threadCount = 32, batchSize = 500
+oram init time 0.091620 s
+oram find time 3.234936 us
+oram find and evict time 5.090330 us
+mapSize = 1000000, threadCount = 32, batchSize = 1000
+oram init time 0.091620 s
+oram find time 2.633694 us
+oram find and evict time 4.159476 us
+mapSize = 1000000, threadCount = 32, batchSize = 2000
+oram init time 0.091620 s
+oram find time 1.947898 us
+oram find and evict time 2.961854 us
+mapSize = 1000000, threadCount = 32, batchSize = 5000
+oram init time 0.091620 s
+oram find time 1.657704 us
+oram find and evict time 2.401935 us
+mapSize = 1000000, threadCount = 32, batchSize = 10000
+oram init time 0.091620 s
+oram find time 1.629924 us
+oram find and evict time 2.283983 us
+mapSize = 1000000, threadCount = 32, batchSize = 20000
+oram init time 0.091620 s
+oram find time 1.634877 us
+oram find and evict time 2.241139 us
+mapSize = 1000000, threadCount = 32, batchSize = 50000
+oram init time 0.091620 s
+oram find time 1.671291 us
+oram find and evict time 2.205780 us
+mapSize = 1000000, threadCount = 32, batchSize = 100000
+oram init time 0.091620 s
+oram find time 1.725172 us
+oram find and evict time 2.240959 us
+mapSize = 2000000, threadCount = 2, batchSize = 100
+oram init time 3.412820 s
+oram find time 10.720434 us
+oram find and evict time 22.331966 us
+mapSize = 2000000, threadCount = 2, batchSize = 200
+oram init time 3.412820 s
+oram find time 9.934077 us
+oram find and evict time 21.546784 us
+mapSize = 2000000, threadCount = 2, batchSize = 500
+oram init time 3.412820 s
+oram find time 9.680703 us
+oram find and evict time 21.108459 us
+mapSize = 2000000, threadCount = 2, batchSize = 1000
+oram init time 3.412820 s
+oram find time 9.860527 us
+oram find and evict time 21.275654 us
+mapSize = 2000000, threadCount = 2, batchSize = 2000
+oram init time 3.412820 s
+oram find time 9.996767 us
+oram find and evict time 22.320396 us
+mapSize = 2000000, threadCount = 2, batchSize = 5000
+oram init time 3.412820 s
+oram find time 9.925228 us
+oram find and evict time 21.611541 us
+mapSize = 2000000, threadCount = 2, batchSize = 10000
+oram init time 3.412820 s
+oram find time 9.925275 us
+oram find and evict time 22.815084 us
+mapSize = 2000000, threadCount = 2, batchSize = 20000
+oram init time 3.412820 s
+oram find time 9.571324 us
+oram find and evict time 22.042861 us
+mapSize = 2000000, threadCount = 2, batchSize = 50000
+oram init time 3.412820 s
+oram find time 9.745054 us
+oram find and evict time 21.250669 us
+mapSize = 2000000, threadCount = 2, batchSize = 100000
+oram init time 3.412820 s
+oram find time 9.511086 us
+oram find and evict time 21.244683 us
+mapSize = 2000000, threadCount = 4, batchSize = 100
+oram init time 1.636765 s
+oram find time 11.098536 us
+oram find and evict time 21.441277 us
+mapSize = 2000000, threadCount = 4, batchSize = 200
+oram init time 1.636765 s
+oram find time 9.178173 us
+oram find and evict time 18.216323 us
+mapSize = 2000000, threadCount = 4, batchSize = 500
+oram init time 1.636765 s
+oram find time 7.354586 us
+oram find and evict time 14.628764 us
+mapSize = 2000000, threadCount = 4, batchSize = 1000
+oram init time 1.636765 s
+oram find time 6.168831 us
+oram find and evict time 12.046185 us
+mapSize = 2000000, threadCount = 4, batchSize = 2000
+oram init time 1.636765 s
+oram find time 5.873493 us
+oram find and evict time 11.615094 us
+mapSize = 2000000, threadCount = 4, batchSize = 5000
+oram init time 1.636765 s
+oram find time 5.565615 us
+oram find and evict time 11.017411 us
+mapSize = 2000000, threadCount = 4, batchSize = 10000
+oram init time 1.636765 s
+oram find time 5.457464 us
+oram find and evict time 10.779115 us
+mapSize = 2000000, threadCount = 4, batchSize = 20000
+oram init time 1.636765 s
+oram find time 5.324603 us
+oram find and evict time 10.504353 us
+mapSize = 2000000, threadCount = 4, batchSize = 50000
+oram init time 1.636765 s
+oram find time 5.162253 us
+oram find and evict time 10.446817 us
+mapSize = 2000000, threadCount = 4, batchSize = 100000
+oram init time 1.636765 s
+oram find time 5.142706 us
+oram find and evict time 10.408073 us
+mapSize = 2000000, threadCount = 8, batchSize = 100
+oram init time 0.790220 s
+oram find time 7.381288 us
+oram find and evict time 14.564968 us
+mapSize = 2000000, threadCount = 8, batchSize = 200
+oram init time 0.790220 s
+oram find time 6.754374 us
+oram find and evict time 12.807184 us
+mapSize = 2000000, threadCount = 8, batchSize = 500
+oram init time 0.790220 s
+oram find time 5.318427 us
+oram find and evict time 9.960646 us
+mapSize = 2000000, threadCount = 8, batchSize = 1000
+oram init time 0.790220 s
+oram find time 4.429224 us
+oram find and evict time 8.340858 us
+mapSize = 2000000, threadCount = 8, batchSize = 2000
+oram init time 0.790220 s
+oram find time 3.842887 us
+oram find and evict time 7.285058 us
+mapSize = 2000000, threadCount = 8, batchSize = 5000
+oram init time 0.790220 s
+oram find time 3.515473 us
+oram find and evict time 6.563691 us
+mapSize = 2000000, threadCount = 8, batchSize = 10000
+oram init time 0.790220 s
+oram find time 3.250221 us
+oram find and evict time 6.094838 us
+mapSize = 2000000, threadCount = 8, batchSize = 20000
+oram init time 0.790220 s
+oram find time 3.225685 us
+oram find and evict time 6.024626 us
+mapSize = 2000000, threadCount = 8, batchSize = 50000
+oram init time 0.790220 s
+oram find time 3.256131 us
+oram find and evict time 5.903538 us
+mapSize = 2000000, threadCount = 8, batchSize = 100000
+oram init time 0.790220 s
+oram find time 3.289179 us
+oram find and evict time 6.032588 us
+mapSize = 2000000, threadCount = 16, batchSize = 100
+oram init time 0.397938 s
+oram find time 6.171653 us
+oram find and evict time 12.340532 us
+mapSize = 2000000, threadCount = 16, batchSize = 200
+oram init time 0.397938 s
+oram find time 4.683297 us
+oram find and evict time 8.609179 us
+mapSize = 2000000, threadCount = 16, batchSize = 500
+oram init time 0.397938 s
+oram find time 3.793332 us
+oram find and evict time 6.768836 us
+mapSize = 2000000, threadCount = 16, batchSize = 1000
+oram init time 0.397938 s
+oram find time 3.032150 us
+oram find and evict time 5.545354 us
+mapSize = 2000000, threadCount = 16, batchSize = 2000
+oram init time 0.397938 s
+oram find time 2.595719 us
+oram find and evict time 4.541628 us
+mapSize = 2000000, threadCount = 16, batchSize = 5000
+oram init time 0.397938 s
+oram find time 2.369396 us
+oram find and evict time 4.062971 us
+mapSize = 2000000, threadCount = 16, batchSize = 10000
+oram init time 0.397938 s
+oram find time 2.240301 us
+oram find and evict time 3.846641 us
+mapSize = 2000000, threadCount = 16, batchSize = 20000
+oram init time 0.397938 s
+oram find time 2.209239 us
+oram find and evict time 3.700150 us
+mapSize = 2000000, threadCount = 16, batchSize = 50000
+oram init time 0.397938 s
+oram find time 2.307078 us
+oram find and evict time 3.739613 us
+mapSize = 2000000, threadCount = 16, batchSize = 100000
+oram init time 0.397938 s
+oram find time 2.320047 us
+oram find and evict time 3.758889 us
+mapSize = 2000000, threadCount = 32, batchSize = 100
+oram init time 0.242016 s
+oram find time 7.779690 us
+oram find and evict time 14.224714 us
+mapSize = 2000000, threadCount = 32, batchSize = 200
+oram init time 0.242016 s
+oram find time 4.263739 us
+oram find and evict time 7.863542 us
+mapSize = 2000000, threadCount = 32, batchSize = 500
+oram init time 0.242016 s
+oram find time 2.653667 us
+oram find and evict time 4.664967 us
+mapSize = 2000000, threadCount = 32, batchSize = 1000
+oram init time 0.242016 s
+oram find time 2.135681 us
+oram find and evict time 3.619793 us
+mapSize = 2000000, threadCount = 32, batchSize = 2000
+oram init time 0.242016 s
+oram find time 1.936196 us
+oram find and evict time 3.145795 us
+mapSize = 2000000, threadCount = 32, batchSize = 5000
+oram init time 0.242016 s
+oram find time 1.766464 us
+oram find and evict time 2.721706 us
+mapSize = 2000000, threadCount = 32, batchSize = 10000
+oram init time 0.242016 s
+oram find time 1.732131 us
+oram find and evict time 2.641327 us
+mapSize = 2000000, threadCount = 32, batchSize = 20000
+oram init time 0.242016 s
+oram find time 1.689576 us
+oram find and evict time 2.501826 us
+mapSize = 2000000, threadCount = 32, batchSize = 50000
+oram init time 0.242016 s
+oram find time 1.744304 us
+oram find and evict time 2.493881 us
+mapSize = 2000000, threadCount = 32, batchSize = 100000
+oram init time 0.242016 s
+oram find time 1.780032 us
+oram find and evict time 2.477120 us
+mapSize = 5000000, threadCount = 2, batchSize = 100
+oram init time 8.818946 s
+oram find time 13.330949 us
+oram find and evict time 26.228759 us
+mapSize = 5000000, threadCount = 2, batchSize = 200
+oram init time 8.818946 s
+oram find time 13.302425 us
+oram find and evict time 27.246967 us
+mapSize = 5000000, threadCount = 2, batchSize = 500
+oram init time 8.818946 s
+oram find time 11.671785 us
+oram find and evict time 23.916536 us
+mapSize = 5000000, threadCount = 2, batchSize = 1000
+oram init time 8.818946 s
+oram find time 11.848471 us
+oram find and evict time 26.835544 us
+mapSize = 5000000, threadCount = 2, batchSize = 2000
+oram init time 8.818946 s
+oram find time 11.589705 us
+oram find and evict time 27.309595 us
+mapSize = 5000000, threadCount = 2, batchSize = 5000
+oram init time 8.818946 s
+oram find time 11.543948 us
+oram find and evict time 24.938547 us
+mapSize = 5000000, threadCount = 2, batchSize = 10000
+oram init time 8.818946 s
+oram find time 11.532338 us
+oram find and evict time 26.134407 us
+mapSize = 5000000, threadCount = 2, batchSize = 20000
+oram init time 8.818946 s
+oram find time 11.317874 us
+oram find and evict time 25.849469 us
+mapSize = 5000000, threadCount = 2, batchSize = 50000
+oram init time 8.818946 s
+oram find time 10.923778 us
+oram find and evict time 24.926589 us
+mapSize = 5000000, threadCount = 2, batchSize = 100000
+oram init time 8.818946 s
+oram find time 10.852095 us
+oram find and evict time 24.287755 us
+mapSize = 5000000, threadCount = 4, batchSize = 100
+oram init time 4.205886 s
+oram find time 11.400130 us
+oram find and evict time 22.714611 us
+mapSize = 5000000, threadCount = 4, batchSize = 200
+oram init time 4.205886 s
+oram find time 9.124366 us
+oram find and evict time 19.097864 us
+mapSize = 5000000, threadCount = 4, batchSize = 500
+oram init time 4.205886 s
+oram find time 7.952608 us
+oram find and evict time 16.467709 us
+mapSize = 5000000, threadCount = 4, batchSize = 1000
+oram init time 4.205886 s
+oram find time 7.115647 us
+oram find and evict time 14.724362 us
+mapSize = 5000000, threadCount = 4, batchSize = 2000
+oram init time 4.205886 s
+oram find time 6.289521 us
+oram find and evict time 14.186807 us
+mapSize = 5000000, threadCount = 4, batchSize = 5000
+oram init time 4.205886 s
+oram find time 6.081148 us
+oram find and evict time 13.659161 us
+mapSize = 5000000, threadCount = 4, batchSize = 10000
+oram init time 4.205886 s
+oram find time 6.202061 us
+oram find and evict time 14.087472 us
+mapSize = 5000000, threadCount = 4, batchSize = 20000
+oram init time 4.205886 s
+oram find time 6.034426 us
+oram find and evict time 13.778290 us
+mapSize = 5000000, threadCount = 4, batchSize = 50000
+oram init time 4.205886 s
+oram find time 5.897141 us
+oram find and evict time 12.352275 us
+mapSize = 5000000, threadCount = 4, batchSize = 100000
+oram init time 4.205886 s
+oram find time 6.057324 us
+oram find and evict time 12.428735 us
+mapSize = 5000000, threadCount = 8, batchSize = 100
+oram init time 2.086545 s
+oram find time 8.169906 us
+oram find and evict time 17.157284 us
+mapSize = 5000000, threadCount = 8, batchSize = 200
+oram init time 2.086545 s
+oram find time 6.490252 us
+oram find and evict time 13.494534 us
+mapSize = 5000000, threadCount = 8, batchSize = 500
+oram init time 2.086545 s
+oram find time 5.793106 us
+oram find and evict time 11.556472 us
+mapSize = 5000000, threadCount = 8, batchSize = 1000
+oram init time 2.086545 s
+oram find time 4.912675 us
+oram find and evict time 9.863126 us
+mapSize = 5000000, threadCount = 8, batchSize = 2000
+oram init time 2.086545 s
+oram find time 4.239541 us
+oram find and evict time 8.565584 us
+mapSize = 5000000, threadCount = 8, batchSize = 5000
+oram init time 2.086545 s
+oram find time 3.605993 us
+oram find and evict time 7.636386 us
+mapSize = 5000000, threadCount = 8, batchSize = 10000
+oram init time 2.086545 s
+oram find time 3.387512 us
+oram find and evict time 7.284913 us
+mapSize = 5000000, threadCount = 8, batchSize = 20000
+oram init time 2.086545 s
+oram find time 3.568599 us
+oram find and evict time 7.268795 us
+mapSize = 5000000, threadCount = 8, batchSize = 50000
+oram init time 2.086545 s
+oram find time 3.640571 us
+oram find and evict time 7.314038 us
+mapSize = 5000000, threadCount = 8, batchSize = 100000
+oram init time 2.086545 s
+oram find time 3.554965 us
+oram find and evict time 7.169361 us
+mapSize = 5000000, threadCount = 16, batchSize = 100
+oram init time 0.998783 s
+oram find time 6.658268 us
+oram find and evict time 13.181922 us
+mapSize = 5000000, threadCount = 16, batchSize = 200
+oram init time 0.998783 s
+oram find time 4.864201 us
+oram find and evict time 9.123239 us
+mapSize = 5000000, threadCount = 16, batchSize = 500
+oram init time 0.998783 s
+oram find time 3.659108 us
+oram find and evict time 6.698036 us
+mapSize = 5000000, threadCount = 16, batchSize = 1000
+oram init time 0.998783 s
+oram find time 3.361498 us
+oram find and evict time 5.959749 us
+mapSize = 5000000, threadCount = 16, batchSize = 2000
+oram init time 0.998783 s
+oram find time 2.991560 us
+oram find and evict time 5.142394 us
+mapSize = 5000000, threadCount = 16, batchSize = 5000
+oram init time 0.998783 s
+oram find time 2.591130 us
+oram find and evict time 4.531423 us
+mapSize = 5000000, threadCount = 16, batchSize = 10000
+oram init time 0.998783 s
+oram find time 2.413760 us
+oram find and evict time 4.222574 us
+mapSize = 5000000, threadCount = 16, batchSize = 20000
+oram init time 0.998783 s
+oram find time 2.384585 us
+oram find and evict time 4.155258 us
+mapSize = 5000000, threadCount = 16, batchSize = 50000
+oram init time 0.998783 s
+oram find time 2.388024 us
+oram find and evict time 4.090520 us
+mapSize = 5000000, threadCount = 16, batchSize = 100000
+oram init time 0.998783 s
+oram find time 2.418684 us
+oram find and evict time 4.046246 us
+mapSize = 5000000, threadCount = 32, batchSize = 100
+oram init time 0.497458 s
+oram find time 7.899207 us
+oram find and evict time 15.132385 us
+mapSize = 5000000, threadCount = 32, batchSize = 200
+oram init time 0.497458 s
+oram find time 4.614623 us
+oram find and evict time 8.636478 us
+mapSize = 5000000, threadCount = 32, batchSize = 500
+oram init time 0.497458 s
+oram find time 2.910751 us
+oram find and evict time 5.169666 us
+mapSize = 5000000, threadCount = 32, batchSize = 1000
+oram init time 0.497458 s
+oram find time 2.371953 us
+oram find and evict time 4.066281 us
+mapSize = 5000000, threadCount = 32, batchSize = 2000
+oram init time 0.497458 s
+oram find time 2.180073 us
+oram find and evict time 3.549987 us
+mapSize = 5000000, threadCount = 32, batchSize = 5000
+oram init time 0.497458 s
+oram find time 1.949093 us
+oram find and evict time 3.044306 us
+mapSize = 5000000, threadCount = 32, batchSize = 10000
+oram init time 0.497458 s
+oram find time 1.865207 us
+oram find and evict time 2.874796 us
+mapSize = 5000000, threadCount = 32, batchSize = 20000
+oram init time 0.497458 s
+oram find time 1.815223 us
+oram find and evict time 2.754260 us
+mapSize = 5000000, threadCount = 32, batchSize = 50000
+oram init time 0.497458 s
+oram find time 1.856111 us
+oram find and evict time 2.710496 us
+mapSize = 5000000, threadCount = 32, batchSize = 100000
+oram init time 0.497458 s
+oram find time 1.885039 us
+oram find and evict time 2.691903 us
+mapSize = 10000000, threadCount = 2, batchSize = 100
+oram init time 18.027370 s
+oram find time 11.911415 us
+oram find and evict time 24.948612 us
+mapSize = 10000000, threadCount = 2, batchSize = 200
+oram init time 18.027370 s
+oram find time 11.142914 us
+oram find and evict time 24.115971 us
+mapSize = 10000000, threadCount = 2, batchSize = 500
+oram init time 18.027370 s
+oram find time 10.616199 us
+oram find and evict time 23.110653 us
+mapSize = 10000000, threadCount = 2, batchSize = 1000
+oram init time 18.027370 s
+oram find time 10.624469 us
+oram find and evict time 23.093500 us
+mapSize = 10000000, threadCount = 2, batchSize = 2000
+oram init time 18.027370 s
+oram find time 10.675599 us
+oram find and evict time 23.164739 us
+mapSize = 10000000, threadCount = 2, batchSize = 5000
+oram init time 18.027370 s
+oram find time 10.603672 us
+oram find and evict time 23.215733 us
+mapSize = 10000000, threadCount = 2, batchSize = 10000
+oram init time 18.027370 s
+oram find time 10.718678 us
+oram find and evict time 23.674158 us
+mapSize = 10000000, threadCount = 2, batchSize = 20000
+oram init time 18.027370 s
+oram find time 10.172234 us
+oram find and evict time 23.237176 us
+mapSize = 10000000, threadCount = 2, batchSize = 50000
+oram init time 18.027370 s
+oram find time 10.321319 us
+oram find and evict time 23.029042 us
+mapSize = 10000000, threadCount = 2, batchSize = 100000
+oram init time 18.027370 s
+oram find time 10.559731 us
+oram find and evict time 23.088719 us
+mapSize = 10000000, threadCount = 4, batchSize = 100
+oram init time 8.883852 s
+oram find time 11.583637 us
+oram find and evict time 23.802329 us
+mapSize = 10000000, threadCount = 4, batchSize = 200
+oram init time 8.883852 s
+oram find time 10.141831 us
+oram find and evict time 20.645419 us
+mapSize = 10000000, threadCount = 4, batchSize = 500
+oram init time 8.883852 s
+oram find time 8.327386 us
+oram find and evict time 18.264079 us
+mapSize = 10000000, threadCount = 4, batchSize = 1000
+oram init time 8.883852 s
+oram find time 7.230733 us
+oram find and evict time 15.262885 us
+mapSize = 10000000, threadCount = 4, batchSize = 2000
+oram init time 8.883852 s
+oram find time 6.915187 us
+oram find and evict time 14.752450 us
+mapSize = 10000000, threadCount = 4, batchSize = 5000
+oram init time 8.883852 s
+oram find time 6.412249 us
+oram find and evict time 13.774918 us
+mapSize = 10000000, threadCount = 4, batchSize = 10000
+oram init time 8.883852 s
+oram find time 6.165075 us
+oram find and evict time 13.632748 us
+mapSize = 10000000, threadCount = 4, batchSize = 20000
+oram init time 8.883852 s
+oram find time 5.801631 us
+oram find and evict time 12.708855 us
+mapSize = 10000000, threadCount = 4, batchSize = 50000
+oram init time 8.883852 s
+oram find time 5.715669 us
+oram find and evict time 12.536130 us
+mapSize = 10000000, threadCount = 4, batchSize = 100000
+oram init time 8.883852 s
+oram find time 5.698955 us
+oram find and evict time 12.818107 us
+mapSize = 10000000, threadCount = 8, batchSize = 100
+oram init time 4.240277 s
+oram find time 9.195432 us
+oram find and evict time 18.040326 us
+mapSize = 10000000, threadCount = 8, batchSize = 200
+oram init time 4.240277 s
+oram find time 7.101084 us
+oram find and evict time 14.149817 us
+mapSize = 10000000, threadCount = 8, batchSize = 500
+oram init time 4.240277 s
+oram find time 5.975214 us
+oram find and evict time 12.258505 us
+mapSize = 10000000, threadCount = 8, batchSize = 1000
+oram init time 4.240277 s
+oram find time 5.390584 us
+oram find and evict time 10.995056 us
+mapSize = 10000000, threadCount = 8, batchSize = 2000
+oram init time 4.240277 s
+oram find time 4.788845 us
+oram find and evict time 9.175855 us
+mapSize = 10000000, threadCount = 8, batchSize = 5000
+oram init time 4.240277 s
+oram find time 4.201915 us
+oram find and evict time 8.233643 us
+mapSize = 10000000, threadCount = 8, batchSize = 10000
+oram init time 4.240277 s
+oram find time 3.919333 us
+oram find and evict time 7.931302 us
+mapSize = 10000000, threadCount = 8, batchSize = 20000
+oram init time 4.240277 s
+oram find time 3.923136 us
+oram find and evict time 7.626378 us
+mapSize = 10000000, threadCount = 8, batchSize = 50000
+oram init time 4.240277 s
+oram find time 3.897911 us
+oram find and evict time 7.937149 us
+mapSize = 10000000, threadCount = 8, batchSize = 100000
+oram init time 4.240277 s
+oram find time 3.838602 us
+oram find and evict time 7.833062 us
+mapSize = 10000000, threadCount = 16, batchSize = 100
+oram init time 2.098277 s
+oram find time 7.817830 us
+oram find and evict time 15.066527 us
+mapSize = 10000000, threadCount = 16, batchSize = 200
+oram init time 2.098277 s
+oram find time 5.668209 us
+oram find and evict time 10.782658 us
+mapSize = 10000000, threadCount = 16, batchSize = 500
+oram init time 2.098277 s
+oram find time 4.202096 us
+oram find and evict time 7.966684 us
+mapSize = 10000000, threadCount = 16, batchSize = 1000
+oram init time 2.098277 s
+oram find time 3.629664 us
+oram find and evict time 6.734917 us
+mapSize = 10000000, threadCount = 16, batchSize = 2000
+oram init time 2.098277 s
+oram find time 3.155256 us
+oram find and evict time 5.877035 us
+mapSize = 10000000, threadCount = 16, batchSize = 5000
+oram init time 2.098277 s
+oram find time 2.864385 us
+oram find and evict time 5.273055 us
+mapSize = 10000000, threadCount = 16, batchSize = 10000
+oram init time 2.098277 s
+oram find time 2.696999 us
+oram find and evict time 4.902774 us
+mapSize = 10000000, threadCount = 16, batchSize = 20000
+oram init time 2.098277 s
+oram find time 2.600483 us
+oram find and evict time 4.665671 us
+mapSize = 10000000, threadCount = 16, batchSize = 50000
+oram init time 2.098277 s
+oram find time 2.614080 us
+oram find and evict time 4.552504 us
+mapSize = 10000000, threadCount = 16, batchSize = 100000
+oram init time 2.098277 s
+oram find time 2.631157 us
+oram find and evict time 4.576645 us
+mapSize = 10000000, threadCount = 32, batchSize = 100
+oram init time 1.026222 s
+oram find time 8.020473 us
+oram find and evict time 15.338211 us
+mapSize = 10000000, threadCount = 32, batchSize = 200
+oram init time 1.026222 s
+oram find time 4.866294 us
+oram find and evict time 8.915868 us
+mapSize = 10000000, threadCount = 32, batchSize = 500
+oram init time 1.026222 s
+oram find time 3.774795 us
+oram find and evict time 6.398694 us
+mapSize = 10000000, threadCount = 32, batchSize = 1000
+oram init time 1.026222 s
+oram find time 2.751525 us
+oram find and evict time 4.781293 us
+mapSize = 10000000, threadCount = 32, batchSize = 2000
+oram init time 1.026222 s
+oram find time 2.305074 us
+oram find and evict time 3.780953 us
+mapSize = 10000000, threadCount = 32, batchSize = 5000
+oram init time 1.026222 s
+oram find time 2.021518 us
+oram find and evict time 3.156548 us
+mapSize = 10000000, threadCount = 32, batchSize = 10000
+oram init time 1.026222 s
+oram find time 1.947639 us
+oram find and evict time 3.020288 us
+mapSize = 10000000, threadCount = 32, batchSize = 20000
+oram init time 1.026222 s
+oram find time 1.889700 us
+oram find and evict time 2.825731 us
+mapSize = 10000000, threadCount = 32, batchSize = 50000
+oram init time 1.026222 s
+oram find time 1.911435 us
+oram find and evict time 2.779225 us
+mapSize = 10000000, threadCount = 32, batchSize = 100000
+oram init time 1.026222 s
+oram find time 1.948609 us
+oram find and evict time 2.768519 us
+mapSize = 20000000, threadCount = 2, batchSize = 100
+oram init time 37.748607 s
+oram find time 13.965552 us
+oram find and evict time 30.066297 us
+mapSize = 20000000, threadCount = 2, batchSize = 200
+oram init time 37.748607 s
+oram find time 15.743070 us
+oram find and evict time 33.438291 us
+mapSize = 20000000, threadCount = 2, batchSize = 500
+oram init time 37.748607 s
+oram find time 15.214718 us
+oram find and evict time 32.047216 us
+mapSize = 20000000, threadCount = 2, batchSize = 1000
+oram init time 37.748607 s
+oram find time 14.991206 us
+oram find and evict time 30.378943 us
+mapSize = 20000000, threadCount = 2, batchSize = 2000
+oram init time 37.748607 s
+oram find time 15.246764 us
+oram find and evict time 31.294711 us
+mapSize = 20000000, threadCount = 2, batchSize = 5000
+oram init time 37.748607 s
+oram find time 14.603682 us
+oram find and evict time 30.405151 us
+mapSize = 20000000, threadCount = 2, batchSize = 10000
+oram init time 37.748607 s
+oram find time 13.656131 us
+oram find and evict time 29.615419 us
+mapSize = 20000000, threadCount = 2, batchSize = 20000
+oram init time 37.748607 s
+oram find time 11.956214 us
+oram find and evict time 27.293131 us
+mapSize = 20000000, threadCount = 2, batchSize = 50000
+oram init time 37.748607 s
+oram find time 12.263470 us
+oram find and evict time 28.939780 us
+mapSize = 20000000, threadCount = 2, batchSize = 100000
+oram init time 37.748607 s
+oram find time 13.279445 us
+oram find and evict time 30.352220 us
+mapSize = 20000000, threadCount = 4, batchSize = 100
+oram init time 18.191306 s
+oram find time 14.158312 us
+oram find and evict time 26.848577 us
+mapSize = 20000000, threadCount = 4, batchSize = 200
+oram init time 18.191306 s
+oram find time 11.826175 us
+oram find and evict time 22.130108 us
+mapSize = 20000000, threadCount = 4, batchSize = 500
+oram init time 18.191306 s
+oram find time 10.274845 us
+oram find and evict time 19.409439 us
+mapSize = 20000000, threadCount = 4, batchSize = 1000
+oram init time 18.191306 s
+oram find time 9.502658 us
+oram find and evict time 18.708608 us
+mapSize = 20000000, threadCount = 4, batchSize = 2000
+oram init time 18.191306 s
+oram find time 8.890961 us
+oram find and evict time 16.810958 us
+mapSize = 20000000, threadCount = 4, batchSize = 5000
+oram init time 18.191306 s
+oram find time 8.415551 us
+oram find and evict time 16.528907 us
+mapSize = 20000000, threadCount = 4, batchSize = 10000
+oram init time 18.191306 s
+oram find time 7.759932 us
+oram find and evict time 15.351962 us
+mapSize = 20000000, threadCount = 4, batchSize = 20000
+oram init time 18.191306 s
+oram find time 7.506750 us
+oram find and evict time 15.945605 us
+mapSize = 20000000, threadCount = 4, batchSize = 50000
+oram init time 18.191306 s
+oram find time 7.036940 us
+oram find and evict time 14.601466 us
+mapSize = 20000000, threadCount = 4, batchSize = 100000
+oram init time 18.191306 s
+oram find time 7.042983 us
+oram find and evict time 13.679759 us
+mapSize = 20000000, threadCount = 8, batchSize = 100
+oram init time 9.056819 s
+oram find time 10.674786 us
+oram find and evict time 20.204666 us
+mapSize = 20000000, threadCount = 8, batchSize = 200
+oram init time 9.056819 s
+oram find time 8.206250 us
+oram find and evict time 15.769580 us
+mapSize = 20000000, threadCount = 8, batchSize = 500
+oram init time 9.056819 s
+oram find time 6.663801 us
+oram find and evict time 13.086371 us
+mapSize = 20000000, threadCount = 8, batchSize = 1000
+oram init time 9.056819 s
+oram find time 5.781962 us
+oram find and evict time 11.133483 us
+mapSize = 20000000, threadCount = 8, batchSize = 2000
+oram init time 9.056819 s
+oram find time 5.338433 us
+oram find and evict time 10.349420 us
+mapSize = 20000000, threadCount = 8, batchSize = 5000
+oram init time 9.056819 s
+oram find time 4.930712 us
+oram find and evict time 9.566300 us
+mapSize = 20000000, threadCount = 8, batchSize = 10000
+oram init time 9.056819 s
+oram find time 4.526632 us
+oram find and evict time 8.743077 us
+mapSize = 20000000, threadCount = 8, batchSize = 20000
+oram init time 9.056819 s
+oram find time 4.419748 us
+oram find and evict time 8.433899 us
+mapSize = 20000000, threadCount = 8, batchSize = 50000
+oram init time 9.056819 s
+oram find time 4.349129 us
+oram find and evict time 8.472866 us
+mapSize = 20000000, threadCount = 8, batchSize = 100000
+oram init time 9.056819 s
+oram find time 4.195206 us
+oram find and evict time 8.330996 us
+mapSize = 20000000, threadCount = 16, batchSize = 100
+oram init time 4.381938 s
+oram find time 8.104109 us
+oram find and evict time 15.422641 us
+mapSize = 20000000, threadCount = 16, batchSize = 200
+oram init time 4.381938 s
+oram find time 5.955041 us
+oram find and evict time 11.164608 us
+mapSize = 20000000, threadCount = 16, batchSize = 500
+oram init time 4.381938 s
+oram find time 4.460057 us
+oram find and evict time 8.265253 us
+mapSize = 20000000, threadCount = 16, batchSize = 1000
+oram init time 4.381938 s
+oram find time 3.857831 us
+oram find and evict time 7.034148 us
+mapSize = 20000000, threadCount = 16, batchSize = 2000
+oram init time 4.381938 s
+oram find time 3.490746 us
+oram find and evict time 6.323517 us
+mapSize = 20000000, threadCount = 16, batchSize = 5000
+oram init time 4.381938 s
+oram find time 3.102585 us
+oram find and evict time 5.545324 us
+mapSize = 20000000, threadCount = 16, batchSize = 10000
+oram init time 4.381938 s
+oram find time 2.913455 us
+oram find and evict time 5.116989 us
+mapSize = 20000000, threadCount = 16, batchSize = 20000
+oram init time 4.381938 s
+oram find time 2.757562 us
+oram find and evict time 4.903417 us
+mapSize = 20000000, threadCount = 16, batchSize = 50000
+oram init time 4.381938 s
+oram find time 2.685834 us
+oram find and evict time 4.639471 us
+mapSize = 20000000, threadCount = 16, batchSize = 100000
+oram init time 4.381938 s
+oram find time 2.734819 us
+oram find and evict time 4.659977 us
+mapSize = 20000000, threadCount = 32, batchSize = 100
+oram init time 2.134139 s
+oram find time 8.912325 us
+oram find and evict time 17.313854 us
+mapSize = 20000000, threadCount = 32, batchSize = 200
+oram init time 2.134139 s
+oram find time 5.395348 us
+oram find and evict time 10.083291 us
+mapSize = 20000000, threadCount = 32, batchSize = 500
+oram init time 2.134139 s
+oram find time 4.255267 us
+oram find and evict time 7.326770 us
+mapSize = 20000000, threadCount = 32, batchSize = 1000
+oram init time 2.134139 s
+oram find time 3.160943 us
+oram find and evict time 5.567856 us
+mapSize = 20000000, threadCount = 32, batchSize = 2000
+oram init time 2.134139 s
+oram find time 2.534965 us
+oram find and evict time 4.332831 us
+mapSize = 20000000, threadCount = 32, batchSize = 5000
+oram init time 2.134139 s
+oram find time 2.205765 us
+oram find and evict time 3.627937 us
+mapSize = 20000000, threadCount = 32, batchSize = 10000
+oram init time 2.134139 s
+oram find time 2.069394 us
+oram find and evict time 3.357727 us
+mapSize = 20000000, threadCount = 32, batchSize = 20000
+oram init time 2.134139 s
+oram find time 1.958956 us
+oram find and evict time 3.128643 us
+mapSize = 20000000, threadCount = 32, batchSize = 50000
+oram init time 2.134139 s
+oram find time 1.976819 us
+oram find and evict time 3.037839 us
+mapSize = 20000000, threadCount = 32, batchSize = 100000
+oram init time 2.134139 s
+oram find time 2.000827 us
+oram find and evict time 3.015353 us
+mapSize = 50000000, threadCount = 2, batchSize = 100
+oram init time 96.237482 s
+oram find time 15.714135 us
+oram find and evict time 32.194612 us
+mapSize = 50000000, threadCount = 2, batchSize = 200
+oram init time 96.237482 s
+oram find time 14.724990 us
+oram find and evict time 30.810992 us
+mapSize = 50000000, threadCount = 2, batchSize = 500
+oram init time 96.237482 s
+oram find time 14.195697 us
+oram find and evict time 30.079037 us
+mapSize = 50000000, threadCount = 2, batchSize = 1000
+oram init time 96.237482 s
+oram find time 14.207528 us
+oram find and evict time 30.130316 us
+mapSize = 50000000, threadCount = 2, batchSize = 2000
+oram init time 96.237482 s
+oram find time 14.338403 us
+oram find and evict time 30.293924 us
+mapSize = 50000000, threadCount = 2, batchSize = 5000
+oram init time 96.237482 s
+oram find time 13.971753 us
+oram find and evict time 30.021049 us
+mapSize = 50000000, threadCount = 2, batchSize = 10000
+oram init time 96.237482 s
+oram find time 13.721111 us
+oram find and evict time 29.696958 us
+mapSize = 50000000, threadCount = 2, batchSize = 20000
+oram init time 96.237482 s
+oram find time 13.438458 us
+oram find and evict time 29.414835 us
+mapSize = 50000000, threadCount = 2, batchSize = 50000
+oram init time 96.237482 s
+oram find time 13.242208 us
+oram find and evict time 29.012705 us
+mapSize = 50000000, threadCount = 2, batchSize = 100000
+oram init time 96.237482 s
+oram find time 13.227418 us
+oram find and evict time 29.045032 us
+mapSize = 50000000, threadCount = 4, batchSize = 100
+oram init time 48.954523 s
+oram find time 16.195326 us
+oram find and evict time 32.595455 us
+mapSize = 50000000, threadCount = 4, batchSize = 200
+oram init time 48.954523 s
+oram find time 12.836084 us
+oram find and evict time 25.306302 us
+mapSize = 50000000, threadCount = 4, batchSize = 500
+oram init time 48.954523 s
+oram find time 9.882970 us
+oram find and evict time 20.584316 us
+mapSize = 50000000, threadCount = 4, batchSize = 1000
+oram init time 48.954523 s
+oram find time 9.366074 us
+oram find and evict time 18.960142 us
+mapSize = 50000000, threadCount = 4, batchSize = 2000
+oram init time 48.954523 s
+oram find time 8.728888 us
+oram find and evict time 18.317711 us
+mapSize = 50000000, threadCount = 4, batchSize = 5000
+oram init time 48.954523 s
+oram find time 7.942552 us
+oram find and evict time 16.627369 us
+mapSize = 50000000, threadCount = 4, batchSize = 10000
+oram init time 48.954523 s
+oram find time 7.576535 us
+oram find and evict time 16.109962 us
+mapSize = 50000000, threadCount = 4, batchSize = 20000
+oram init time 48.954523 s
+oram find time 7.159549 us
+oram find and evict time 15.324236 us
+mapSize = 50000000, threadCount = 4, batchSize = 50000
+oram init time 48.954523 s
+oram find time 7.006796 us
+oram find and evict time 15.083466 us
+mapSize = 50000000, threadCount = 4, batchSize = 100000
+oram init time 48.954523 s
+oram find time 7.090928 us
+oram find and evict time 15.004762 us
+mapSize = 50000000, threadCount = 8, batchSize = 100
+oram init time 23.282199 s
+oram find time 11.813448 us
+oram find and evict time 21.276024 us
+mapSize = 50000000, threadCount = 8, batchSize = 200
+oram init time 23.282199 s
+oram find time 9.417385 us
+oram find and evict time 18.118077 us
+mapSize = 50000000, threadCount = 8, batchSize = 500
+oram init time 23.282199 s
+oram find time 8.047703 us
+oram find and evict time 13.976174 us
+mapSize = 50000000, threadCount = 8, batchSize = 1000
+oram init time 23.282199 s
+oram find time 6.622871 us
+oram find and evict time 11.642505 us
+mapSize = 50000000, threadCount = 8, batchSize = 2000
+oram init time 23.282199 s
+oram find time 5.923970 us
+oram find and evict time 10.364137 us
+mapSize = 50000000, threadCount = 8, batchSize = 5000
+oram init time 23.282199 s
+oram find time 5.368776 us
+oram find and evict time 9.286358 us
+mapSize = 50000000, threadCount = 8, batchSize = 10000
+oram init time 23.282199 s
+oram find time 5.053185 us
+oram find and evict time 8.784889 us
+mapSize = 50000000, threadCount = 8, batchSize = 20000
+oram init time 23.282199 s
+oram find time 4.783119 us
+oram find and evict time 8.443983 us
+mapSize = 50000000, threadCount = 8, batchSize = 50000
+oram init time 23.282199 s
+oram find time 4.593772 us
+oram find and evict time 8.221251 us
+mapSize = 50000000, threadCount = 8, batchSize = 100000
+oram init time 23.282199 s
+oram find time 4.481060 us
+oram find and evict time 7.860913 us
+mapSize = 50000000, threadCount = 16, batchSize = 100
+oram init time 11.444988 s
+oram find time 9.185575 us
+oram find and evict time 16.664080 us
+mapSize = 50000000, threadCount = 16, batchSize = 200
+oram init time 11.444988 s
+oram find time 6.658166 us
+oram find and evict time 11.898267 us
+mapSize = 50000000, threadCount = 16, batchSize = 500
+oram init time 11.444988 s
+oram find time 5.317097 us
+oram find and evict time 9.529081 us
+mapSize = 50000000, threadCount = 16, batchSize = 1000
+oram init time 11.444988 s
+oram find time 4.528184 us
+oram find and evict time 7.505495 us
+mapSize = 50000000, threadCount = 16, batchSize = 2000
+oram init time 11.444988 s
+oram find time 3.874242 us
+oram find and evict time 6.387360 us
+mapSize = 50000000, threadCount = 16, batchSize = 5000
+oram init time 11.444988 s
+oram find time 3.483091 us
+oram find and evict time 5.726132 us
+mapSize = 50000000, threadCount = 16, batchSize = 10000
+oram init time 11.444988 s
+oram find time 3.201936 us
+oram find and evict time 5.257032 us
+mapSize = 50000000, threadCount = 16, batchSize = 20000
+oram init time 11.444988 s
+oram find time 3.037389 us
+oram find and evict time 4.924388 us
+mapSize = 50000000, threadCount = 16, batchSize = 50000
+oram init time 11.444988 s
+oram find time 2.937214 us
+oram find and evict time 4.729121 us
+mapSize = 50000000, threadCount = 16, batchSize = 100000
+oram init time 11.444988 s
+oram find time 2.876411 us
+oram find and evict time 4.573394 us
+mapSize = 50000000, threadCount = 32, batchSize = 100
+oram init time 5.840156 s
+oram find time 9.436013 us
+oram find and evict time 18.432072 us
+mapSize = 50000000, threadCount = 32, batchSize = 200
+oram init time 5.840156 s
+oram find time 5.958492 us
+oram find and evict time 10.820215 us
+mapSize = 50000000, threadCount = 32, batchSize = 500
+oram init time 5.840156 s
+oram find time 3.848179 us
+oram find and evict time 6.600498 us
+mapSize = 50000000, threadCount = 32, batchSize = 1000
+oram init time 5.840156 s
+oram find time 3.320892 us
+oram find and evict time 5.427261 us
+mapSize = 50000000, threadCount = 32, batchSize = 2000
+oram init time 5.840156 s
+oram find time 2.842539 us
+oram find and evict time 4.407566 us
+mapSize = 50000000, threadCount = 32, batchSize = 5000
+oram init time 5.840156 s
+oram find time 2.430249 us
+oram find and evict time 3.675888 us
+mapSize = 50000000, threadCount = 32, batchSize = 10000
+oram init time 5.840156 s
+oram find time 2.240011 us
+oram find and evict time 3.364939 us
+mapSize = 50000000, threadCount = 32, batchSize = 20000
+oram init time 5.840156 s
+oram find time 2.139911 us
+oram find and evict time 3.208387 us
+mapSize = 50000000, threadCount = 32, batchSize = 50000
+oram init time 5.840156 s
+oram find time 2.113852 us
+oram find and evict time 3.056212 us
+mapSize = 50000000, threadCount = 32, batchSize = 100000
+oram init time 5.840156 s
+oram find time 2.144054 us
+oram find and evict time 3.028730 us
+mapSize = 100000000, threadCount = 2, batchSize = 100
+oram init time 200.894063 s
+oram find time 17.191825 us
+oram find and evict time 34.842490 us
+mapSize = 100000000, threadCount = 2, batchSize = 200
+oram init time 200.894063 s
+oram find time 16.132247 us
+oram find and evict time 33.317919 us
+mapSize = 100000000, threadCount = 2, batchSize = 500
+oram init time 200.894063 s
+oram find time 15.727365 us
+oram find and evict time 32.775288 us
+mapSize = 100000000, threadCount = 2, batchSize = 1000
+oram init time 200.894063 s
+oram find time 15.753098 us
+oram find and evict time 32.642342 us
+mapSize = 100000000, threadCount = 2, batchSize = 2000
+oram init time 200.894063 s
+oram find time 15.855094 us
+oram find and evict time 32.954763 us
+mapSize = 100000000, threadCount = 2, batchSize = 5000
+oram init time 200.894063 s
+oram find time 15.645309 us
+oram find and evict time 32.777834 us
+mapSize = 100000000, threadCount = 2, batchSize = 10000
+oram init time 200.894063 s
+oram find time 15.198147 us
+oram find and evict time 32.252650 us
+mapSize = 100000000, threadCount = 2, batchSize = 20000
+oram init time 200.894063 s
+oram find time 14.799734 us
+oram find and evict time 31.813851 us
+mapSize = 100000000, threadCount = 2, batchSize = 50000
+oram init time 200.894063 s
+oram find time 14.539660 us
+oram find and evict time 31.640100 us
+mapSize = 100000000, threadCount = 2, batchSize = 100000
+oram init time 200.894063 s
+oram find time 14.507400 us
+oram find and evict time 31.493582 us
+mapSize = 100000000, threadCount = 4, batchSize = 100
+oram init time 96.571186 s
+oram find time 14.553411 us
+oram find and evict time 28.747407 us
+mapSize = 100000000, threadCount = 4, batchSize = 200
+oram init time 96.571186 s
+oram find time 12.263772 us
+oram find and evict time 24.471103 us
+mapSize = 100000000, threadCount = 4, batchSize = 500
+oram init time 96.571186 s
+oram find time 10.802631 us
+oram find and evict time 21.414503 us
+mapSize = 100000000, threadCount = 4, batchSize = 1000
+oram init time 96.571186 s
+oram find time 9.850649 us
+oram find and evict time 19.683335 us
+mapSize = 100000000, threadCount = 4, batchSize = 2000
+oram init time 96.571186 s
+oram find time 9.466465 us
+oram find and evict time 18.829354 us
+mapSize = 100000000, threadCount = 4, batchSize = 5000
+oram init time 96.571186 s
+oram find time 9.065224 us
+oram find and evict time 17.999350 us
+mapSize = 100000000, threadCount = 4, batchSize = 10000
+oram init time 96.571186 s
+oram find time 10.142512 us
+oram find and evict time 19.107853 us
+mapSize = 100000000, threadCount = 4, batchSize = 20000
+oram init time 96.571186 s
+oram find time 9.635277 us
+oram find and evict time 18.531979 us
+mapSize = 100000000, threadCount = 4, batchSize = 50000
+oram init time 96.571186 s
+oram find time 9.242765 us
+oram find and evict time 17.817952 us
+mapSize = 100000000, threadCount = 4, batchSize = 100000
+oram init time 96.571186 s
+oram find time 8.434343 us
+oram find and evict time 17.138572 us
+mapSize = 100000000, threadCount = 8, batchSize = 100
+oram init time 49.592738 s
+oram find time 12.974463 us
+oram find and evict time 23.817572 us
+mapSize = 100000000, threadCount = 8, batchSize = 200
+oram init time 49.592738 s
+oram find time 10.273664 us
+oram find and evict time 20.150935 us
+mapSize = 100000000, threadCount = 8, batchSize = 500
+oram init time 49.592738 s
+oram find time 8.458994 us
+oram find and evict time 15.377221 us
+mapSize = 100000000, threadCount = 8, batchSize = 1000
+oram init time 49.592738 s
+oram find time 7.497617 us
+oram find and evict time 13.501656 us
+mapSize = 100000000, threadCount = 8, batchSize = 2000
+oram init time 49.592738 s
+oram find time 6.586378 us
+oram find and evict time 11.960112 us
+mapSize = 100000000, threadCount = 8, batchSize = 5000
+oram init time 49.592738 s
+oram find time 5.988593 us
+oram find and evict time 10.858824 us
+mapSize = 100000000, threadCount = 8, batchSize = 10000
+oram init time 49.592738 s
+oram find time 5.648379 us
+oram find and evict time 10.141797 us
+mapSize = 100000000, threadCount = 8, batchSize = 20000
+oram init time 49.592738 s
+oram find time 5.395187 us
+oram find and evict time 9.936139 us
+mapSize = 100000000, threadCount = 8, batchSize = 50000
+oram init time 49.592738 s
+oram find time 5.117393 us
+oram find and evict time 9.710901 us
+mapSize = 100000000, threadCount = 8, batchSize = 100000
+oram init time 49.592738 s
+oram find time 4.956813 us
+oram find and evict time 9.108444 us
+mapSize = 100000000, threadCount = 16, batchSize = 100
+oram init time 23.486151 s
+oram find time 9.869106 us
+oram find and evict time 17.625086 us
+mapSize = 100000000, threadCount = 16, batchSize = 200
+oram init time 23.486151 s
+oram find time 7.665696 us
+oram find and evict time 13.557918 us
+mapSize = 100000000, threadCount = 16, batchSize = 500
+oram init time 23.486151 s
+oram find time 5.744652 us
+oram find and evict time 9.700974 us
+mapSize = 100000000, threadCount = 16, batchSize = 1000
+oram init time 23.486151 s
+oram find time 4.562055 us
+oram find and evict time 7.819873 us
+mapSize = 100000000, threadCount = 16, batchSize = 2000
+oram init time 23.486151 s
+oram find time 4.087546 us
+oram find and evict time 6.666318 us
+mapSize = 100000000, threadCount = 16, batchSize = 5000
+oram init time 23.486151 s
+oram find time 3.728339 us
+oram find and evict time 6.110961 us
+mapSize = 100000000, threadCount = 16, batchSize = 10000
+oram init time 23.486151 s
+oram find time 3.464848 us
+oram find and evict time 5.656425 us
+mapSize = 100000000, threadCount = 16, batchSize = 20000
+oram init time 23.486151 s
+oram find time 3.275740 us
+oram find and evict time 5.232381 us
+mapSize = 100000000, threadCount = 16, batchSize = 50000
+oram init time 23.486151 s
+oram find time 3.157344 us
+oram find and evict time 4.965630 us
+mapSize = 100000000, threadCount = 16, batchSize = 100000
+oram init time 23.486151 s
+oram find time 3.112322 us
+oram find and evict time 4.921857 us
+mapSize = 100000000, threadCount = 32, batchSize = 100
+oram init time 12.035720 s
+oram find time 9.839905 us
+oram find and evict time 18.790798 us
+mapSize = 100000000, threadCount = 32, batchSize = 200
+oram init time 12.035720 s
+oram find time 6.248217 us
+oram find and evict time 11.153696 us
+mapSize = 100000000, threadCount = 32, batchSize = 500
+oram init time 12.035720 s
+oram find time 4.868452 us
+oram find and evict time 8.016222 us
+mapSize = 100000000, threadCount = 32, batchSize = 1000
+oram init time 12.035720 s
+oram find time 3.714309 us
+oram find and evict time 6.166405 us
+mapSize = 100000000, threadCount = 32, batchSize = 2000
+oram init time 12.035720 s
+oram find time 3.000511 us
+oram find and evict time 4.777751 us
+mapSize = 100000000, threadCount = 32, batchSize = 5000
+oram init time 12.035720 s
+oram find time 2.592321 us
+oram find and evict time 3.944710 us
+mapSize = 100000000, threadCount = 32, batchSize = 10000
+oram init time 12.035720 s
+oram find time 2.406777 us
+oram find and evict time 3.609031 us
+mapSize = 100000000, threadCount = 32, batchSize = 20000
+oram init time 12.035720 s
+oram find time 2.284547 us
+oram find and evict time 3.380302 us
+mapSize = 100000000, threadCount = 32, batchSize = 50000
+oram init time 12.035720 s
+oram find time 2.239125 us
+oram find and evict time 3.212417 us
+mapSize = 100000000, threadCount = 32, batchSize = 100000
+oram init time 12.035720 s
+oram find time 2.249701 us
+oram find and evict time 3.204746 us
+mapSize = 200000000, threadCount = 2, batchSize = 100
+oram init time 414.803160 s
+oram find time 18.983903 us
+oram find and evict time 37.543925 us
+mapSize = 200000000, threadCount = 2, batchSize = 200
+oram init time 414.803160 s
+oram find time 17.715395 us
+oram find and evict time 35.664297 us
+mapSize = 200000000, threadCount = 2, batchSize = 500
+oram init time 414.803160 s
+oram find time 17.045096 us
+oram find and evict time 34.504399 us
+mapSize = 200000000, threadCount = 2, batchSize = 1000
+oram init time 414.803160 s
+oram find time 17.203611 us
+oram find and evict time 34.609655 us
+mapSize = 200000000, threadCount = 2, batchSize = 2000
+oram init time 414.803160 s
+oram find time 16.995076 us
+oram find and evict time 34.423945 us
+mapSize = 200000000, threadCount = 2, batchSize = 5000
+oram init time 414.803160 s
+oram find time 16.835326 us
+oram find and evict time 34.349100 us
+mapSize = 200000000, threadCount = 2, batchSize = 10000
+oram init time 414.803160 s
+oram find time 16.152681 us
+oram find and evict time 33.573212 us
+mapSize = 200000000, threadCount = 2, batchSize = 20000
+oram init time 414.803160 s
+oram find time 16.064848 us
+oram find and evict time 33.558157 us
+mapSize = 200000000, threadCount = 2, batchSize = 50000
+oram init time 414.803160 s
+oram find time 15.471562 us
+oram find and evict time 33.009232 us
+mapSize = 200000000, threadCount = 2, batchSize = 100000
+oram init time 414.803160 s
+oram find time 15.680896 us
+oram find and evict time 33.111957 us
+mapSize = 200000000, threadCount = 4, batchSize = 100
+oram init time 210.344511 s
+oram find time 16.666530 us
+oram find and evict time 32.135872 us
+mapSize = 200000000, threadCount = 4, batchSize = 200
+oram init time 210.344511 s
+oram find time 15.032539 us
+oram find and evict time 28.879843 us
+mapSize = 200000000, threadCount = 4, batchSize = 500
+oram init time 210.344511 s
+oram find time 12.113533 us
+oram find and evict time 23.677305 us
+mapSize = 200000000, threadCount = 4, batchSize = 1000
+oram init time 210.344511 s
+oram find time 11.505031 us
+oram find and evict time 22.385603 us
+mapSize = 200000000, threadCount = 4, batchSize = 2000
+oram init time 210.344511 s
+oram find time 10.597471 us
+oram find and evict time 20.914804 us
+mapSize = 200000000, threadCount = 4, batchSize = 5000
+oram init time 210.344511 s
+oram find time 9.649163 us
+oram find and evict time 19.313885 us
+mapSize = 200000000, threadCount = 4, batchSize = 10000
+oram init time 210.344511 s
+oram find time 9.059568 us
+oram find and evict time 18.543551 us
+mapSize = 200000000, threadCount = 4, batchSize = 20000
+oram init time 210.344511 s
+oram find time 8.636590 us
+oram find and evict time 17.664670 us
+mapSize = 200000000, threadCount = 4, batchSize = 50000
+oram init time 210.344511 s
+oram find time 8.292965 us
+oram find and evict time 17.118592 us
+mapSize = 200000000, threadCount = 4, batchSize = 100000
+oram init time 210.344511 s
+oram find time 9.918991 us
+oram find and evict time 19.094261 us
+mapSize = 200000000, threadCount = 8, batchSize = 100
+oram init time 99.020371 s
+oram find time 13.852362 us
+oram find and evict time 25.247519 us
+mapSize = 200000000, threadCount = 8, batchSize = 200
+oram init time 99.020371 s
+oram find time 11.371972 us
+oram find and evict time 20.344880 us
+mapSize = 200000000, threadCount = 8, batchSize = 500
+oram init time 99.020371 s
+oram find time 9.505023 us
+oram find and evict time 16.428329 us
+mapSize = 200000000, threadCount = 8, batchSize = 1000
+oram init time 99.020371 s
+oram find time 8.210572 us
+oram find and evict time 14.211380 us
+mapSize = 200000000, threadCount = 8, batchSize = 2000
+oram init time 99.020371 s
+oram find time 7.492737 us
+oram find and evict time 12.942445 us
+mapSize = 200000000, threadCount = 8, batchSize = 5000
+oram init time 99.020371 s
+oram find time 6.788380 us
+oram find and evict time 11.766109 us
+mapSize = 200000000, threadCount = 8, batchSize = 10000
+oram init time 99.020371 s
+oram find time 6.392604 us
+oram find and evict time 11.087359 us
+mapSize = 200000000, threadCount = 8, batchSize = 20000
+oram init time 99.020371 s
+oram find time 6.007957 us
+oram find and evict time 10.536730 us
+mapSize = 200000000, threadCount = 8, batchSize = 50000
+oram init time 99.020371 s
+oram find time 5.399064 us
+oram find and evict time 9.719214 us
+mapSize = 200000000, threadCount = 8, batchSize = 100000
+oram init time 99.020371 s
+oram find time 4.951842 us
+oram find and evict time 9.303468 us
+mapSize = 200000000, threadCount = 16, batchSize = 100
+oram init time 49.393931 s
+oram find time 11.398925 us
+oram find and evict time 20.307196 us
+mapSize = 200000000, threadCount = 16, batchSize = 200
+oram init time 49.393931 s
+oram find time 8.359456 us
+oram find and evict time 14.577020 us
+mapSize = 200000000, threadCount = 16, batchSize = 500
+oram init time 49.393931 s
+oram find time 6.867458 us
+oram find and evict time 11.560117 us
+mapSize = 200000000, threadCount = 16, batchSize = 1000
+oram init time 49.393931 s
+oram find time 5.446465 us
+oram find and evict time 9.392506 us
+mapSize = 200000000, threadCount = 16, batchSize = 2000
+oram init time 49.393931 s
+oram find time 4.652436 us
+oram find and evict time 7.760173 us
+mapSize = 200000000, threadCount = 16, batchSize = 5000
+oram init time 49.393931 s
+oram find time 4.200313 us
+oram find and evict time 6.990817 us
+mapSize = 200000000, threadCount = 16, batchSize = 10000
+oram init time 49.393931 s
+oram find time 3.868402 us
+oram find and evict time 6.437050 us
+mapSize = 200000000, threadCount = 16, batchSize = 20000
+oram init time 49.393931 s
+oram find time 3.568699 us
+oram find and evict time 5.884678 us
+mapSize = 200000000, threadCount = 16, batchSize = 50000
+oram init time 49.393931 s
+oram find time 3.418766 us
+oram find and evict time 5.650918 us
+mapSize = 200000000, threadCount = 16, batchSize = 100000
+oram init time 49.393931 s
+oram find time 3.351320 us
+oram find and evict time 5.545783 us
+mapSize = 200000000, threadCount = 32, batchSize = 100
+oram init time 24.865220 s
+oram find time 10.283683 us
+oram find and evict time 19.576230 us
+mapSize = 200000000, threadCount = 32, batchSize = 200
+oram init time 24.865220 s
+oram find time 6.677559 us
+oram find and evict time 11.823376 us
+mapSize = 200000000, threadCount = 32, batchSize = 500
+oram init time 24.865220 s
+oram find time 5.255462 us
+oram find and evict time 8.439163 us
+mapSize = 200000000, threadCount = 32, batchSize = 1000
+oram init time 24.865220 s
+oram find time 3.968337 us
+oram find and evict time 6.455991 us
+mapSize = 200000000, threadCount = 32, batchSize = 2000
+oram init time 24.865220 s
+oram find time 3.199695 us
+oram find and evict time 5.034933 us
+mapSize = 200000000, threadCount = 32, batchSize = 5000
+oram init time 24.865220 s
+oram find time 2.745387 us
+oram find and evict time 4.177413 us
+mapSize = 200000000, threadCount = 32, batchSize = 10000
+oram init time 24.865220 s
+oram find time 2.544536 us
+oram find and evict time 3.806404 us
+mapSize = 200000000, threadCount = 32, batchSize = 20000
+oram init time 24.865220 s
+oram find time 2.408600 us
+oram find and evict time 3.551834 us
+mapSize = 200000000, threadCount = 32, batchSize = 50000
+oram init time 24.865220 s
+oram find time 2.317268 us
+oram find and evict time 3.318515 us
+mapSize = 200000000, threadCount = 32, batchSize = 100000
+oram init time 24.865220 s
+oram find time 2.315626 us
+oram find and evict time 3.324423 us

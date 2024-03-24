@@ -1,5 +1,5 @@
-# Oblivious Sorting
-An implementation of external memory efficient, cpu instruction and memory access trace oblivious sorting algorithms.
+# Oblivious Map
+An implementation of external memory efficient, cpu instruction and memory access trace parallel oblivious maps.
 
 # Prerequisites
 Install cmake, ninja and intel sgx sdk, or use the cppbuilder docker image.
@@ -16,7 +16,7 @@ docker run -it --rm -v $PWD:/builder -u $(id -u) cppbuilder
 
 ## How to enter the docker environment to run algorithms in enclave
 ```bash
-docker run -v /tmp/sortbackend:/ssdmount --privileged -it --rm -v $PWD:/builder -p 8080:8080 cppbuilder
+docker run -v /tmp/omapbackend:/ssdmount --privileged -it --rm -v $PWD:/builder -p 8080:8080 cppbuilder
 ```
 
 ## How to run the unit tests
@@ -37,38 +37,40 @@ cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
 ninja -C build
 ```
 
-## Build the sorting example enclave (hardware mode)
+## Build the omap example enclave (hardware mode)
 ```bash
 source /startsgxenv.sh
-cd applications/sorting
+cd applications/omap
 make
 ```
 
-## Build the sorting example enclave (simulation mode)
+## Build the omap example enclave (simulation mode)
 ```bash
 source /startsgxenv.sh
-cd applications/sorting
+cd applications/omap
 make SGX_MODE=SIM
 ```
 
-## Run a sample script to test runtime of sorting algorithms
+## Run a sample script to test runtime of omap algorithms
 ```bash
-cd applications/sorting
+cd applications/omap
 ./algo_runner.sh
 ```
 
 ## Folder structure high level details
 
-osort - C++ osort library code
+omap - C++ oblivious map library code
 tests - C++ tests modules
-applications - Enclaves example of osort
+applications - Enclaves example of omap
 tools - tools used to generate graphs or test sets
 tools/docker - dockerfiles used for reproducible builds
 
-### OSort folder structure
+### omap folder structure
 
+odsl - core library code of oblivious data structures
+algorithm - algorithmic building blocks for oblivious data structures
 common - common c++ utilies, cpu abstractions, cryptography abstractions and tracing code
-external_memory - external memory abstraction and sorting algorithms
+external_memory - external memory vector abstraction
 external_memory/server - server abstraction for different external memory scenarios (sgx, file system, ram)
 
 

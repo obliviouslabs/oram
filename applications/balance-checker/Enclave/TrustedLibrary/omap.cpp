@@ -7,7 +7,7 @@
 
 #include "../../common.hpp"
 #include "crypt.hpp"
-#include "oram/omap.hpp"
+#include "odsl/omap.hpp"
 #include "sgx_error.h"
 #include "sgx_report.h"
 #include "sgx_spinlock.h"
@@ -99,7 +99,7 @@ void ecall_omap_init(uint64_t N, uint64_t initSize) {
           bufferOffset += sizeof(val_type);
           return res;
         });
-    omap.InitFromReaderInPlace(reader);
+    omap.InitFromReader(reader);
   } catch (std::exception& e) {
     printf("exception: %s\n", e.what());
     abort();
@@ -112,7 +112,7 @@ int ecall_omap_find(uint8_t* key, uint8_t* val, uint32_t keyLength,
   const key_type& k = *reinterpret_cast<key_type*>(key);
   const val_type& v = *reinterpret_cast<val_type*>(val);
   OMapCritical section;
-  bool res = omap.find(k, *reinterpret_cast<val_type*>(val));
+  bool res = omap.Find(k, *reinterpret_cast<val_type*>(val));
   return (int)res;
 }
 
@@ -121,13 +121,13 @@ int ecall_omap_insert(uint8_t* key, uint8_t* val, uint32_t keyLength,
   const key_type& k = *reinterpret_cast<key_type*>(key);
   const val_type& v = *reinterpret_cast<val_type*>(val);
   OMapCritical section;
-  bool res = omap.insert(k, v);
+  bool res = omap.Insert(k, v);
   return (int)res;
 }
 
 int ecall_omap_delete(uint8_t* key, uint32_t keyLength) {
   const key_type& k = *reinterpret_cast<key_type*>(key);
-  bool res = omap.erase(k);
+  bool res = omap.Erase(k);
   return (int)res;
 }
 
@@ -191,7 +191,7 @@ void ecall_handle_encrypted_query(uint8_t* encryptedQuery,
   {
     OMapCritical section;
     response.tillBlock = globalLastBlock;  // TODO add pending status
-    bool found = omap.find(query.addr, response.balance);
+    bool found = omap.Find(query.addr, response.balance);
     obliMove(!found, response.balance, ERC20_Balance());
     response.success = true;
   }

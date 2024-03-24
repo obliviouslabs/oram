@@ -2,8 +2,8 @@
 
 #include <assert.h>
 #include <stdlib.h>
-#ifndef NOOPENSSL
-#define NOOPENSSL
+#ifndef ENCLAVE_MODE_ENCLAVE
+#define ENCLAVE_MODE_ENCLAVE
 #endif
 #if defined(__cplusplus)
 extern "C" {

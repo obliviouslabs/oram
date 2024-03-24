@@ -1,0 +1,885 @@
+#pragma once
+
+#include "oram_common.hpp"
+
+/// @brief This file implements Circuit ORAM (https://eprint.iacr.org/2014/672),
+/// which turns out to be faster than Path ORAM when full obliviousness is
+/// desired.
+
+namespace ODSL::CircuitORAM {
+/// @brief Circuit ORAM implementation.
+/// @tparam T   Type of data stored in the ORAM
+/// @tparam PositionType   Type of the position, default to uint64_t. Each
+/// position corresponds to a path in the ORAM tree.
+/// @tparam UidType   Type of the unique id, default to uint64_t. Each block in
+/// the ORAM has a unique id. The unique id is used to identify the block in the
+/// ORAM. Dummy blocks have a unique id of DUMMY<UidType>().
+/// @tparam Z   The number of blocks in each bucket
+/// @tparam stashSize   The number of blocks in the stash, not counting the root
+/// bucket.
+/// @tparam page_size   The size of the page if part of the data is stored in
+/// external memory, default to 4096 bytes
+/// @tparam evict_freq  The number of reverse lexico evictions per random access
+/// @tparam check_freshness  Whether to check freshness of the buckets swapped
+/// from external memory
+template <typename T, const int Z = 2, const int stashSize = 20,
+          typename PositionType = uint64_t, typename UidType = uint64_t,
+          const uint64_t page_size = 4096, int evict_freq = 2,
+          const bool check_freshness = true>
+struct ORAM {
+  using Stash = Bucket<T, stashSize, PositionType, UidType>;
+  using Block_ = Block<T, PositionType, UidType>;
+  using Bucket_ = Bucket<T, Z, PositionType, UidType>;
+
+  using FreshBucket_ = FreshBucket<Bucket_>;
+
+  using TreeNode_ = std::conditional_t<check_freshness, FreshBucket_, Bucket_>;
+
+  using HeapTree_ = HeapTree<TreeNode_, PositionType, page_size, evict_freq>;
+
+ private:
+  HeapTree_ tree;  // underlying tree structure
+
+  Stash* stash = nullptr;  // stash for Circuit ORAM
+  int depth = 0;           // number of levels in the tree
+  PositionType _size = 0;  // size of the ORAM (number of leaves in the tree)
+
+  PositionType evictCounter = 0;  // counter for reverse lexicographic eviction
+
+  std::vector<Block_> path;  // a temporary buffer for reading and writing paths
+
+  uint64_t rootNonce = 0;  // nonce for the root bucket
+
+  /**
+   * @brief Evict the buffered path
+   *
+   * @param pos The position of the path
+   * @param depth The depth of the path, i.e., the number of buckets excluding
+   * stash
+   */
+  void evictPath(PositionType pos, int depth) {
+    // allocate metadata on stack to avoid contention of heap allocation
+    int deepest[64];     // the deepest level an block in this level can go
+    int deepestIdx[64];  // the index of the block in this level that goes
+                         // deepest
+    int target[64];      // the target level an block in this level should go
+    bool hasEmpty[64];   // whether each level has empty slot
+    std::fill(&deepest[0], &deepest[64], -1);
+    std::fill(&deepestIdx[0], &deepestIdx[64], 0);
+    std::fill(&target[0], &target[64], -1);
+    std::fill(&hasEmpty[0], &hasEmpty[64], false);
+
+    // first pass, root to leaf
+
+    // pack the two integers so that we can set them using one obliMove
+    struct SrcGoal {
+      int src;
+      int goal;
+    };
+    SrcGoal sg = {-1, -1};
+    // first level including the stash
+    for (int idx = 0; idx < stashSize + Z; ++idx) {
+      int deepestLevel = CommonSuffixLength(path[idx].position, pos);
+      bool deeperFlag = !path[idx].IsDummy() & (deepestLevel > sg.goal);
+      obliMove(deeperFlag, sg.goal, deepestLevel);
+      obliMove(deeperFlag, deepestIdx[0], idx);
+    }
+    obliMove(sg.goal >= 0, sg.src, 0);
+    // the remaining levels
+    for (int i = 1; i < depth; ++i) {
+      obliMove(sg.goal >= i, deepest[i], sg.src);
+      int bucketDeepestLevel = -1;
+      int offset = stashSize + i * Z;
+      for (int j = 0; j < Z; ++j) {
+        int idx = offset + j;
+        int deepestLevel = CommonSuffixLength(path[idx].position, pos);
+        bool isEmpty = path[idx].IsDummy();
+        hasEmpty[i] |= isEmpty;
+        // cache if each empty has empty slot, so in the second scan, we don't
+        // need to access the buckets
+        bool deeperFlag = !isEmpty & (deepestLevel > bucketDeepestLevel);
+        obliMove(deeperFlag, bucketDeepestLevel, deepestLevel);
+        obliMove(deeperFlag, deepestIdx[i], idx);
+      }
+      bool deeperFlag = bucketDeepestLevel > sg.goal;
+      obliMove(deeperFlag, sg, {i, bucketDeepestLevel});
+    }
+
+    // second pass, leaf to root
+
+    struct SrcDest {
+      int src;
+      int dest;
+    };
+    SrcDest sd = {-1, -1};
+    for (int i = depth - 1; i > 0; --i) {
+      bool isSrc = i == sd.src;
+      obliMove(isSrc, target[i], sd.dest);
+      obliMove(isSrc, sd, {-1, -1});
+      bool changeFlag = (((sd.dest == -1) & hasEmpty[i]) | (target[i] != -1)) &
+                        (deepest[i] != -1);
+      obliMove(changeFlag, sd, {deepest[i], i});
+    }
+    obliMove(0 == sd.src, target[0], sd.dest);
+
+    // actually moving the data
+
+    Block_ hold;
+    for (int idx = 0; idx < stashSize + Z; ++idx) {
+      bool isDeepest = idx == deepestIdx[0];
+      bool readAndRemoveFlag = isDeepest & (target[0] != -1);
+      obliMove(readAndRemoveFlag, hold, path[idx]);
+      obliMove(readAndRemoveFlag, path[idx].uid, DUMMY<UidType>());
+    }
+    int dest = target[0];
+    for (int i = 1; i < depth - 1; ++i) {
+      bool hasTargetFlag = target[i] != -1;
+      bool placeDummyFlag = (i == dest) & !hasTargetFlag;
+
+      int offset = stashSize + i * Z;
+      for (int j = 0; j < Z; ++j) {
+        // case 0: level i is neither a dest and not a src
+        //         hasTargetFlag = false, placeDummyFlag = false
+        //         nothing will change
+        // case 1: level i is a dest but not a src
+        //         hasTargetFlag = false, placeDummyFlag = true
+        //         hold will be swapped with each dummy slot
+        //         after the first swap, hold will become dummy, and the
+        //         subsequent swaps have no effect.
+        // case 2: level i is a src but not a dest
+        //         hasTargetFlag = true, placeDummyFlag = false
+        //         hold must be dummy originally (eviction cannot carry two
+        //         blocks). hold will be swapped with the slot that evicts to
+        //         deepest.
+        // case 3: level i is both a src and a dest
+        //         hasTargetFlag = true, placeDummyFlag = false
+        //         hold will be swapped with the slot that evicts to deepest,
+        //         which fulfills both src and dest requirements.
+        int idx = offset + j;
+        bool isDeepest = (idx == deepestIdx[i]);
+        bool readAndRemoveFlag = isDeepest & hasTargetFlag;
+        bool writeFlag = path[idx].IsDummy() & placeDummyFlag;
+        bool swapFlag = readAndRemoveFlag | writeFlag;
+        // for large element, obliSwap is faster than performing two obliMove
+        obliSwap(swapFlag, hold, path[idx]);
+      }
+      obliMove(hasTargetFlag | placeDummyFlag, dest, target[i]);
+    }
+
+    bool placeDummyFlag = (depth - 1 == dest);
+    int offset = stashSize + (depth - 1) * Z;
+    bool written = false;
+    for (int j = 0; j < Z; ++j) {
+      int idx = offset + j;
+      bool writeFlag = (path[idx].IsDummy() & placeDummyFlag) & !written;
+      written |= writeFlag;
+      obliMove(writeFlag, path[idx], hold);
+    }
+  }
+
+  /**
+   * @brief Read the path indexed by pos, evict it, and writeback.
+   *
+   * @tparam copy_stash Whether to copy the stash to/from the path
+   * @param pos The position of the path to evict
+   */
+  template <const bool copy_stash = true>
+  void evict(PositionType pos) {
+    PositionType nodeIdxArr[64];
+    if constexpr (copy_stash) {
+      int pathDepth = readPathAndGetNodeIdxArr(pos, nodeIdxArr);
+      evictPath(pos, pathDepth);
+      writeBackPath(pos, pathDepth, nodeIdxArr);
+    } else {
+      int pathDepth = readPathWithoutStashAndGetNodeIdxArr(pos, nodeIdxArr);
+      evictPath(pos, pathDepth);
+      writeBackPathWithoutStash(pos, pathDepth, nodeIdxArr);
+    }
+  }
+
+  /**
+   * @brief Perform multiple evictions on paths given by evict counter.
+   *
+   * @tparam copy_stash Whether to copy the stash to/from the path
+   * @tparam _evict_freq The number of evictions to perform
+   */
+  template <const bool copy_stash = true, const int _evict_freq = evict_freq>
+  void evict() {
+    for (int i = 0; i < _evict_freq; ++i) {
+      evict<copy_stash>((evictCounter++) % size());
+    }
+  }
+
+  /**
+   * @brief Write a new block to the top of the tree, evict the currently
+   * buffered path, and write back. If the write fails, perform some more
+   * evictions and retry. The retrying leaks some information, but it happens
+   * only with negligible probability.
+   *
+   * @tparam copy_stash whether to copy the stash to/from the path
+   * @tparam _evict_freq Number of evictions to perform
+   * @param newBlock The new block to write
+   * @param pos The position of the path
+   * @param pathDepth The depth of the path
+   * @param nodeIdxArr The index of the nodes in the path
+   * @param retry Maximum number of retries
+   */
+  template <const bool copy_stash = true, const int _evict_freq = evict_freq>
+  INLINE void writeBlockWithRetry(const Block_& newBlock, PositionType pos,
+                                  int pathDepth, PositionType nodeIdxArr[64],
+                                  int retry = 10) {
+    while (true) {
+      bool success = WriteNewBlockToPath(
+          path.begin(), path.begin() + stashSize + Z, newBlock);
+      evictPath(pos, pathDepth);
+      if constexpr (copy_stash) {
+        writeBackPath(pos, pathDepth, nodeIdxArr);
+      } else {
+        writeBackPathWithoutStash(pos, pathDepth, nodeIdxArr);
+      }
+      evict<copy_stash, _evict_freq>();
+      if (success) {
+        break;
+      }
+      if (!retry) {
+        throw std::runtime_error("ORAM read failed");
+      }
+      --retry;
+      pos = (evictCounter++) % size();
+      if constexpr (copy_stash) {
+        pathDepth = readPathAndGetNodeIdxArr(pos, nodeIdxArr);
+      } else {
+        pathDepth = readPathWithoutStashAndGetNodeIdxArr(pos, nodeIdxArr);
+      }
+    }
+  }
+
+  /**
+   * @brief Read a path in the ORAM, don't copy the stash into path
+   *
+   * @param pos The position of the path
+   * @param nodeIdxArr The buffer to output the path index
+   * @return int The depth of the path
+   */
+  int readPathWithoutStashAndGetNodeIdxArr(PositionType pos,
+                                           PositionType nodeIdxArr[64]) {
+    int depth = tree.GetNodeIdxArr(nodeIdxArr, pos);
+    if constexpr (check_freshness) {
+      uint64_t expectedNonce = rootNonce;
+      for (int i = 0; i < depth; ++i) {
+        const TreeNode_& node = tree.GetNodeByIdx(nodeIdxArr[i]);
+
+        if (node.leftNonce + node.rightNonce != expectedNonce) {
+          throw std::runtime_error("ORAM freshness check failed");
+        }
+        if ((pos >> i) & 1) {
+          expectedNonce = node.rightNonce;
+        } else {
+          expectedNonce = node.leftNonce;
+        }
+        memcpy(&path[stashSize + i * Z], node.bucket.blocks,
+               Z * sizeof(Block_));
+      }
+    } else {
+      for (int i = 0; i < depth; ++i) {
+        const TreeNode_& node = tree.GetNodeByIdx(nodeIdxArr[i]);
+        memcpy(&path[stashSize + i * Z], node.blocks, Z * sizeof(Block_));
+      }
+    }
+    return depth;
+  }
+
+  /**
+   * @brief Read a path in the ORAM
+   *
+   * @param pos The position of the path
+   * @param nodeIdxArr The buffer to output the path index
+   * @return int The depth of the path
+   */
+  int readPathAndGetNodeIdxArr(PositionType pos, PositionType nodeIdxArr[64]) {
+    memcpy(&path[0], stash->blocks, stashSize * sizeof(Block_));
+    return readPathWithoutStashAndGetNodeIdxArr(pos, nodeIdxArr);
+  }
+
+  /**
+   * @brief Write back the buffered path to the ORAM, don't copy the stash
+   *
+   * @param pos The position of the path
+   */
+  void writeBackPathWithoutStash(PositionType pos, int pathDepth,
+                                 const PositionType nodeIdxArr[64]) {
+    if constexpr (check_freshness) {
+      ++rootNonce;
+      for (int i = 0; i < pathDepth; ++i) {
+        TreeNode_& node = tree.GetNodeByIdx(nodeIdxArr[i]);
+
+        if ((pos >> i) & 1) {
+          ++node.rightNonce;
+        } else {
+          ++node.leftNonce;
+        }
+        memcpy(node.bucket.blocks, &path[stashSize + i * Z],
+               Z * sizeof(Block_));
+      }
+    } else {
+      for (int i = 0; i < pathDepth; ++i) {
+        TreeNode_& node = tree.GetNodeByIdx(nodeIdxArr[i]);
+        memcpy(node.blocks, &path[stashSize + i * Z], Z * sizeof(Block_));
+      }
+    }
+  }
+
+  /**
+   * @brief Write back the buffered path to the ORAM
+   *
+   * @param pos The position of the path
+   */
+  void writeBackPath(PositionType pos, int pathDepth,
+                     const PositionType nodeIdxArr[64]) {
+    memcpy(stash->blocks, &path[0], stashSize * sizeof(Block_));
+    writeBackPathWithoutStash(pos, pathDepth, nodeIdxArr);
+  }
+
+  /**
+   * @brief Get a random position in the ORAM
+   *
+   * @return PositionType the random position
+   */
+  INLINE PositionType getRandPos() {
+    return (PositionType)UniformRandom(size() - 1);
+  }
+
+  /**
+   * @brief Get a vector of random positions.
+   *
+   * @param batchSize The number of random positions to generate
+   * @return const std::vector<PositionType> The vector of random positions
+   */
+  const std::vector<PositionType> getRandNewPoses(uint64_t batchSize) {
+    std::vector<PositionType> newPos(batchSize);
+    for (int i = 0; i < batchSize; ++i) {
+      newPos[i] = getRandPos();
+    }
+    return newPos;
+  }
+
+  /**
+   * @brief Duplicate the positions of blocks with the same uid. Keep the
+   * position of the first block with the uid.
+   *
+   * @param batchSize The number of blocks
+   * @param newPos The new positions of the blocks. The positions of duplicate
+   * blocks may be arbitrary.
+   * @param uid The uids of the blocks. Requires uid to be sorted.
+   * @return const std::vector<PositionType> A vector with duplicated
+   * positions
+   */
+  const std::vector<PositionType> duplicateNewPoses(uint64_t batchSize,
+                                                    const PositionType* newPos,
+                                                    const UidType* uid) {
+    std::vector<PositionType> dupNewPos(newPos, newPos + batchSize);
+    for (int i = 1; i < batchSize; ++i) {
+      obliMove(uid[i] == uid[i - 1], dupNewPos[i], dupNewPos[i - 1]);
+    }
+    return dupNewPos;
+  }
+
+  /**
+   * @brief Change positions of duplicate blocks to random positions, to avoid
+   * leaking information.
+   *
+   * @param batchSize The number of blocks
+   * @param pos The positions of the blocks
+   * @param uid The uids of the blocks. Requires uid to be sorted.
+   */
+  void deDuplicatePoses(uint64_t batchSize, PositionType* pos,
+                        const UidType* uid) {
+    for (uint64_t i = 1; i < batchSize; ++i) {
+      PositionType randPos = getRandPos();
+      obliMove(uid[i] == uid[i - 1], pos[i], randPos);
+    }
+  }
+
+  /**
+   * @brief Duplicate the values of blocks with the same uid. Keep the value
+   * of the first block with the uid.
+   *
+   * @param batchSize The number of blocks
+   * @param out The output blocks
+   * @param uid The uids of the blocks. Requires uid to be sorted.
+   */
+  void duplicateVal(uint64_t batchSize, T* out, const UidType* uid) {
+    for (uint64_t i = 1; i < batchSize; ++i) {
+      obliMove(uid[i] == uid[i - 1], out[i], out[i - 1]);
+    }
+  }
+
+ public:
+  ORAM() {}
+
+  /**
+   * @brief Construct a new ORAM object
+   *
+   * @param size Capacity of the ORAM
+   */
+  ORAM(PositionType size) { SetSize(size); }
+
+  /**
+   * @brief Construct a new ORAM object
+   *
+   * @param size Capacity of the ORAM
+   * @param cacheBytes The maximum size of the tree-top cache in bytes.
+   */
+  ORAM(PositionType size, uint64_t cacheBytes) { SetSize(size, cacheBytes); }
+
+  /**
+   * @brief Get the Stash object
+   *
+   * @return Stash& Returns the stash
+   */
+  const Stash& GetStash() { return *stash; }
+
+  /**
+   * @brief Set the size of the ORAM, and allocate the cache.
+   *
+   * @param size Capacity of the ORAM
+   * @param cacheBytes The maximum size of the tree-top cache in bytes.
+   */
+  void SetSize(PositionType size, uint64_t cacheBytes = 1UL << 62) {
+    if (_size) {
+      throw std::runtime_error("Circuit ORAM double initialization");
+    }
+
+    _size = size;
+    int cacheLevel = GetMaxCacheLevel<T, Z, stashSize, PositionType, UidType,
+                                      check_freshness>(size, cacheBytes);
+    if (cacheLevel < 0) {
+      throw std::runtime_error("Circuit ORAM cache size too small");
+    }
+    TreeNode_ dummyNode = TreeNode_();
+    tree.InitWithDefault(size, dummyNode, cacheLevel);
+    depth = (int)GetLogBaseTwo(size - 1) + 2;
+    if (depth > 64) {
+      throw std::runtime_error("Circuit ORAM too large");
+    }
+    stash = new Stash();
+    path.resize(stashSize + Z * depth);
+  }
+
+  /**
+   * @brief Return the memory usage of the ORAM
+   *
+   * @param size Capacity of the ORAM
+   * @param cacheBytes The maximum size of the tree-top cache in bytes.
+   * @return uint64_t The memory usage in bytes
+   */
+  static uint64_t GetMemoryUsage(PositionType size,
+                                 uint64_t cacheBytes = 1UL << 62) {
+    return sizeof(Stash) +
+           HeapTree_::GetMemoryUsage(
+               size, GetMaxCacheLevel<T, Z, stashSize, PositionType, UidType,
+                                      check_freshness>(size, cacheBytes));
+  }
+
+  /**
+   * @brief Get the memory usage of this ORAM
+   *
+   * @return uint64_t The memory usage in bytes
+   */
+  uint64_t GetMemoryUsage() const {
+    return sizeof(Stash) + tree.GetMemoryUsage();
+  }
+
+  /**
+   * @brief Initialize the ORAM from a reader and output the position map.
+   *
+   * @tparam Reader Type of the reader
+   * @tparam PosMapWriter Type of the position map writer
+   * @param reader A sequential reader of the RAM data, starting from index 0.
+   * @param posMapWriter A writer of the position map, the data it writes has
+   * type UidBlock<PositionType, UidType>.
+   */
+  template <typename Reader, class PosMapWriter>
+    requires Readable<Reader, T> &&
+             Writable<PosMapWriter, UidBlock<PositionType, UidType>>
+  void InitFromReader(Reader& reader, PosMapWriter& posMapWriter) {
+    uint64_t initSize = reader.size();
+    for (UidType uid = 0; uid != (UidType)initSize; ++uid) {
+      PositionType newPos = Write(uid, reader.read());
+      posMapWriter.write(UidBlock<PositionType, UidType>(newPos, uid));
+    }
+  }
+
+  /**
+   * @brief Return the capcity of the ORAM
+   *
+   * @return PositionType
+   */
+  PositionType size() const { return _size; }
+
+  ~ORAM() {
+    if (stash) {
+      delete stash;
+      stash = nullptr;
+    }
+  }
+
+  /**
+   * @brief Read a block from the ORAM and assign it to a new position
+   *
+   * @param pos The current position of the block
+   * @param uid The unique id of the block
+   * @param out The output block
+   * @param newPos The new position of the block
+   * @return PositionType The new position of the block
+   */
+  PositionType Read(PositionType pos, const UidType& uid, T& out,
+                    PositionType newPos) {
+    PositionType nodeIdxArr[64];
+    int pathDepth = readPathAndGetNodeIdxArr(pos, nodeIdxArr);
+
+    ReadElementAndRemoveFromPath(
+        path.begin(), path.begin() + (pathDepth * Z + stashSize), uid, out);
+
+    Block_ newBlock(out, newPos, uid);
+    writeBlockWithRetry(newBlock, pos, pathDepth, nodeIdxArr);
+    return newPos;
+  }
+
+  /**
+   * @brief Read a block from the ORAM and assign it to a random new position
+   *
+   * @param pos The current position of the block
+   * @param uid The unique id of the block
+   * @param out The output block
+   * @return PositionType The random new position of the block
+   */
+  PositionType Read(PositionType pos, const UidType& uid, T& out) {
+    PositionType newPos = getRandPos();
+    return Read(pos, uid, out, newPos);
+  }
+
+  /**
+   * @brief Write a new block to the ORAM
+   *
+   * @tparam _evict_freq The number of evictions to perform after write
+   * @param uid The unique id of the block
+   * @param in The new block to write
+   * @param newPos The new position of the block
+   * @return PositionType The new position of the block
+   */
+  template <const int _evict_freq = evict_freq>
+  PositionType Write(const UidType& uid, const T& in, PositionType newPos) {
+    PositionType pos = (evictCounter++) % size();
+    PositionType nodeIdxArr[64];
+    int pathDepth = readPathAndGetNodeIdxArr(pos, nodeIdxArr);
+    Block_ newBlock(in, newPos, uid);
+    writeBlockWithRetry<true, _evict_freq>(newBlock, pos, pathDepth,
+                                           nodeIdxArr);
+    return newPos;
+  }
+
+  /**
+   * @brief Write a new block to the ORAM and assign it to a random new
+   * position
+   *
+   * @tparam _evict_freq The number of evictions to perform after write
+   * @param uid The unique id of the block
+   * @param in The new block to write
+   * @return PositionType The random new position of the block
+   */
+  template <const int _evict_freq = evict_freq>
+  PositionType Write(const UidType& uid, const T& in) {
+    PositionType newPos = getRandPos();
+    return Write<evict_freq>(uid, in, newPos);
+  }
+
+  /**
+   * @brief Update a block in the ORAM and assign it to a random new position
+   *
+   * @tparam Func The type of the update function. The update function should
+   * take a reference to the block and return a bool. If the return value is
+   * true, the block is kept, otherwise it is deleted.
+   * @param pos The current position of the block
+   * @param uid The unique id of the block
+   * @param updateFunc The update function
+   * @return PositionType The random new position of the block
+   */
+  template <class Func>
+    requires UpdateOrRemoveFunction<Func, T>
+  PositionType Update(PositionType pos, const UidType& uid,
+                      const Func& updateFunc) {
+    T out;
+    return Update(pos, uid, updateFunc, out);
+  }
+
+  /**
+   * @brief Update a block in the ORAM and assign it to a new position
+   *
+   * @tparam Func The type of the update function. The update function should
+   * take a reference to the block and return a bool. If the return value is
+   * true, the block is kept, otherwise it is deleted.
+   * @param pos The current position of the block
+   * @param uid The unique id of the block
+   * @param newPos The new position of the block
+   * @param updateFunc The update function
+   * @return PositionType
+   */
+  template <class Func>
+    requires UpdateOrRemoveFunction<Func, T>
+  PositionType Update(PositionType pos, const UidType& uid, PositionType newPos,
+                      const Func& updateFunc) {
+    T out = T();
+    return Update(pos, uid, newPos, updateFunc, out);
+  }
+
+  /**
+   * @brief Update a block in the ORAM and assign it to a random new position
+   *
+   * @tparam Func The type of the update function. The update function should
+   * take a reference to the block and return a bool. If the return value is
+   * true, the block is kept, otherwise it is deleted.
+   * @param pos The current position of the block
+   * @param uid The unique id of the block
+   * @param updateFunc The update function
+   * @param out Output the updated block
+   * @return PositionType The random new position of the block
+   */
+  template <class Func>
+    requires UpdateOrRemoveFunction<Func, T>
+  PositionType Update(PositionType pos, const UidType& uid,
+                      const Func& updateFunc, T& out) {
+    return Update(pos, uid, updateFunc, out, uid);  // does not change uid
+  }
+
+  /**
+   * @brief Update a block in the ORAM and assign it to a new position
+   *
+   * @tparam Func The type of the update function. The update function should
+   * take a reference to the block and return a bool. If the return value is
+   * true, the block is kept, otherwise it is deleted.
+   * @param pos The current position of the block
+   * @param uid The unique id of the block
+   * @param newPos The new position of the block
+   * @param updateFunc The update function
+   * @param out Output the updated block
+   * @return PositionType The new position of the block
+   */
+  template <class Func>
+    requires UpdateOrRemoveFunction<Func, T>
+  PositionType Update(PositionType pos, const UidType& uid, PositionType newPos,
+                      const Func& updateFunc, T& out) {
+    return Update(pos, uid, newPos, updateFunc, out,
+                  uid);  // does not change uid
+  }
+
+  /**
+   * @brief Update a block in the ORAM and assign it to a random new position.
+   * Possibly change the uid.
+   *
+   * @tparam Func The type of the update function. The update function should
+   * take a reference to the block and return a bool. If the return value is
+   * true, the block is kept, otherwise it is deleted.
+   * @param pos The current position of the block
+   * @param uid The unique id of the block
+   * @param updateFunc The update function
+   * @param out Output the updated block
+   * @param updatedUid The new uid of the block
+   * @return PositionType The random new position of the block
+   */
+  template <class Func>
+    requires UpdateOrRemoveFunction<Func, T>
+  PositionType Update(PositionType pos, const UidType& uid,
+                      const Func& updateFunc, T& out,
+                      const UidType& updatedUid) {
+    PositionType newPos = getRandPos();
+    return Update(pos, uid, newPos, updateFunc, out, updatedUid);
+  }
+
+  /**
+   * @brief Update a block in the ORAM and assign it to a new position.
+   * Possibly change the uid.
+   *
+   * @tparam Func The type of the update function. The update function should
+   * take a reference to the block and return a bool. If the return value is
+   * true, the block is kept, otherwise it is deleted.
+   * @param pos The current position of the block
+   * @param uid The unique id of the block
+   * @param newPos The new position of the block
+   * @param updateFunc The update function
+   * @param out Output the updated block
+   * @param updatedUid The new uid of the block
+   * @return PositionType The random new position of the block
+   */
+  template <class Func>
+    requires UpdateOrRemoveFunction<Func, T>
+  PositionType Update(PositionType pos, const UidType& uid, PositionType newPos,
+                      const Func& updateFunc, T& out,
+                      const UidType& updatedUid) {
+    PositionType nodeIdxArr[64];
+    int pathDepth = readPathAndGetNodeIdxArr(pos, nodeIdxArr);
+    ReadElementAndRemoveFromPath(
+        path.begin(), path.begin() + (pathDepth * Z + stashSize), uid, out);
+    bool keepFlag = updateFunc(out);
+    UidType newUid = DUMMY<UidType>();
+    obliMove(keepFlag, newUid, updatedUid);
+    Block_ newBlock(out, newPos, updatedUid);
+    writeBlockWithRetry(newBlock, pos, pathDepth, nodeIdxArr);
+    return newPos;
+  }
+
+  /**
+   * @brief Read a batch of blocks and remove them from the ORAM.
+   *
+   * @param batchSize The number of blocks
+   * @param pos The positions of the blocks
+   * @param uid The uids of the blocks
+   * @param out The output blocks
+   *
+   */
+  void BatchReadAndRemove(uint64_t batchSize, PositionType* pos,
+                          const UidType* uid, T* out) {
+    // mask duplicate positions
+    deDuplicatePoses(batchSize, pos, uid);
+
+    PositionType nodeIdxArr[64];
+    // read and remove
+    for (uint64_t i = 0; i < batchSize; ++i) {
+      int pathDepth = tree.GetNodeIdxArr(&nodeIdxArr[0], pos[i]);
+      ReadElementAndRemoveFromPath(stash->blocks, stash->blocks + stashSize,
+                                   uid[i], out[i]);
+      if constexpr (check_freshness) {
+        uint64_t expectedNonce = rootNonce++;
+        for (int j = 0; j < pathDepth; ++j) {
+          TreeNode_& node = tree.GetNodeByIdx(nodeIdxArr[j]);
+          if (node.leftNonce + node.rightNonce != expectedNonce) {
+            throw std::runtime_error("ORAM freshness check failed");
+          }
+          if ((pos[i] >> j) & 1) {
+            expectedNonce = node.rightNonce++;
+          } else {
+            expectedNonce = node.leftNonce++;
+          }
+          ReadElementAndRemoveFromPath(node.bucket.blocks,
+                                       node.bucket.blocks + Z, uid[i], out[i]);
+        }
+      } else {
+        for (int j = 0; j < pathDepth; ++j) {
+          TreeNode_& node = tree.GetNodeByIdx(nodeIdxArr[j]);
+          ReadElementAndRemoveFromPath(node.blocks, node.blocks + Z, uid[i],
+                                       out[i]);
+        }
+      }
+    }
+
+    // propagate duplicate values
+    duplicateVal(batchSize, out, uid);
+  }
+
+  /**
+   * @brief Write back a batch of blocks to the ORAM. For duplicate blocks,
+   * ignore all but the first block.
+   *
+   * @param batchSize The number of blocks
+   * @param uid The uids of the blocks. Requires uid to be sorted.
+   * @param newPos The new positions of the blocks
+   * @param in The new blocks
+   * @param writeBackFlags The write back flags. If writeBackFlags[i] is true,
+   * the block is written back, otherwise it is not written back.
+   */
+  void BatchWriteBack(uint64_t batchSize, const UidType* uid,
+                      const PositionType* newPos, const T* in,
+                      const std::vector<bool>& writeBackFlags) {
+    // only copy stash once
+    memcpy(&path[0], stash->blocks, stashSize * sizeof(Block_));
+    PositionType nodeIdxArr[64];
+    for (uint64_t i = 0; i < batchSize; ++i) {
+      PositionType p = evictCounter++ % size();
+      int pathDepth = readPathWithoutStashAndGetNodeIdxArr(p, nodeIdxArr);
+      Block_ toWrite = {in[i], newPos[i], DUMMY<UidType>()};
+      bool writeBack = writeBackFlags[i];
+      if (i > 0) {
+        // don't write back duplicate blocks
+        writeBack &= (uid[i] != uid[i - 1]);
+      }
+      obliMove(writeBack, toWrite.uid, uid[i]);
+      writeBlockWithRetry<false>(toWrite, p, pathDepth, nodeIdxArr);
+    }
+
+    memcpy(stash->blocks, &path[0], stashSize * sizeof(Block_));
+  }
+
+  /**
+   * @brief Update a batch of blocks in the ORAM and assign them to new
+   * positions
+   *
+   * @tparam Func The type of the update function
+   * @param batchSize The number of blocks
+   * @param pos The positions of the blocks. May be modified.
+   * @param uid The uids of the blocks. Requires uid to be sorted.
+   * @param newPos The new positions of the blocks
+   * @param updateFunc The update function. The update function should take a
+   * integer batchSize and a pointer to an array of batchSize blocks, and
+   * return a std::vector<bool> of batchSize, indicating whether each block
+   * should be written back.
+   * @param out Pointer to an array of output blocks
+   */
+  template <class Func>
+    requires BatchUpdateOrRemoveFunction<Func, T>
+  void BatchUpdate(uint64_t batchSize, PositionType* pos, const UidType* uid,
+
+                   const PositionType* newPos, const Func& updateFunc, T* out) {
+    BatchReadAndRemove(batchSize, pos, uid, out);
+    const std::vector<bool>& writeBackFlags = updateFunc(batchSize, out);
+    BatchWriteBack(batchSize, uid, newPos, out, writeBackFlags);
+  }
+
+  /**
+   * @brief Update a batch of blocks in the ORAM and assign them to new
+   * positions
+   *
+   * @tparam Func The type of the update function
+   * @param batchSize The number of blocks
+   * @param pos The positions of the blocks. May be modified.
+   * @param uid The uids of the blocks. Requires uid to be sorted.
+   * @param newPos The new positions of the blocks
+   * @param updateFunc The update function. The update function should take a
+   * integer batchSize and a pointer to an array of batchSize blocks, and
+   * return a std::vector<bool> of batchSize, indicating whether each block
+   * should be written back.
+   */
+  template <class Func>
+    requires BatchUpdateOrRemoveFunction<Func, T>
+  void BatchUpdate(uint64_t batchSize, PositionType* pos, const UidType* uid,
+                   const PositionType* newPos, const Func& updateFunc) {
+    std::vector<T> out(batchSize);
+    BatchUpdate(batchSize, pos, uid, newPos, updateFunc, &out[0]);
+  }
+
+  /**
+   * @brief Update a batch of blocks in the ORAM and assign them to random new
+   * positions
+   *
+   * @tparam Func The type of the update function
+   * @param batchSize The number of blocks
+   * @param pos The positions of the blocks. May be modified.
+   * @param uid The uids of the blocks. Requires uid to be sorted.
+   * @param updateFunc The update function. The update function should take a
+   * integer batchSize and a pointer to an array of batchSize blocks, and
+   * return a std::vector<bool> of batchSize, indicating whether each block
+   * should be written back.
+   * @return const std::vector<PositionType> The random new positions of the
+   * blocks.
+   */
+  template <class Func>
+    requires BatchUpdateOrRemoveFunction<Func, T>
+  std::vector<PositionType> BatchUpdate(uint64_t batchSize, PositionType* pos,
+                                        const UidType* uid,
+                                        const Func& updateFunc) {
+    const std::vector<PositionType>& newPoses = getRandNewPoses(batchSize);
+    BatchUpdate(batchSize, pos, uid, &newPoses[0], updateFunc);
+    return duplicateNewPoses(batchSize, &newPoses[0], uid);
+  }
+};
+
+}  // namespace ODSL::CircuitORAM

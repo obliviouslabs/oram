@@ -42,7 +42,6 @@ ALGO ?= KWAYBUTTERFLYOSORT
 MIN_SIZE ?= 524288
 MAX_SIZE ?= 419430400
 STEP_RATIO ?= 1.2
-IO_ROUND ?= 1
 ENCLAVE_SIZE ?= 128
 DISK_IO ?= 0
 TCS_NUM ?= 1
@@ -77,10 +76,10 @@ else
         SGX_COMMON_FLAGS += -O2
 endif
 
-# SGX_COMMON_FLAGS += -Wall -Wextra -Winit-self -Wpointer-arith -Wreturn-type \
-#                     -Waddress -Wsequence-point -Wformat-security \
-#                     -Wmissing-include-dirs -Wfloat-equal -Wundef -Wshadow \
-#                     -Wcast-align -Wcast-qual -Wconversion -Wredundant-decls
+SGX_COMMON_FLAGS += -Wall -Wextra -Winit-self -Wpointer-arith -Wreturn-type \
+                    -Waddress -Wsequence-point -Wformat-security \
+                    -Wmissing-include-dirs -Wfloat-equal -Wundef \
+                    -Wcast-align -Wcast-qual -Wconversion -Wredundant-decls
 SGX_COMMON_CFLAGS := $(SGX_COMMON_FLAGS) -Wjump-misses-init -Wstrict-prototypes -Wunsuffixed-float-constants
 SGX_COMMON_CXXFLAGS := $(SGX_COMMON_FLAGS) -Wnon-virtual-dtor -std=c++20
 
@@ -93,7 +92,7 @@ else
 endif
 
 App_Cpp_Files := App/App.cpp $(wildcard App/TrustedLibrary/*.cpp)
-App_Include_Paths := -IApp -I$(SGX_SDK)/include -I../../osort/
+App_Include_Paths := -IApp -I$(SGX_SDK)/include -I../../omap/
 
 App_C_Flags := -fPIC -Wno-attributes $(App_Include_Paths)
 
@@ -160,7 +159,7 @@ BEARSSL_SOURCES := \
 
 Enclave_C_Files := $(BEARSSL_SOURCES) 
 Enclave_Cpp_Files := Enclave/Enclave.cpp $(wildcard Enclave/TrustedLibrary/*.cpp) 
-Enclave_Include_Paths := -IEnclave -I$(SGX_SDK)/include -I$(SGX_SDK)/include/libcxx -I$(SGX_SDK)/include/tlibc -I../../osort -IEnclave/bearssl/include -IEnclave/bearssl/src/bearssl
+Enclave_Include_Paths := -IEnclave -I$(SGX_SDK)/include -I$(SGX_SDK)/include/libcxx -I$(SGX_SDK)/include/tlibc -I../../omap -IEnclave/bearssl/include -IEnclave/bearssl/src/bearssl
 
 Enclave_Flags := -fvisibility=hidden -fpie -fstack-protector -fno-builtin-printf -march=native $(Enclave_Include_Paths)
 
@@ -173,7 +172,7 @@ else
 endif
 
 Enclave_C_Flags := $(Enclave_Flags) -std=c17 
-Enclave_Cpp_Flags := $(Enclave_Flags) -std=c++20 -nostdinc++ -fopenmp -DNOOPENSSL -DENCLAVE_MODE -DELEMENT_SIZE=${ELEMENT_SIZE} -DALGO=${ALGO} -DMIN_SIZE=${MIN_SIZE} -DMAX_SIZE=${MAX_SIZE} -DSTEP_RATIO=${STEP_RATIO} -DENCLAVE_SIZE=${ENCLAVE_SIZE} -DIO_ROUND=${IO_ROUND}  -DTCS_NUM=${TCS_NUM}
+Enclave_Cpp_Flags := $(Enclave_Flags) -std=c++20 -nostdinc++ -fopenmp -DENCLAVE_MODE -DELEMENT_SIZE=${ELEMENT_SIZE} -DALGO=${ALGO} -DMIN_SIZE=${MIN_SIZE} -DMAX_SIZE=${MAX_SIZE} -DSTEP_RATIO=${STEP_RATIO} -DENCLAVE_SIZE=${ENCLAVE_SIZE} -DTCS_NUM=${TCS_NUM}
 ifeq ($(DISK_IO), 1)
 	Enclave_Cpp_Flags += -DDISK_IO
 endif

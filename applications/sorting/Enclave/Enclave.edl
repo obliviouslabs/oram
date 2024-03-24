@@ -1,4 +1,0 @@
-enclave {
-  from "TrustedLibrary/sorting.edl" import *;
-  from "sgx_tstdc.edl" import *;
-};
