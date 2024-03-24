@@ -33,4 +33,11 @@ struct Bucket {
   }
 #endif
 };
+
+template <typename BucketType>
+struct FreshBucket {
+  BucketType bucket;
+  uint64_t leftNonce = 0;
+  uint64_t rightNonce = 0;
+};
 };  // namespace ODSL

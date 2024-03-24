@@ -31,11 +31,7 @@ struct ORAM {
   using Block_ = Block<T, PositionType, UidType>;
   using Bucket_ = Bucket<T, Z, PositionType, UidType>;
 
-  struct FreshBucket_ {
-    Bucket_ bucket;
-    uint64_t leftNonce = 0;
-    uint64_t rightNonce = 0;
-  };
+  using FreshBucket_ = FreshBucket<Bucket_>;
 
   using TreeNode_ = std::conditional_t<check_freshness, FreshBucket_, Bucket_>;
 
@@ -455,8 +451,8 @@ struct ORAM {
     }
 
     _size = size;
-    int cacheLevel = GetMaxCacheLevel<T, Z, stashSize, PositionType, UidType>(
-        size, cacheBytes);
+    int cacheLevel = GetMaxCacheLevel<T, Z, stashSize, PositionType, UidType,
+                                      check_freshness>(size, cacheBytes);
     if (cacheLevel < 0) {
       throw std::runtime_error("Circuit ORAM cache size too small");
     }
@@ -481,8 +477,8 @@ struct ORAM {
                                  uint64_t cacheBytes = 1UL << 62) {
     return sizeof(Stash) +
            HeapTree_::GetMemoryUsage(
-               size, GetMaxCacheLevel<T, Z, stashSize, PositionType, UidType>(
-                         size, cacheBytes));
+               size, GetMaxCacheLevel<T, Z, stashSize, PositionType, UidType,
+                                      check_freshness>(size, cacheBytes));
   }
 
   /**

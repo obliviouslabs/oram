@@ -127,13 +127,18 @@ bool WriteNewBlockToPath(Iterator begin, Iterator end, const Block_& block) {
  * @tparam stashSize The size of the ORAM stash
  * @tparam PositionType The type of the position
  * @tparam UidType The type of the unique id
+ * @tparam check_freshness Whether to check freshness of the data
  */
 template <typename T, const int Z, const int stashSize,
-          typename PositionType = uint64_t, typename UidType = uint64_t>
+          typename PositionType = uint64_t, typename UidType = uint64_t,
+          const bool check_freshness = true>
 int GetMaxCacheLevel(PositionType size, size_t cacheBytes = 1UL << 62) {
   using Bucket_ = Bucket<T, Z, PositionType, UidType>;
+  using FreshBucket_ = FreshBucket<Bucket_>;
+
+  using TreeNode_ = std::conditional_t<check_freshness, FreshBucket_, Bucket_>;
   using Stash = Bucket<T, stashSize, PositionType, UidType>;
-  using HeapTree_ = HeapTree<Bucket_, PositionType>;
+  using HeapTree_ = HeapTree<TreeNode_, PositionType>;
   int maxCacheLevel = 0;
   if (cacheBytes >= HeapTree_::GetMemoryUsage(size, 62)) {
     // default value
