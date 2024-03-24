@@ -25,7 +25,6 @@ enum class EncryptType {
 template <typename T, typename _BackendType = ::EM::Backend::MemServerBackend,
           const EncryptType enc_type = EncryptType::ENCRYPT_AND_AUTH,
           bool LATE_INIT = false>
-  requires EM::Backend::BackendServer<_BackendType>
 struct NonCachedServerFrontendInstance {
   // Just forwards reads and writes to the server. Call the allocator during
   // construction and resizes.
@@ -58,8 +57,7 @@ struct NonCachedServerFrontendInstance {
     uint8_t bytes[IV_SIZE];
     struct {
       IndexType indexPart;
-      uint32_t counterPart;  // in case an index is written multiple times
-      uint32_t padding;
+      uint64_t counterPart;  // in case an index is written multiple times
     } identifiers;
   } nounce_t;
 
@@ -94,7 +92,7 @@ struct NonCachedServerFrontendInstance {
     // std::endl;
     if constexpr (AUTH) {
       nounce.identifiers.indexPart = UniformRandom();
-      nounce.identifiers.counterPart = UniformRandom32();
+      nounce.identifiers.counterPart = UniformRandom();
     }
     if constexpr (FRESH_CHECK) {
       counters.resize(initialSize, 0);

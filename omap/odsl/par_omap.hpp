@@ -237,7 +237,7 @@ struct ParOMap {
    * factor of numbers between 2 and 8 to support Initialization. Please use
    * GetSuitableShardCount method to get a suitable shard count.
    */
-  ParOMap(uint64_t mapSize, uint64_t shardCount) {
+  ParOMap(PositionType mapSize, uint64_t shardCount) {
     SetSize(mapSize, shardCount);
   }
 
@@ -249,7 +249,7 @@ struct ParOMap {
    * @param shardCount The number of shards, should be a power of 2 to support
    * InitFromReader. Suggested to be the number of available threads / 2.
    */
-  void SetSize(uint64_t mapSize, uint64_t shardCount) {
+  void SetSize(PositionType mapSize, uint64_t shardCount) {
     if (shardCount == 0) {
       throw std::runtime_error("shardCount should be positive");
     }
