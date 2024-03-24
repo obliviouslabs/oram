@@ -273,7 +273,7 @@ struct ORAM {
       for (int i = 0; i < depth; ++i) {
         const TreeNode_& node = tree.GetNodeByIdx(nodeIdxArr[i]);
 
-        if ((node.leftNonce ^ node.rightNonce) != expectedNonce) {
+        if (node.leftNonce + node.rightNonce != expectedNonce) {
           throw std::runtime_error("ORAM freshness check failed");
         }
         if ((pos >> i) & 1) {
@@ -313,15 +313,14 @@ struct ORAM {
   void writeBackPathWithoutStash(PositionType pos, int pathDepth,
                                  const PositionType nodeIdxArr[64]) {
     if constexpr (check_freshness) {
-      uint64_t newNonceMask = UniformRandom();
-      rootNonce ^= newNonceMask;
+      ++rootNonce;
       for (int i = 0; i < pathDepth; ++i) {
         TreeNode_& node = tree.GetNodeByIdx(nodeIdxArr[i]);
 
         if ((pos >> i) & 1) {
-          node.rightNonce ^= newNonceMask;
+          ++node.rightNonce;
         } else {
-          node.leftNonce ^= newNonceMask;
+          ++node.leftNonce;
         }
         memcpy(node.bucket.blocks, &path[stashSize + i * Z],
                Z * sizeof(Block_));
@@ -754,20 +753,16 @@ struct ORAM {
       ReadElementAndRemoveFromPath(stash->blocks, stash->blocks + stashSize,
                                    uid[i], out[i]);
       if constexpr (check_freshness) {
-        uint64_t expectedNonce = rootNonce;
-        uint64_t newNonceMask = UniformRandom();
-        rootNonce ^= newNonceMask;
+        uint64_t expectedNonce = rootNonce++;
         for (int j = 0; j < pathDepth; ++j) {
           TreeNode_& node = tree.GetNodeByIdx(nodeIdxArr[j]);
-          if ((node.leftNonce ^ node.rightNonce) != expectedNonce) {
+          if (node.leftNonce + node.rightNonce != expectedNonce) {
             throw std::runtime_error("ORAM freshness check failed");
           }
           if ((pos[i] >> j) & 1) {
-            expectedNonce = node.rightNonce;
-            node.rightNonce ^= newNonceMask;
+            expectedNonce = node.rightNonce++;
           } else {
-            expectedNonce = node.leftNonce;
-            node.leftNonce ^= newNonceMask;
+            expectedNonce = node.leftNonce++;
           }
           ReadElementAndRemoveFromPath(node.bucket.blocks,
                                        node.bucket.blocks + Z, uid[i], out[i]);
