@@ -155,9 +155,11 @@ struct HeapTree {
       } else {
         PositionType mask = (PositionType)(1UL << (totalLevel - 2));
         // number of deleted nodes on the last level left to path
-        PositionType deletedNode = (PositionType)std::max(
-            (int64_t)(std::min(idx, mask) + mask - leafCount), 0L);
-        *it = prevNodes + subTreeIdx - deletedNode;
+        PositionType leafCountPlusDeleted = std::min(idx, mask) + mask;
+        PositionType deletedNode = leafCountPlusDeleted >= leafCount
+                                       ? leafCountPlusDeleted - leafCount
+                                       : 0;
+        *it = prevNodes + subTreeIdx - (PositionType)deletedNode;
       }
     }
     // return if all the nodes are cached in top levels

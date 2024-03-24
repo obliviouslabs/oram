@@ -513,6 +513,50 @@ TEST(LinearORAM, testBatchReadWriteNaive) { testBatchReadWrite<false>(); }
 
 TEST(LinearORAM, testBatchReadWriteCompact) { testBatchReadWrite<true>(); }
 
+template <const uint64_t element_size>
+void testThreshold() {
+  struct Element {
+    uint8_t data[element_size];
+  };
+  using LinearORAM_ = ODSL::LinearORAM::ORAM<Element, uint32_t>;
+  using CircuitORAM_ = ODSL::CircuitORAM::ORAM<Element, 2, 20, uint32_t,
+                                               uint32_t, 4096, 2, false>;
+  for (uint32_t size = 10; size < 1000; size += 10) {
+    LinearORAM_ linear_oram(size);
+    CircuitORAM_ circuit_oram(size);
+    // time linear oram performing 1e5 updates
+    auto start = std::chrono::system_clock::now();
+    for (uint64_t i = 0; i < 1e5; ++i) {
+      linear_oram.Update(i % size, [](Element& x) { return false; });
+    }
+    auto end = std::chrono::system_clock::now();
+    std::chrono::duration<double> diff = end - start;
+    printf("Linear  ORAM of size %u (%lu byte element): %f s\n", size,
+           element_size, diff.count());
+    // time circuit oram performing 1e5 updates
+    start = std::chrono::system_clock::now();
+    for (uint64_t i = 0; i < 1e5; ++i) {
+      circuit_oram.Update(UniformRandom32() % size, i % size,
+                          [](Element& x) { return false; });
+    }
+    end = std::chrono::system_clock::now();
+    std::chrono::duration<double> diff2 = end - start;
+    printf("Circuit ORAM of size %u (%lu byte element): %f s\n", size,
+           element_size, diff2.count());
+    if (diff2.count() < diff.count()) {
+      break;
+    }
+  }
+}
+
+TEST(AdaptiveORAM, testThreshold) {
+  GTEST_SKIP();
+  testThreshold<16>();
+  testThreshold<64>();
+  testThreshold<128>();
+  testThreshold<256>();
+}
+
 TEST(RecursiveORAM, testInitDefault) {
   uint64_t size = 12345;
   ODSL::RecursiveORAM<TestElement> oram(size);

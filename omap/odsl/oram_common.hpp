@@ -111,12 +111,12 @@ void ReadElementAndRemoveFromPath(Iterator begin, Iterator end,
  */
 template <class Iterator, typename Block_>
 bool WriteNewBlockToPath(Iterator begin, Iterator end, const Block_& block) {
-  bool cond = true;
+  bool cond = block.IsDummy();
   // fill the first slot that's empty
   for (auto it = begin; it != end; ++it) {
-    cond &= !it->Insert(cond, block);
+    cond |= !it->Insert(cond, block);
   }
-  return !cond;
+  return cond;
 }
 
 /**

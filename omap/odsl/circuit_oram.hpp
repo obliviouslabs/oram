@@ -461,10 +461,7 @@ struct ORAM {
     if (cacheLevel < 0) {
       throw std::runtime_error("Circuit ORAM cache size too small");
     }
-    TreeNode_ dummyNode = {};
-    // for (int i = 0; i < Z; ++i) {
-    //   dummy.blocks[i].uid = DUMMY<UidType>();
-    // }
+    TreeNode_ dummyNode = TreeNode_();
     tree.InitWithDefault(size, dummyNode, cacheLevel);
     depth = (int)GetLogBaseTwo(size - 1) + 2;
     if (depth > 64) {
