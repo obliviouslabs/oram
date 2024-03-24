@@ -161,7 +161,7 @@ struct RecursiveORAM {
          size = (PositionType)divRoundUp(size, fan_out)) {
       oramSizes.push_back(size);
       ++numLevel;
-      if (size <= 1) {
+      if (size <= InternalORAM::linear_oram_threshold) {
         break;
       }
     }
@@ -220,8 +220,9 @@ struct RecursiveORAM {
     if (reader.size() != _size) {
       throw std::runtime_error("Reader size does not match oram size");
     }
-
-    initFromReaderHelper(reader);
+    for (PositionType i = 0; i < oramSizes[0]; ++i) {
+      initFromReaderHelper(reader);
+    }
   }
 
   /**
