@@ -241,6 +241,7 @@ struct ORAM {
       if (success) {
         break;
       }
+      PERFCTR_INCREMENT(CIRCUITORAM_OVERFLOW);
       if (!retry) {
         throw std::runtime_error("ORAM read failed");
       }

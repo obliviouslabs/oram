@@ -155,7 +155,7 @@ struct LRUStash {
       stash.resize(stash_size);
       timestamps.resize(stash_size);
     }
-    bool inserted = false;
+    bool inserted = !entry.valid;
     uint64_t time = highPriority ? 0 : currTime;
     for (size_t i = 0; i < stash.size(); ++i) {
       bool isEmpty = !stash[i].valid;
@@ -166,6 +166,7 @@ struct LRUStash {
     }
     bool overflowFlag = !inserted & entry.valid;
     if (overflowFlag) {
+      PERFCTR_INCREMENT(OHMAP_DEAMORT_OVERFLOW);
       stash.push_back(entry);
       timestamps.push_back(time);
     }
