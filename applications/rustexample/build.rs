@@ -30,7 +30,8 @@ fn main() {
     println!("cargo:rustc-link-search=native=/usr/lib");
     println!("cargo:rustc-link-lib=static=stdc++");
     println!("cargo:rustc-link-lib=boost_system");
-    println!("cargo:rustc-link-lib=static=ssl");
+    println!("cargo:rustc-link-search=native=/home/xtrm0/ol/oram/applications/rustexample/BearSSL/build/");
+    println!("cargo:rustc-link-lib=static=bearssl");
     println!("cargo:rustc-link-lib=crypto");
     println!("cargo:rustc-link-lib=gomp");
 
