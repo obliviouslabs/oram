@@ -99,8 +99,6 @@ struct FreshEncrypted {
     if (!r) {
       throw std::runtime_error("Authentication failed during decrypt.");
     }
-    Assert(r);
-    IGNORE_UNUSED(r);
   }
 
   INLINE void Decrypt(T& out, uint8_t iv[IV_SIZE]) /*const*/ {

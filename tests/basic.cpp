@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
 
+#include "common/encrypted.hpp"
 #include "common/mov_intrinsics.hpp"
 #include "odsl/heap_tree.hpp"
 #include "testutils.hpp"
@@ -174,6 +175,123 @@ TEST(Basic, ObliSwap) {
 TEST(Basic, MovPerf) { testObliMovPerf<200>(); }
 
 TEST(Basic, SwapPerf) { testObliSwapPerf<200>(); }
+
+template <const uint64_t size>
+void testEncrypted() {
+  struct TestBlock {
+    uint8_t data[size];
+  };
+  TestBlock b;
+  for (uint64_t i = 0; i < size; i++) {
+    b.data[i] = 7 * i + 3;
+  }
+  // check decryption correctness
+  Encrypted<TestBlock> e;
+  e.Encrypt(b);
+  TestBlock b2;
+  e.Decrypt(b2);
+  for (size_t i = 0; i < size; i++) {
+    ASSERT_EQ(b.data[i], b2.data[i]);
+  }
+  size_t i = UniformRandom(size - 1);
+  // Check changing the encrypted data gets different decrypted data
+  e.data[i]++;
+  TestBlock b3;
+  e.Decrypt(b3);
+  bool isDifferent = false;
+  for (size_t i = 0; i < size; i++) {
+    if (b.data[i] != b3.data[i]) {
+      isDifferent = true;
+      break;
+    }
+  }
+  ASSERT_TRUE(isDifferent);
+  e.data[i]--;
+  // Check encryption is not deterministic
+  Encrypted<TestBlock> e2;
+  e2.Encrypt(b);
+  bool isDifferent2 = false;
+  for (size_t i = 0; i < size; i++) {
+    if (e.data[i] != e2.data[i]) {
+      isDifferent2 = true;
+      break;
+    }
+  }
+  ASSERT_TRUE(isDifferent2);
+
+  // Check FreshEncrypted
+  FreshEncrypted<TestBlock> fe;
+  uint8_t iv[32];
+  fe.Encrypt(b, iv);
+  TestBlock b4;
+  fe.Decrypt(b4, iv);
+  for (size_t i = 0; i < size; i++) {
+    ASSERT_EQ(b.data[i], b4.data[i]);
+  }
+  // Check changing the encrypted data can be detected
+  FreshEncrypted<TestBlock> fe2 = fe;
+  i = UniformRandom(size - 1);
+  fe2.data[i]++;
+  TestBlock b5;
+  try {
+    fe2.Decrypt(b5, iv);
+    ASSERT_TRUE(false);
+  } catch (std::exception& e) {
+    ASSERT_TRUE(true);
+  }
+  // Check changing the iv can be detected
+  i = UniformRandom(11);
+  iv[i]++;
+  try {
+    fe.Decrypt(b5, iv);
+    ASSERT_TRUE(false);
+  } catch (std::exception& e) {
+    ASSERT_TRUE(true);
+  }
+}
+
+TEST(Basic, Encrypted) {
+  testEncrypted<1>();
+  testEncrypted<2>();
+  testEncrypted<3>();
+  testEncrypted<7>();
+  testEncrypted<8>();
+  testEncrypted<9>();
+  testEncrypted<12>();
+  testEncrypted<15>();
+  testEncrypted<16>();
+  testEncrypted<17>();
+  testEncrypted<30>();
+  testEncrypted<31>();
+  testEncrypted<32>();
+  testEncrypted<33>();
+  testEncrypted<63>();
+  testEncrypted<64>();
+  testEncrypted<65>();
+  testEncrypted<127>();
+  testEncrypted<128>();
+  testEncrypted<129>();
+  testEncrypted<200>();
+  testEncrypted<256>();
+  testEncrypted<257>();
+  testEncrypted<300>();
+  testEncrypted<512>();
+  testEncrypted<513>();
+  testEncrypted<600>();
+  testEncrypted<1023>();
+  testEncrypted<1024>();
+  testEncrypted<1025>();
+  testEncrypted<2000>();
+  testEncrypted<4000>();
+  testEncrypted<4095>();
+  testEncrypted<4096>();
+  testEncrypted<4097>();
+  testEncrypted<7000>();
+  testEncrypted<12345>();
+  testEncrypted<16384>();
+  testEncrypted<16385>();
+  testEncrypted<20000>();
+}
 
 template <const size_t page_size>
 void testHeapTreeCorrectness() {

@@ -16,10 +16,13 @@ namespace MemoryServer {
 
 // enumerator for different types of encryption level
 enum class EncryptType {
-  NONE,
-  ENCRYPT,
-  ENCRYPT_AND_AUTH,
-  ENCRYPT_AND_AUTH_FRESH
+  NONE,              // no encryption
+  ENCRYPT,           // encrypt only, no authentication
+  ENCRYPT_AND_AUTH,  // encrypt and authenticate with the index of the page, but
+                     // no freshness check
+  ENCRYPT_AND_AUTH_FRESH  // encrypt and authenticate with the index of the page
+                          // and a freshness check. Note that the freshness
+                          // check only works for 2^32 writes.
 };
 
 template <typename T, typename _BackendType = ::EM::Backend::MemServerBackend,
@@ -49,16 +52,21 @@ struct NonCachedServerFrontendInstance {
   std::vector<bool> modified;
 
   // counters for each page
-  std::vector<uint64_t> counters;
+  std::vector<uint32_t> counters;
 
   AllocatorSlot slot;
 
   typedef union {
     uint8_t bytes[IV_SIZE];
     struct {
-      IndexType indexPart;
-      uint64_t counterPart;  // in case an index is written multiple times
+      uint32_t indexPart;
+      uint32_t indexPart2;
+      uint32_t counterPart;  // in case an index is written multiple times
     } identifiers;
+    INLINE uint64_t& GetIndexRef() {
+      return *(uint64_t*)&identifiers.indexPart;
+    }
+    INLINE uint32_t& GetCounterRef() { return identifiers.counterPart; }
   } nounce_t;
 
   nounce_t nounce;
@@ -91,8 +99,8 @@ struct NonCachedServerFrontendInstance {
     // std::cout << "Alloc: " << slot.base << "--" << slot.base + slot.size <<
     // std::endl;
     if constexpr (AUTH) {
-      nounce.identifiers.indexPart = UniformRandom();
-      nounce.identifiers.counterPart = UniformRandom();
+      nounce.GetIndexRef() = UniformRandom();
+      nounce.GetCounterRef() = UniformRandom32();
     }
     if constexpr (FRESH_CHECK) {
       counters.resize(initialSize, 0);
@@ -127,9 +135,9 @@ struct NonCachedServerFrontendInstance {
       typename T::Encrypted_t inEnc;
       if constexpr (AUTH) {
         nounce_t nounceCopy = nounce;
-        nounceCopy.identifiers.indexPart ^= i;
+        nounceCopy.GetIndexRef() ^= i;
         if constexpr (FRESH_CHECK) {
-          nounceCopy.identifiers.counterPart ^= ++counters[i];
+          nounceCopy.GetCounterRef() ^= ++counters[i];
         }
         inEnc.Encrypt(in, nounceCopy.bytes);
       } else {
@@ -165,9 +173,9 @@ struct NonCachedServerFrontendInstance {
                    reinterpret_cast<uint8_t*>(&inEnc));
       if constexpr (AUTH) {
         nounce_t nounceCopy = nounce;
-        nounceCopy.identifiers.indexPart ^= i;
+        nounceCopy.GetIndexRef() ^= i;
         if constexpr (FRESH_CHECK) {
-          nounceCopy.identifiers.counterPart ^= counters[i];
+          nounceCopy.GetCounterRef() ^= counters[i];
         }
 
         inEnc.Decrypt(out, nounceCopy.bytes);
