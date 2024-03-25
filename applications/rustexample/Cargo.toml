@@ -1,0 +1,11 @@
+[package]
+name = "rustexample"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[build-dependencies]
+bindgen = "0.69.4"
+cmake = "0.1.50"
+cxx = { version = "1.0.118", features = ["c++14", "c++17", "c++20"] }
