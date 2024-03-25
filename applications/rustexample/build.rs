@@ -28,6 +28,7 @@ fn main() {
     // They exist on most distros, but you probably need to install them.
     //
     println!("cargo:rustc-link-search=native=/usr/lib");
+    println!("cargo:rustc-link-search=native=/usr/lib/gcc/x86_64-linux-gnu/11/");
     println!("cargo:rustc-link-lib=static=stdc++");
     println!("cargo:rustc-link-lib=boost_system");
     println!("cargo:rustc-link-search=native=./BearSSL/build/");
