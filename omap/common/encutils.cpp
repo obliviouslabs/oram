@@ -11,7 +11,7 @@
 #include "common/encutils.hpp"
 #define memset_s(s, smax, c, n) memset(s, c, n);
 
-#define SGXSD_AES_GCM_IV_SIZE 12
+#define SGXSD_AES_GCM_IV_SIZE IV_SIZE
 #define SGXSD_AES_GCM_MAC_SIZE 16
 #define SGXSD_AES_GCM_KEY_SIZE 32
 #define SGXSD_CURVE25519_KEY_SIZE 32
@@ -118,7 +118,7 @@ uint64_t secure_hash_with_salt(const uint8_t *data, size_t data_size,
 bool sgxsd_aes_gcm_run(bool encrypt,
                        const uint8_t p_key[SGXSD_AES_GCM_KEY_SIZE],
                        const void *p_src, uint32_t src_len, void *p_dst,
-                       const uint8_t p_iv[SGXSD_AES_GCM_KEY_SIZE],
+                       const uint8_t p_iv[SGXSD_AES_GCM_IV_SIZE],
                        const void *p_aad, uint32_t aad_len,
                        uint8_t p_mac[SGXSD_AES_GCM_KEY_SIZE]) {
   if (p_key == NULL || ((p_src == NULL || p_dst == NULL) && src_len != 0) ||
@@ -160,7 +160,7 @@ bool sgxsd_aes_gcm_run(bool encrypt,
 
 void aes_256_gcm_encrypt(uint64_t plaintextSize, uint8_t *plaintext,
                          const uint8_t key[AES_BLOCK_SIZE],
-                         uint8_t iv[AES_BLOCK_SIZE],
+                         uint8_t iv[SGXSD_AES_GCM_IV_SIZE],
                          uint8_t tag[AES_BLOCK_SIZE], uint8_t *ciphertext) {
   aes_init();
   sgxsd_aes_gcm_run(true, key, plaintext, plaintextSize, ciphertext, iv,
@@ -169,7 +169,7 @@ void aes_256_gcm_encrypt(uint64_t plaintextSize, uint8_t *plaintext,
 
 bool aes_256_gcm_decrypt(uint64_t ciphertextSize, uint8_t *ciphertext,
                          const uint8_t key[AES_BLOCK_SIZE],
-                         uint8_t iv[AES_BLOCK_SIZE],
+                         const uint8_t iv[SGXSD_AES_GCM_IV_SIZE],
                          uint8_t tag[AES_BLOCK_SIZE], uint8_t *plaintext) {
   aes_init();
   return sgxsd_aes_gcm_run(false, key, ciphertext, ciphertextSize, plaintext,
@@ -179,7 +179,7 @@ bool aes_256_gcm_decrypt(uint64_t ciphertextSize, uint8_t *ciphertext,
 bool sgxsd_aes_ctr_run(bool encrypt,
                        const uint8_t p_key[SGXSD_AES_GCM_KEY_SIZE],
                        const void *p_src, uint32_t src_len, void *p_dst,
-                       const uint8_t p_iv[SGXSD_AES_GCM_KEY_SIZE]) {
+                       const uint8_t p_iv[SGXSD_AES_GCM_IV_SIZE]) {
   if (p_key == NULL || ((p_src == NULL || p_dst == NULL) && src_len != 0) ||
       p_iv == NULL) {
     return 0;
@@ -198,7 +198,7 @@ bool sgxsd_aes_ctr_run(bool encrypt,
 
 void aes_256_ctr_encrypt(uint64_t plaintextSize, uint8_t *plaintext,
                          const uint8_t key[AES_BLOCK_SIZE],
-                         const uint8_t iv[AES_BLOCK_SIZE],
+                         const uint8_t iv[SGXSD_AES_GCM_IV_SIZE],
                          uint8_t *ciphertext) {
   aes_init();
   sgxsd_aes_ctr_run(true, key, plaintext, plaintextSize, ciphertext, iv);
@@ -206,7 +206,8 @@ void aes_256_ctr_encrypt(uint64_t plaintextSize, uint8_t *plaintext,
 
 bool aes_256_ctr_decrypt(uint64_t ciphertextSize, uint8_t *ciphertext,
                          const uint8_t key[AES_BLOCK_SIZE],
-                         const uint8_t iv[AES_BLOCK_SIZE], uint8_t *plaintext) {
+                         const uint8_t iv[SGXSD_AES_GCM_IV_SIZE],
+                         uint8_t *plaintext) {
   aes_init();
   return sgxsd_aes_ctr_run(false, key, ciphertext, ciphertextSize, plaintext,
                            iv);

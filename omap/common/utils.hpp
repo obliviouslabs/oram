@@ -96,9 +96,9 @@ INLINE uint32_t UniformRandom32(uint32_t right) {
 // [0,right]
 INLINE uint32_t UniformRandom32() { return default_rand.rand32(); }
 
-INLINE void GetRand16(uint8_t* out) {
+INLINE void GetRandIV(uint8_t* out) {
   *(uint64_t*)out = UniformRandom();
-  *(uint64_t*)(out + 8) = UniformRandom();
+  *(uint32_t*)(out + 8) = UniformRandom32();
 }
 
 // x/y round up

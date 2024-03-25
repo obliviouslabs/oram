@@ -7,8 +7,6 @@
 #include "common/tracing/tracer.hpp"
 #include "common/utils.hpp"
 
-#define IV_SIZE 12
-
 namespace Concepts {
 template <typename T>
 concept Encryptable = requires(typename T::Encrypted_t et) {
@@ -27,14 +25,14 @@ struct Encrypted {
   static constexpr uint64_t SIZE = sizeof(T);
   uint8_t data[SIZE];  // We don't need to adjust this because CTR modes don't
                        // need padding.
-  uint8_t iv[AES_BLOCK_SIZE];
+  uint8_t iv[IV_SIZE];
 
   // Encrypted& operator=(const Encrypted&) = delete;
   // Encrypted(const Encrypted&) = delete;
 
   INLINE void Encrypt(const T& in) {
     // PROFILE_F();
-    GetRand16(iv);
+    GetRandIV(iv);
     aes_256_ctr_encrypt(
         SIZE, const_cast<uint8_t*>(reinterpret_cast<const uint8_t*>(&in)), KEY,
         iv, data);
@@ -93,7 +91,7 @@ struct FreshEncrypted {
   }
 
   INLINE void Decrypt(T& out, const uint8_t* key,
-                      uint8_t iv[IV_SIZE]) /*const*/ {
+                      const uint8_t iv[IV_SIZE]) /*const*/ {
     bool r = aes_256_gcm_decrypt(SIZE, data, key, iv, tag,
                                  reinterpret_cast<uint8_t*>(&out));
     if (!r) {
