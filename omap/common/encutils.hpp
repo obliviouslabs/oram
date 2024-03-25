@@ -13,20 +13,20 @@
 #ifndef IV_SIZE
 #define IV_SIZE 12
 #endif
-void aes_init();
+#ifndef MAC_SIZE
+#define MAC_SIZE 16
+#endif
+
 void aes_256_gcm_encrypt(uint64_t plaintextSize, uint8_t* plaintext,
-                         const uint8_t key[AES_BLOCK_SIZE], uint8_t iv[IV_SIZE],
-                         uint8_t tag[AES_BLOCK_SIZE], uint8_t* ciphertext);
+                         uint8_t iv[IV_SIZE], uint8_t tag[MAC_SIZE],
+                         uint8_t* ciphertext);
 bool aes_256_gcm_decrypt(uint64_t ciphertextSize, uint8_t* ciphertext,
-                         const uint8_t key[AES_BLOCK_SIZE],
-                         const uint8_t iv[IV_SIZE], uint8_t tag[AES_BLOCK_SIZE],
+                         const uint8_t iv[IV_SIZE], uint8_t tag[MAC_SIZE],
                          uint8_t* plaintext);
 
 void aes_256_ctr_encrypt(uint64_t plaintextSize, uint8_t* plaintext,
-                         const uint8_t key[AES_BLOCK_SIZE],
                          const uint8_t iv[IV_SIZE], uint8_t* ciphertext);
 bool aes_256_ctr_decrypt(uint64_t ciphertextSize, uint8_t* ciphertext,
-                         const uint8_t key[AES_BLOCK_SIZE],
                          const uint8_t iv[IV_SIZE], uint8_t* plaintext);
 
 template <class result_type_param = uint64_t>
@@ -69,10 +69,7 @@ class RandGen {
 #include "common/encutils.cpp"
 #endif
 
-// "random" (:P) AES key:
-inline constexpr uint8_t KEY[16] = {0x41, 0x41, 0x41, 0x41, 0x41, 0x41,
-                                    0x41, 0x41, 0x41, 0x41, 0x41, 0x41,
-                                    0x41, 0x41, 0x41, 0x41};
+extern uint8_t KEY[AES_BLOCK_SIZE];
 
 void read_rand(uint8_t* output, size_t size);
 uint64_t secure_hash_with_salt(const uint8_t* data, size_t data_size,

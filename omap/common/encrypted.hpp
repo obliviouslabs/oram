@@ -34,14 +34,14 @@ struct Encrypted {
     // PROFILE_F();
     GetRandIV(iv);
     aes_256_ctr_encrypt(
-        SIZE, const_cast<uint8_t*>(reinterpret_cast<const uint8_t*>(&in)), KEY,
-        iv, data);
+        SIZE, const_cast<uint8_t*>(reinterpret_cast<const uint8_t*>(&in)), iv,
+        data);
   }
 
   INLINE void Decrypt(T& out) /*const*/ {
     // PROFILE_F();
-    bool r = aes_256_ctr_decrypt(SIZE, data, KEY, iv,
-                                 reinterpret_cast<uint8_t*>(&out));
+    bool r =
+        aes_256_ctr_decrypt(SIZE, data, iv, reinterpret_cast<uint8_t*>(&out));
     Assert(r);
     IGNORE_UNUSED(r);
   }
@@ -73,34 +73,25 @@ struct FreshEncrypted {
   static constexpr uint64_t SIZE = sizeof(T);
   uint8_t data[SIZE];  // We don't need to adjust this because CTR modes don't
                        // need padding.
-  uint8_t tag[16];
+  uint8_t tag[MAC_SIZE];
 
   // Encrypted& operator=(const Encrypted&) = delete;
   // Encrypted(const Encrypted&) = delete;
 
-  INLINE void Encrypt(const T& in, const uint8_t* key, uint8_t iv[IV_SIZE]) {
+  INLINE void Encrypt(const T& in, uint8_t iv[IV_SIZE]) {
     // PROFILE_F();
 
     aes_256_gcm_encrypt(
-        SIZE, const_cast<uint8_t*>(reinterpret_cast<const uint8_t*>(&in)), key,
-        iv, tag, data);
+        SIZE, const_cast<uint8_t*>(reinterpret_cast<const uint8_t*>(&in)), iv,
+        tag, data);
   }
 
-  INLINE void Encrypt(const T& in, uint8_t iv[IV_SIZE]) {
-    Encrypt(in, KEY, iv);
-  }
-
-  INLINE void Decrypt(T& out, const uint8_t* key,
-                      const uint8_t iv[IV_SIZE]) /*const*/ {
-    bool r = aes_256_gcm_decrypt(SIZE, data, key, iv, tag,
+  INLINE void Decrypt(T& out, const uint8_t iv[IV_SIZE]) /*const*/ {
+    bool r = aes_256_gcm_decrypt(SIZE, data, iv, tag,
                                  reinterpret_cast<uint8_t*>(&out));
     if (!r) {
       throw std::runtime_error("Authentication failed during decrypt.");
     }
-  }
-
-  INLINE void Decrypt(T& out, uint8_t iv[IV_SIZE]) /*const*/ {
-    Decrypt(out, KEY, iv);
   }
 
 #ifndef ENCLAVE_MODE

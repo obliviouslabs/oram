@@ -59,14 +59,10 @@ struct NonCachedServerFrontendInstance {
   typedef union {
     uint8_t bytes[IV_SIZE];
     struct {
-      uint32_t indexPart;
-      uint32_t indexPart2;
-      uint32_t counterPart;  // in case an index is written multiple times
-    } identifiers;
-    INLINE uint64_t& GetIndexRef() {
-      return *(uint64_t*)&identifiers.indexPart;
-    }
-    INLINE uint32_t& GetCounterRef() { return identifiers.counterPart; }
+      uint64_t index;
+      uint32_t counter;  // in case an index is written multiple times
+      uint32_t padding;  // pad to ensure counter part is right after index part
+    };
   } nounce_t;
 
   nounce_t nounce;
@@ -99,8 +95,8 @@ struct NonCachedServerFrontendInstance {
     // std::cout << "Alloc: " << slot.base << "--" << slot.base + slot.size <<
     // std::endl;
     if constexpr (AUTH) {
-      nounce.GetIndexRef() = UniformRandom();
-      nounce.GetCounterRef() = UniformRandom32();
+      nounce.index = UniformRandom();
+      nounce.counter = UniformRandom32();
     }
     if constexpr (FRESH_CHECK) {
       counters.resize(initialSize, 0);
@@ -135,9 +131,9 @@ struct NonCachedServerFrontendInstance {
       typename T::Encrypted_t inEnc;
       if constexpr (AUTH) {
         nounce_t nounceCopy = nounce;
-        nounceCopy.GetIndexRef() ^= i;
+        nounceCopy.index ^= i;
         if constexpr (FRESH_CHECK) {
-          nounceCopy.GetCounterRef() ^= ++counters[i];
+          nounceCopy.counter ^= ++counters[i];
         }
         inEnc.Encrypt(in, nounceCopy.bytes);
       } else {
@@ -173,9 +169,9 @@ struct NonCachedServerFrontendInstance {
                    reinterpret_cast<uint8_t*>(&inEnc));
       if constexpr (AUTH) {
         nounce_t nounceCopy = nounce;
-        nounceCopy.GetIndexRef() ^= i;
+        nounceCopy.index ^= i;
         if constexpr (FRESH_CHECK) {
-          nounceCopy.GetCounterRef() ^= counters[i];
+          nounceCopy.counter ^= counters[i];
         }
 
         inEnc.Decrypt(out, nounceCopy.bytes);

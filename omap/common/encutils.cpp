@@ -12,26 +12,19 @@
 #define memset_s(s, smax, c, n) memset(s, c, n);
 
 #define SGXSD_AES_GCM_IV_SIZE IV_SIZE
-#define SGXSD_AES_GCM_MAC_SIZE 16
-#define SGXSD_AES_GCM_KEY_SIZE 32
-#define SGXSD_CURVE25519_KEY_SIZE 32
-#define SGXSD_SHA256_HASH_SIZE 32
+#define SGXSD_AES_GCM_MAC_SIZE MAC_SIZE
+#define SGXSD_AES_GCM_KEY_SIZE AES_BLOCK_SIZE
+#define SGXSD_CURVE25519_KEY_SIZE AES_BLOCK_SIZE
 
 RandGen default_rand;
+// random AES key:
+uint8_t KEY[AES_BLOCK_SIZE] = {0};
+br_aes_x86ni_ctr_keys aes_ctx;
 
 // We have two versions of bearssl. For the enclave we need the sgx prepacked
 // one, for non enclave we need one installed in the OS. This file allows us to
 // use SGX library functions instead of bearssl inside of the enclave whenever
 // they are available.
-
-void aes_init() {
-  static int init = 0;
-  if (init == 0) {
-    // Assert(crypto_aead_aes256gcm_is_available());
-    // int rv = RAND_load_file("/dev/urandom", 32);
-    init = 1;
-  }
-}
 
 #ifndef ENCLAVE_MODE_ENCLAVE
 void handleErrors(void) { throw std::runtime_error("BearSSL error"); }
@@ -115,18 +108,14 @@ uint64_t secure_hash_with_salt(const uint8_t *data, size_t data_size,
 }
 #endif
 
-bool sgxsd_aes_gcm_run(bool encrypt,
-                       const uint8_t p_key[SGXSD_AES_GCM_KEY_SIZE],
-                       const void *p_src, uint32_t src_len, void *p_dst,
-                       const uint8_t p_iv[SGXSD_AES_GCM_IV_SIZE],
+bool sgxsd_aes_gcm_run(bool encrypt, const void *p_src, uint32_t src_len,
+                       void *p_dst, const uint8_t p_iv[SGXSD_AES_GCM_IV_SIZE],
                        const void *p_aad, uint32_t aad_len,
-                       uint8_t p_mac[SGXSD_AES_GCM_KEY_SIZE]) {
-  if (p_key == NULL || ((p_src == NULL || p_dst == NULL) && src_len != 0) ||
-      p_iv == NULL || (p_aad == NULL && aad_len != 0) || p_mac == NULL) {
+                       uint8_t p_mac[SGXSD_AES_GCM_MAC_SIZE]) {
+  if (((p_src == NULL || p_dst == NULL) && src_len != 0) || p_iv == NULL ||
+      (p_aad == NULL && aad_len != 0) || p_mac == NULL) {
     return 0;
   }
-  br_aes_x86ni_ctr_keys aes_ctx;
-  br_aes_x86ni_ctr_init(&aes_ctx, p_key, SGXSD_AES_GCM_KEY_SIZE);
   br_gcm_context aes_gcm_ctx;
   br_gcm_init(&aes_gcm_ctx, &aes_ctx.vtable, &br_ghash_pclmul);
   br_gcm_reset(&aes_gcm_ctx, p_iv, SGXSD_AES_GCM_IV_SIZE);
@@ -146,7 +135,6 @@ bool sgxsd_aes_gcm_run(bool encrypt,
     tag_res = br_gcm_check_tag(&aes_gcm_ctx, p_mac);
   }
   sgxsd_br_clear_stack();
-  memset_s(&aes_ctx, sizeof(aes_ctx), 0, sizeof(aes_ctx));
   memset_s(&aes_gcm_ctx, sizeof(aes_gcm_ctx), 0, sizeof(aes_gcm_ctx));
   if (tag_res) {
     return 1;
@@ -159,58 +147,43 @@ bool sgxsd_aes_gcm_run(bool encrypt,
 }
 
 void aes_256_gcm_encrypt(uint64_t plaintextSize, uint8_t *plaintext,
-                         const uint8_t key[AES_BLOCK_SIZE],
                          uint8_t iv[SGXSD_AES_GCM_IV_SIZE],
-                         uint8_t tag[AES_BLOCK_SIZE], uint8_t *ciphertext) {
-  aes_init();
-  sgxsd_aes_gcm_run(true, key, plaintext, plaintextSize, ciphertext, iv,
-                    nullptr, 0, tag);
+                         uint8_t tag[SGXSD_AES_GCM_MAC_SIZE],
+                         uint8_t *ciphertext) {
+  sgxsd_aes_gcm_run(true, plaintext, plaintextSize, ciphertext, iv, nullptr, 0,
+                    tag);
 }
 
 bool aes_256_gcm_decrypt(uint64_t ciphertextSize, uint8_t *ciphertext,
-                         const uint8_t key[AES_BLOCK_SIZE],
                          const uint8_t iv[SGXSD_AES_GCM_IV_SIZE],
-                         uint8_t tag[AES_BLOCK_SIZE], uint8_t *plaintext) {
-  aes_init();
-  return sgxsd_aes_gcm_run(false, key, ciphertext, ciphertextSize, plaintext,
-                           iv, nullptr, 0, tag);
+                         uint8_t tag[SGXSD_AES_GCM_MAC_SIZE],
+                         uint8_t *plaintext) {
+  return sgxsd_aes_gcm_run(false, ciphertext, ciphertextSize, plaintext, iv,
+                           nullptr, 0, tag);
 }
 
-bool sgxsd_aes_ctr_run(bool encrypt,
-                       const uint8_t p_key[SGXSD_AES_GCM_KEY_SIZE],
-                       const void *p_src, uint32_t src_len, void *p_dst,
-                       const uint8_t p_iv[SGXSD_AES_GCM_IV_SIZE]) {
-  if (p_key == NULL || ((p_src == NULL || p_dst == NULL) && src_len != 0) ||
-      p_iv == NULL) {
+bool sgxsd_aes_ctr_run(bool encrypt, const void *p_src, uint32_t src_len,
+                       void *p_dst, const uint8_t p_iv[SGXSD_AES_GCM_IV_SIZE]) {
+  if (((p_src == NULL || p_dst == NULL) && src_len != 0) || p_iv == NULL) {
     return 0;
   }
-  br_aes_x86ni_ctr_keys aes_ctx;
-  br_aes_x86ni_ctr_init(&aes_ctx, p_key, SGXSD_AES_GCM_KEY_SIZE);
   if (src_len != 0) {
     memmove(p_dst, p_src, src_len);
     br_aes_x86ni_ctr_run(&aes_ctx, p_iv, 0, p_dst, src_len);
   }
-
-  // sgxsd_br_clear_stack();
-  // memset_s(&aes_ctx, sizeof(aes_ctx), 0, sizeof(aes_ctx));
   return 1;
 }
 
 void aes_256_ctr_encrypt(uint64_t plaintextSize, uint8_t *plaintext,
-                         const uint8_t key[AES_BLOCK_SIZE],
                          const uint8_t iv[SGXSD_AES_GCM_IV_SIZE],
                          uint8_t *ciphertext) {
-  aes_init();
-  sgxsd_aes_ctr_run(true, key, plaintext, plaintextSize, ciphertext, iv);
+  sgxsd_aes_ctr_run(true, plaintext, plaintextSize, ciphertext, iv);
 }
 
 bool aes_256_ctr_decrypt(uint64_t ciphertextSize, uint8_t *ciphertext,
-                         const uint8_t key[AES_BLOCK_SIZE],
                          const uint8_t iv[SGXSD_AES_GCM_IV_SIZE],
                          uint8_t *plaintext) {
-  aes_init();
-  return sgxsd_aes_ctr_run(false, key, ciphertext, ciphertextSize, plaintext,
-                           iv);
+  return sgxsd_aes_ctr_run(false, ciphertext, ciphertextSize, plaintext, iv);
 }
 
 #ifndef ENCLAVE_MODE_ENCLAVE
@@ -271,3 +244,11 @@ uint8_t RandGen::rand1() {
 void read_rand(uint8_t *output, size_t size) { sgx_read_rand(output, size); }
 
 #endif
+struct GlobalRandomKeySetter {
+  GlobalRandomKeySetter() {
+    read_rand(KEY, AES_BLOCK_SIZE);
+    br_aes_x86ni_ctr_init(&aes_ctx, KEY, SGXSD_AES_GCM_KEY_SIZE);
+  }
+};
+
+GlobalRandomKeySetter global_random_key_setter;

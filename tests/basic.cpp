@@ -221,32 +221,67 @@ void testEncrypted() {
 
   // Check FreshEncrypted
   FreshEncrypted<TestBlock> fe;
-  uint8_t iv[32];
+  uint8_t iv[IV_SIZE];
+  GetRandIV(iv);
   fe.Encrypt(b, iv);
   TestBlock b4;
   fe.Decrypt(b4, iv);
   for (size_t i = 0; i < size; i++) {
     ASSERT_EQ(b.data[i], b4.data[i]);
   }
+  FreshEncrypted<TestBlock> fe2;
+  fe2.Encrypt(b, iv);
+  for (size_t i = 0; i < size; i++) {
+    ASSERT_EQ(fe.data[i], fe2.data[i]);
+  }
+  for (size_t i = 0; i < MAC_SIZE; i++) {
+    ASSERT_EQ(fe.tag[i], fe2.tag[i]);
+  }
   // Check changing the encrypted data can be detected
-  FreshEncrypted<TestBlock> fe2 = fe;
   i = UniformRandom(size - 1);
-  fe2.data[i]++;
+  fe.data[i]++;
   TestBlock b5;
   try {
-    fe2.Decrypt(b5, iv);
+    fe.Decrypt(b5, iv);
     ASSERT_TRUE(false);
   } catch (std::exception& e) {
     ASSERT_TRUE(true);
   }
+  fe.data[i]--;
+  // Check changing the tag can be detected
+  i = UniformRandom(MAC_SIZE - 1);
+  fe.tag[i]++;
+  try {
+    fe.Decrypt(b5, iv);
+    ASSERT_TRUE(false);
+  } catch (std::exception& e) {
+    ASSERT_TRUE(true);
+  }
+  fe.tag[i]--;
   // Check changing the iv can be detected
-  i = UniformRandom(11);
+  i = UniformRandom(IV_SIZE - 1);
   iv[i]++;
   try {
     fe.Decrypt(b5, iv);
     ASSERT_TRUE(false);
   } catch (std::exception& e) {
     ASSERT_TRUE(true);
+  }
+}
+
+template <const uint64_t size>
+void testEncryptPerf() {
+  for (uint64_t round = 0; round < 1000000UL; ++round) {
+    struct TestBlock {
+      uint8_t data[size];
+    };
+    TestBlock b;
+    for (uint64_t i = 0; i < size; i++) {
+      b.data[i] = 7 * i + round;
+    }
+    uint8_t iv[IV_SIZE];
+    FreshEncrypted<TestBlock> e2;
+    e2.Encrypt(b, iv);
   }
 }
 
@@ -292,6 +327,8 @@ TEST(Basic, Encrypted) {
   testEncrypted<16385>();
   testEncrypted<20000>();
 }
+
+TEST(Basic, EncryptPerf) { testEncryptPerf<4096>(); }
 
 template <const size_t page_size>
 void testHeapTreeCorrectness() {
