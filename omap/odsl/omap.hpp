@@ -822,7 +822,8 @@ struct OHashMap {
       throw std::runtime_error(
           "OHashMap size not set. Call SetSize before initialization.");
     }
-    load = other.GetLoad();
+    PositionType load0 = 0;
+    PositionType load1 = 0;
     indexer = other.GetIndexer();
     // change dummies to invalid
     EM::VirtualVector::VirtualReader<BucketType> reader0(
@@ -830,6 +831,7 @@ struct OHashMap {
           BucketType bucket = other.GetTable0()[i];
           for (int j = 0; j < bucketSize; ++j) {
             bucket.entries[j].valid &= !bucket.entries[j].dummy;
+            load0 += bucket.entries[j].valid;
             bucket.entries[j].dummy = false;
           }
           return bucket;
@@ -839,6 +841,7 @@ struct OHashMap {
           BucketType bucket = other.GetTable1()[i];
           for (int j = 0; j < bucketSize; ++j) {
             bucket.entries[j].valid &= !bucket.entries[j].dummy;
+            load1 += bucket.entries[j].valid;
             bucket.entries[j].dummy = false;
           }
           return bucket;
@@ -853,6 +856,7 @@ struct OHashMap {
       table0.InitFromReader(reader0);
       table1.InitFromReader(reader1);
     }
+    load = load0 + load1;
     for (const auto& entry : other.GetStash().stash) {
       if (entry.valid) {
         // valid is public but dummy is not

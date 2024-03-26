@@ -108,6 +108,7 @@ void testOHashMapPushInit() {
       }
     }
     initContext.Finalize();
+    ASSERT_EQ(map.GetLoad(), std_map.size());
     for (int r = 0; r < 2 * keySpace; ++r) {
       if (std_map.size() < mapSize) {
         int key = rand() % keySpace;
@@ -128,6 +129,7 @@ void testOHashMapPushInit() {
         ASSERT_FALSE(foundFlag);
       }
     }
+    ASSERT_EQ(map.GetLoad(), std_map.size());
   }
 }
 
@@ -150,7 +152,7 @@ void testOHashMapInitFromNonObliviousWithDummy() {
       nonOMap.Insert<true>(it->first, it->second);
     }
     map.InitFromNonOblivious(nonOMap);
-    // printf("init done\n");
+    ASSERT_EQ(map.GetLoad(), std_map.size());
     for (int r = 0; r < 2 * keySpace; ++r) {
       if (std_map.size() < mapSize) {
         int key = rand() % keySpace;
@@ -170,6 +172,7 @@ void testOHashMapInitFromNonObliviousWithDummy() {
         ASSERT_FALSE(foundFlag);
       }
     }
+    ASSERT_EQ(map.GetLoad(), std_map.size());
   }
 }
 
@@ -192,6 +195,7 @@ void testOHashMapFindBatch() {
     EM::VirtualVector::VirtualReader<std::pair<int, int>> reader(
         std_map.size(), [&it](uint64_t) { return *it++; });
     map.InitFromReader(reader);
+    ASSERT_EQ(map.GetLoad(), std_map.size());
     for (int r = 0; r < numBatch; ++r) {
       std::vector<int> keys(batchSize);
       using ValResult = CHMap::ValResult;
