@@ -109,7 +109,7 @@ else
         App_C_Flags += -DNDEBUG -UEDEBUG -UDEBUG
 endif
 
-App_Cpp_Flags := $(App_C_Flags)
+App_Cpp_Flags := $(App_C_Flags) -DENCLAVE_MODE
 
 ifeq ($(DISK_IO), 1)
 	App_Cpp_Flags += -DDISK_IO
@@ -158,7 +158,7 @@ BEARSSL_SOURCES := \
 
 
 Enclave_C_Files := $(BEARSSL_SOURCES) 
-Enclave_Cpp_Files := Enclave/Enclave.cpp $(wildcard Enclave/TrustedLibrary/*.cpp) 
+Enclave_Cpp_Files := Enclave/Enclave.cpp $(wildcard Enclave/TrustedLibrary/*.cpp)
 Enclave_Include_Paths := -IEnclave -I$(SGX_SDK)/include -I$(SGX_SDK)/include/libcxx -I$(SGX_SDK)/include/tlibc -I../../omap -IEnclave/bearssl/include -IEnclave/bearssl/src/bearssl
 
 Enclave_Flags := -fvisibility=hidden -fpie -fstack-protector -fno-builtin-printf -march=native $(Enclave_Include_Paths)
@@ -172,7 +172,7 @@ else
 endif
 
 Enclave_C_Flags := $(Enclave_Flags) -std=c17 
-Enclave_Cpp_Flags := $(Enclave_Flags) -std=c++20 -nostdinc++ -fopenmp -DENCLAVE_MODE -DELEMENT_SIZE=${ELEMENT_SIZE} -DALGO=${ALGO} -DMIN_SIZE=${MIN_SIZE} -DMAX_SIZE=${MAX_SIZE} -DSTEP_RATIO=${STEP_RATIO} -DENCLAVE_SIZE=${ENCLAVE_SIZE} -DTCS_NUM=${TCS_NUM}
+Enclave_Cpp_Flags := $(Enclave_Flags) -std=c++20 -nostdinc++ -fopenmp -DENCLAVE_MODE  -DENCLAVE_MODE_ENCLAVE -DELEMENT_SIZE=${ELEMENT_SIZE} -DALGO=${ALGO} -DMIN_SIZE=${MIN_SIZE} -DMAX_SIZE=${MAX_SIZE} -DSTEP_RATIO=${STEP_RATIO} -DENCLAVE_SIZE=${ENCLAVE_SIZE} -DTCS_NUM=${TCS_NUM}
 ifeq ($(DISK_IO), 1)
 	Enclave_Cpp_Flags += -DDISK_IO
 endif

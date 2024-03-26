@@ -70,3 +70,7 @@ db_rcc/
 mock_db/
 tx.log
 temp/
+
+applications/balance-checker/Enclave/TrustedLibrary/encutils.cpp
+applications/omap/Enclave/TrustedLibrary/encutils.cpp
+applications/rustexample/BearSSL/

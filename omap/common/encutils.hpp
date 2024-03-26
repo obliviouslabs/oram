@@ -1,11 +1,20 @@
 #pragma once
 #include <cassert>
 #include <random>
+#include <cstdint>
 
-#include "common/defs.hpp"
 #ifdef ENCLAVE_MODE
+#include "sgx_tcrypto.h"
 #include "bearssl_rand.h"
 #include "sgx_trts.h"
+#include <bearssl.h>
+// #include <cstdint>
+// #include <cstring>
+#include <cstring>
+#include "sgx_tcrypto.h"
+#include "sgx_trts.h"
+
+#define Assert(x) 
 #endif
 #ifndef AES_BLOCK_SIZE
 #define AES_BLOCK_SIZE 32
@@ -62,10 +71,6 @@ class RandGen {
   uint32_t rand32();
   uint8_t rand1();
 };
-
-#ifdef ENCLAVE_MODE
-#include "common/encutils.cpp"
-#endif
 
 // "random" (:P) AES key:
 inline constexpr uint8_t KEY[16] = {0x41, 0x41, 0x41, 0x41, 0x41, 0x41,
