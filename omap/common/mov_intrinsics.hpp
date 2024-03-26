@@ -381,7 +381,7 @@ INLINE m256i mm256_decrement_epi32_var_indx(const m256i vec,
 struct m256i {
   int32_t data[8];
 };
-static INLINE int32_t mm256_extract_epi32_var_indx(const m256i vec,
+static INLINE int32_t mm256_extract_epi32_var_indx(const m256i& vec,
                                                    const unsigned int i) {
   int32_t ans;
   for (unsigned int j = 0; j < 8; ++j) {

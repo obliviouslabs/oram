@@ -22,7 +22,7 @@ struct OHashMapIndexer {
 
   OHashMapIndexer() {}
 
-  OHashMapIndexer(PositionType size) { SetSize(size); }
+  explicit OHashMapIndexer(PositionType size) { SetSize(size); }
 
   /**
    * @brief Initialize the indexer
@@ -128,7 +128,7 @@ struct LRUStash {
 
   LRUStash() : currTime(0) {}
 
-  LRUStash(size_t capacity) : currTime(0) { SetSize(capacity); }
+  explicit LRUStash(size_t capacity) : currTime(0) { SetSize(capacity); }
 
   /**
    * @brief Set the stash size for oblivious insertion
@@ -159,12 +159,12 @@ struct LRUStash {
     uint64_t time = highPriority ? 0 : currTime;
     for (size_t i = 0; i < stash.size(); ++i) {
       bool isEmpty = !stash[i].valid;
-      bool insertFlag = isEmpty & !inserted;
+      bool insertFlag = isEmpty & (!inserted);
       obliMove(insertFlag, stash[i], entry);
       obliMove(insertFlag, timestamps[i], time);
       inserted |= insertFlag;
     }
-    bool overflowFlag = !inserted & entry.valid;
+    bool overflowFlag = (!inserted) & entry.valid;
     if (overflowFlag) {
       PERFCTR_INCREMENT(OHMAP_DEAMORT_OVERFLOW);
       stash.push_back(entry);
@@ -456,22 +456,6 @@ struct OHashMap {
   }
 
   /**
-   * @brief A helper function that inserts an entry to the stash if a slot is
-   * empty. The function is not oblivious.
-   *
-   * @param stash the stash to perform insert
-   * @param entryToInsert the entry to insert
-   * @return true if the entry is inserted, false otherwise
-   */
-  static bool insertToStash(const KVEntry& entryToInsert, StashType& stash) {
-    if (stash.size() < stash_max_size) {
-      stash.Insert(entryToInsert);
-      return true;
-    }
-    return false;
-  }
-
-  /**
    * @brief Helper function that searches the stash for a key. Depending on
    * whether the hash map is oblivious, the function may reveal the number of
    * comparisons.
@@ -519,7 +503,7 @@ struct OHashMap {
     for (auto it = begin; it != end; ++it) {
       auto& entry = *it;
       bool matchFlag =
-          entry.valid & (entry.key == entryToInsert.key) & !updated;
+          entry.valid & (entry.key == entryToInsert.key) & (!updated);
       obliMove(matchFlag, entry, entryToInsert);
       updated |= matchFlag;
     }
@@ -567,7 +551,7 @@ struct OHashMap {
     for (int i = 0; i < bucketSize; ++i) {
       auto& entry = bucket.entries[i];
       bool isEmpty = !entry.valid;
-      bool insertFlag = isEmpty & !updated;
+      bool insertFlag = isEmpty & (!updated);
       obliMove(insertFlag, entry, entryToInsert);
       updated |= insertFlag;
     }
@@ -743,7 +727,7 @@ struct OHashMap {
    *
    * @param size capacity of the hash map
    */
-  OHashMap(PositionType size) { SetSize(size); }
+  explicit OHashMap(PositionType size) { SetSize(size); }
 
   /**
    * @brief Construct a new OHashMap object
@@ -933,7 +917,7 @@ struct OHashMap {
      * @param additionalCacheBytes the size of additional available cache for
      * initialization
      */
-    InitContext(OHashMap& map, uint64_t additionalCacheBytes = 0)
+    explicit InitContext(OHashMap& map, uint64_t additionalCacheBytes = 0)
         : oHashMap(map),
           nonObliviousHashMap(
               new NonObliviousHashMap(map.size(), additionalCacheBytes)) {
@@ -946,6 +930,17 @@ struct OHashMap {
             "OHashMap size not set. Call SetSize before initialization.");
       }
     }
+
+    /**
+     * @brief Move constructor
+     * @param other the other InitContext
+     *
+     */
+    InitContext(const InitContext&& other)
+        : oHashMap(other.oHashMap),
+          nonObliviousHashMap(other.nonObliviousHashMap) {}
+
+    InitContext(const InitContext& other) = delete;
 
     /**
      * @brief Insert a new key value pair for initialization. The method will
@@ -1182,7 +1177,7 @@ struct OHashMap {
         return true;
       }
       found = searchStash(key, value, stash);
-      return found & !isDummy;
+      return found & (!isDummy);
     } else {
       bool found = false;
       PositionType idx0, idx1;
@@ -1198,7 +1193,7 @@ struct OHashMap {
       readHelper(idx1, table1, bucket);
       found |= searchBucket(key, value, bucket);
       found |= searchStash(key, value, stash);
-      return found & !isDummy;
+      return found & (!isDummy);
     }
   }
 
@@ -1315,7 +1310,7 @@ struct OHashMap {
       for (int i = 0; i < bucketSize; ++i) {
         auto& entry = bucket.entries[i];
         bool matchFlag = entry.valid & (entry.key == key);
-        entry.valid &= !matchFlag | erased;
+        entry.valid &= (!matchFlag) | erased;
         erased |= matchFlag;
       }
     };

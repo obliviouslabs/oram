@@ -59,7 +59,7 @@ class RandGen {
 #endif
  public:
   RandGen();
-  RandGen(uint64_t seed);
+  explicit RandGen(uint64_t seed);
   uint64_t rand64();
   uint32_t rand32();
   uint8_t rand1();

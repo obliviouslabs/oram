@@ -130,7 +130,7 @@ struct RecursiveORAM {
    *
    * @param size The size of the ORAM
    */
-  RecursiveORAM(PositionType size) { SetSize(size); }
+  explicit RecursiveORAM(PositionType size) { SetSize(size); }
 
   /**
    * @brief Construct a new Recursive ORAM of given size and available cache
@@ -302,6 +302,7 @@ struct RecursiveORAM {
     leafOram.Update(pos, uids.back(), newPos, updateFunc);
   }
 
+ private:
   /**
    * @brief A custom data structure to store the data to be written back to the
    * ORAM. This is used to batch the write back operations. To prevent
@@ -310,14 +311,14 @@ struct RecursiveORAM {
    *
    */
   struct WriteBackBuffer {
-    UidType* uids;                // uids at each level
-    PositionType* newPoses;       // new positions at each level
-    InternalNode* internalNodes;  // nodes at each internal level
-    LeafNode* leafNodes;          // nodes at the leaf level
-    uint8_t* buffer = NULL;       // start of the buffer
-    size_t bufferSize = 0;        // size of the buffer
-    int numLevel;        // number of oram levels, including the leaf level
-    uint64_t batchSize;  // batch size
+    UidType* uids = NULL;                // uids at each level
+    PositionType* newPoses = NULL;       // new positions at each level
+    InternalNode* internalNodes = NULL;  // nodes at each internal level
+    LeafNode* leafNodes = NULL;          // nodes at the leaf level
+    uint8_t* buffer = NULL;              // start of the buffer
+    size_t bufferSize = 0;               // size of the buffer
+    int numLevel = 0;        // number of oram levels, including the leaf level
+    uint64_t batchSize = 0;  // batch size
 
     /**
      * @brief Allocate the buffer and calculate the offset of each member
@@ -379,6 +380,7 @@ struct RecursiveORAM {
   // The default write back buffer
   WriteBackBuffer oramWriteBackBuffer;
 
+ public:
   /**
    * @brief Perform a batch access to the ORAM. The accessor function is called
    * with a vector of data at the addresses. The accessor function may modify
@@ -541,7 +543,7 @@ struct RecursiveORAM {
    * @param out The output data
    */
   void Read(UidType address, T& out) {
-    Access(address, [&](T& data) { out = data; });
+    Access(address, [&](const T& data) { out = data; });
   }
 
   /**

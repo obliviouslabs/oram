@@ -28,6 +28,7 @@ enum class EncryptType {
 template <typename T, typename _BackendType = ::EM::Backend::MemServerBackend,
           const EncryptType enc_type = EncryptType::ENCRYPT_AND_AUTH,
           bool LATE_INIT = false>
+  requires EM::Backend::BackendServer<_BackendType>
 struct NonCachedServerFrontendInstance {
   // Just forwards reads and writes to the server. Call the allocator during
   // construction and resizes.
@@ -68,9 +69,7 @@ struct NonCachedServerFrontendInstance {
   nounce_t nounce;
 
   NonCachedServerFrontendInstance(NonCachedServerFrontendInstance& other)
-      : backend(other.backend) {
-    defaultVal = other.defaultVal;
-    slot = other.slot;
+      : backend(other.backend), defaultVal(other.defaultVal), slot(other.slot) {
     if constexpr (AUTH) {
       nounce = other.nounce;
     }

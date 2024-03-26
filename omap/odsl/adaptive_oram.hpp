@@ -33,7 +33,7 @@ struct ORAM {
 
   ORAM() {}
 
-  ORAM(PositionType size) { SetSize(size); }
+  explicit ORAM(PositionType size) { SetSize(size); }
 
   ORAM(PositionType size, size_t cacheBytes) { SetSize(size, cacheBytes); }
 

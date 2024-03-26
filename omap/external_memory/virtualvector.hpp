@@ -24,7 +24,7 @@ struct Vector {
     using pointer = uint64_t;
     using reference = VT&;
     using const_reference = const VT&;
-    Iterator() : m_ptr(0) {}
+    Iterator() : m_ptr(0), vec_ptr(NULL) {}
 
     // Constructor to initialize the base iterator and custom attribute
     Iterator(pointer ptr, Vector& vec) : m_ptr(ptr), vec_ptr(&vec) {}

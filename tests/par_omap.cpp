@@ -79,7 +79,6 @@ TEST(ParOMap, PushInitInsertFind) {
   uint64_t mapSize = UniformRandom(100, 500000);
   uint64_t shardCount = 32;
   uint64_t round = 1000;
-  uint64_t batchSize = 100;
   ParOMap<uint64_t, uint64_t> parOMap(mapSize, shardCount);
   if (EM::Backend::g_DefaultBackend) {
     delete EM::Backend::g_DefaultBackend;
@@ -91,7 +90,6 @@ TEST(ParOMap, PushInitInsertFind) {
   for (uint64_t i = 0; i < mapSize; ++i) {
     kvMap[UniformRandom()] = UniformRandom();
   }
-  auto it = kvMap.begin();
   auto initContext = parOMap.NewInitContext(kvMap.size(), 1UL << 28);
   for (auto it = kvMap.begin(); it != kvMap.end();) {
     if (rand() % 2) {
@@ -109,6 +107,7 @@ TEST(ParOMap, PushInitInsertFind) {
   initContext.Finalize();
   std::cout << "omp max threads: " << omp_get_max_threads() << std::endl;
   for (uint64_t r = 0; r < round; ++r) {
+    int batchSize = (rand() % 100) + 1;
     std::vector<uint64_t> keys(batchSize);
     std::vector<uint64_t> vals(batchSize);
     if (r % 10 == 0) {  // perform fewer inserts than finds
@@ -349,8 +348,8 @@ TEST(ParOMap, MixedLarge) {
   }
   EM::Backend::g_DefaultBackend =
       new EM::Backend::MemServerBackend(BackendSize);
-  for (int r = 0; r < round; ++r) {
-    std::cout << "Test round " << r << std::endl;
+  for (int rr = 0; rr < round; ++rr) {
+    std::cout << "Test round " << rr << std::endl;
     uint64_t mapSize = UniformRandom(100, 5000000);
     uint64_t shardCount = 1UL << UniformRandom(1, 5);
     uint64_t accessRound = 100;

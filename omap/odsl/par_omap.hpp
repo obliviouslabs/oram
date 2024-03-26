@@ -461,6 +461,9 @@ struct ParOMap {
       butterflyLevel = factors.size();
     }
 
+    InitContext(const InitContext&) = delete;
+    InitContext(InitContext&&) = default;
+
     /**
      * @brief Insert a new key-value pair into the batch. The key must be
      * strictly increasing. The running time of this function can be unstable.
@@ -525,6 +528,9 @@ struct ParOMap {
       delete[] tempElements;
       delete[] tempMarks;
       delete[] batch;
+      tempElements = NULL;
+      tempMarks = NULL;
+      batch = NULL;
       for (auto& shard : omap.shards) {
         shard.SetSize(omap.shardSize, cacheBytes / shardCount);
       }
@@ -533,6 +539,24 @@ struct ParOMap {
       for (uint32_t i = 0; i < shardCount; ++i) {
         omap.shards[i].InitFromNonOblivious(*nonOMaps[i]);
         delete nonOMaps[i];
+        nonOMaps[i] = NULL;
+      }
+    }
+
+    ~InitContext() {
+      if (tempElements) {
+        delete[] tempElements;
+      }
+      if (tempMarks) {
+        delete[] tempMarks;
+      }
+      if (batch) {
+        delete[] batch;
+      }
+      for (auto& nonOMapPtr : nonOMaps) {
+        if (nonOMapPtr) {
+          delete nonOMapPtr;
+        }
       }
     }
   };
@@ -612,7 +636,8 @@ struct ParOMap {
     }
     uint32_t batchSize = (uint32_t)(keyEnd - keyBegin);
     // Calculate the max unique element per shard with high probability.
-    uint32_t shardSize = (uint32_t)maxQueryPerShard(batchSize, shardCount);
+    uint32_t batchSizePerShard =
+        (uint32_t)maxQueryPerShard(batchSize, shardCount);
     std::vector<KeyInfo> keyInfoVec(batchSize);
     // hash the keys and determine the shard index for each key
     for (uint32_t i = 0; i < batchSize; ++i) {
@@ -648,17 +673,17 @@ struct ParOMap {
       prefixSumFirstCompaction[i + 1] = prefixSumFirstCompaction[i] + !isDup;
 #pragma omp simd
       for (uint32_t j = 0; j < shardCount; ++j) {
-        bool matchFlag = (keyInfoVec[i].shardIdx == j) & !isDup;
+        bool matchFlag = (keyInfoVec[i].shardIdx == j) & (!isDup);
         shardLoads[j] += matchFlag;
       }
     }
     // With negligible probability, we need to enlarge the shard size for the
     // batch to avoid overflow
     for (uint32_t load : shardLoads) {
-      obliMove(load > shardSize, shardSize, load);
+      obliMove(load > batchSizePerShard, batchSizePerShard, load);
     }
 
-    std::vector<K> keyVec(shardCount * shardSize);
+    std::vector<K> keyVec(shardCount * batchSizePerShard);
     for (uint32_t i = 0; i < batchSize; ++i) {
       keyVec[i] = keyInfoVec[i].key;
     }
@@ -666,7 +691,8 @@ struct ParOMap {
     // sum.
     Algorithm::OrCompactSeparateMark(keyVec.begin(), keyVec.begin() + batchSize,
                                      prefixSumFirstCompaction.begin());
-    std::vector<uint32_t> prefixSumSecondCompaction(shardCount * shardSize + 1);
+    std::vector<uint32_t> prefixSumSecondCompaction(
+        shardCount * batchSizePerShard + 1);
     std::vector<uint32_t> shardLoadPrefixSum(shardCount);
     shardLoadPrefixSum[0] = 0;
     for (uint32_t i = 0; i < shardCount - 1; ++i) {
@@ -674,10 +700,10 @@ struct ParOMap {
     }
     prefixSumSecondCompaction[0] = 0;
     for (uint32_t i = 0; i < shardCount; ++i) {
-      for (uint32_t j = 0; j < shardSize; ++j) {
+      for (uint32_t j = 0; j < batchSizePerShard; ++j) {
         uint32_t rankInShard = j + 1;
         obliMove(rankInShard > shardLoads[i], rankInShard, shardLoads[i]);
-        prefixSumSecondCompaction[i * shardSize + j + 1] =
+        prefixSumSecondCompaction[i * batchSizePerShard + j + 1] =
             shardLoadPrefixSum[i] + rankInShard;
       }
     }
@@ -686,15 +712,16 @@ struct ParOMap {
     Algorithm::OrDistributeSeparateMark(keyVec.begin(), keyVec.end(),
                                         prefixSumSecondCompaction.begin());
     using ValResult = BaseMap::ValResult;
-    std::vector<ValResult> resultVec(shardCount * shardSize);
+    std::vector<ValResult> resultVec(shardCount * batchSizePerShard);
 
     // Parallel query each shard, and get the result values (along with flags
     // of existence).
 #pragma omp parallel for schedule(static)
     for (uint32_t i = 0; i < shardCount; ++i) {
-      shards[i].FindBatchDeferWriteBack(keyVec.begin() + i * shardSize,
-                                        keyVec.begin() + (i + 1) * shardSize,
-                                        resultVec.begin() + i * shardSize);
+      shards[i].FindBatchDeferWriteBack(
+          keyVec.begin() + i * batchSizePerShard,
+          keyVec.begin() + (i + 1) * batchSizePerShard,
+          resultVec.begin() + i * batchSizePerShard);
     }
 
     // Compact the result values in reverse order of the previous
@@ -786,7 +813,8 @@ struct ParOMap {
       throw std::runtime_error("InsertBatch: batch size too large");
     }
     uint32_t batchSize = (uint32_t)(keyEnd - keyBegin);
-    uint32_t shardSize = (uint32_t)maxQueryPerShard(batchSize, shardCount);
+    uint32_t batchSizePerShard =
+        (uint32_t)maxQueryPerShard(batchSize, shardCount);
     std::vector<KVInfo> keyInfoVec(batchSize);
     for (uint32_t i = 0; i < batchSize; ++i) {
       keyInfoVec[i].key = *(keyBegin + i);
@@ -815,17 +843,17 @@ struct ParOMap {
       prefixSumFirstCompaction[i + 1] = prefixSumFirstCompaction[i] + !isDup;
 #pragma omp simd
       for (uint32_t j = 0; j < shardCount; ++j) {
-        bool matchFlag = (keyInfoVec[i].shardIdx == j) & !isDup;
+        bool matchFlag = (keyInfoVec[i].shardIdx == j) & (!isDup);
         shardLoads[j] += matchFlag;
       }
     }
     // With negligible probability, we need to enlarge the shard size for the
     // batch to avoid overflow
     for (uint32_t load : shardLoads) {
-      obliMove(load > shardSize, shardSize, load);
+      obliMove(load > batchSizePerShard, batchSizePerShard, load);
     }
 
-    std::vector<KVPair> kvVec(shardCount * shardSize);
+    std::vector<KVPair> kvVec(shardCount * batchSizePerShard);
     for (uint32_t i = 0; i < batchSize; ++i) {
       kvVec[i].key = keyInfoVec[i].key;
       kvVec[i].value = keyInfoVec[i].value;
@@ -833,7 +861,8 @@ struct ParOMap {
     Algorithm::OrCompactSeparateMark(kvVec.begin(), kvVec.begin() + batchSize,
                                      prefixSumFirstCompaction.begin());
 
-    std::vector<uint32_t> prefixSumSecondCompaction(shardCount * shardSize + 1);
+    std::vector<uint32_t> prefixSumSecondCompaction(
+        shardCount * batchSizePerShard + 1);
     std::vector<uint32_t> shardLoadPrefixSum(shardCount);
     shardLoadPrefixSum[0] = 0;
     for (uint32_t i = 0; i < shardCount - 1; ++i) {
@@ -841,24 +870,24 @@ struct ParOMap {
     }
     prefixSumSecondCompaction[0] = 0;
     for (uint32_t i = 0; i < shardCount; ++i) {
-      for (uint32_t j = 0; j < shardSize; ++j) {
+      for (uint32_t j = 0; j < batchSizePerShard; ++j) {
         uint32_t rankInShard = j + 1;
         obliMove(rankInShard > shardLoads[i], rankInShard, shardLoads[i]);
-        prefixSumSecondCompaction[i * shardSize + j + 1] =
+        prefixSumSecondCompaction[i * batchSizePerShard + j + 1] =
             shardLoadPrefixSum[i] + rankInShard;
       }
     }
 
     Algorithm::OrDistributeSeparateMark(kvVec.begin(), kvVec.end(),
                                         prefixSumSecondCompaction.begin());
-    std::vector<uint8_t> foundVec(shardCount * shardSize);
+    std::vector<uint8_t> foundVec(shardCount * batchSizePerShard);
 #pragma omp parallel for schedule(static)
     for (uint32_t i = 0; i < shardCount; ++i) {
       uint32_t numReal = shardLoads[i];
-      for (uint32_t j = 0; j < shardSize; ++j) {
-        foundVec[i * shardSize + j] =
-            shards[i].OInsert(kvVec[i * shardSize + j].key,
-                              kvVec[i * shardSize + j].value, j >= numReal);
+      for (uint32_t j = 0; j < batchSizePerShard; ++j) {
+        foundVec[i * batchSizePerShard + j] = shards[i].OInsert(
+            kvVec[i * batchSizePerShard + j].key,
+            kvVec[i * batchSizePerShard + j].value, j >= numReal);
       }
     }
 
@@ -903,7 +932,8 @@ struct ParOMap {
     }
     uint64_t shardCount = shards.size();
     uint32_t batchSize = (uint32_t)(keyEnd - keyBegin);
-    uint32_t shardSize = (uint32_t)maxQueryPerShard(batchSize, shardCount);
+    uint32_t batchSizePerShard =
+        (uint32_t)maxQueryPerShard(batchSize, shardCount);
     std::vector<KeyInfo> keyInfoVec(batchSize);
     for (uint32_t i = 0; i < batchSize; ++i) {
       keyInfoVec[i].key = *(keyBegin + i);
@@ -930,24 +960,25 @@ struct ParOMap {
       prefixSumFirstCompaction[i + 1] = prefixSumFirstCompaction[i] + !isDup;
 #pragma omp simd
       for (uint32_t j = 0; j < shardCount; ++j) {
-        bool matchFlag = (keyInfoVec[i].shardIdx == j) & !isDup;
+        bool matchFlag = (keyInfoVec[i].shardIdx == j) & (!isDup);
         shardLoads[j] += matchFlag;
       }
     }
     // With negligible probability, we need to enlarge the shard size for the
     // batch to avoid overflow
     for (uint32_t load : shardLoads) {
-      obliMove(load > shardSize, shardSize, load);
+      obliMove(load > batchSizePerShard, batchSizePerShard, load);
     }
 
-    std::vector<K> keyVec(shardCount * shardSize);
+    std::vector<K> keyVec(shardCount * batchSizePerShard);
     for (uint32_t i = 0; i < batchSize; ++i) {
       keyVec[i] = keyInfoVec[i].key;
     }
     Algorithm::OrCompactSeparateMark(keyVec.begin(), keyVec.begin() + batchSize,
                                      prefixSumFirstCompaction.begin());
 
-    std::vector<uint32_t> prefixSumSecondCompaction(shardCount * shardSize + 1);
+    std::vector<uint32_t> prefixSumSecondCompaction(
+        shardCount * batchSizePerShard + 1);
     std::vector<uint32_t> shardLoadPrefixSum(shardCount);
     shardLoadPrefixSum[0] = 0;
     for (uint32_t i = 0; i < shardCount - 1; ++i) {
@@ -955,23 +986,23 @@ struct ParOMap {
     }
     prefixSumSecondCompaction[0] = 0;
     for (uint32_t i = 0; i < shardCount; ++i) {
-      for (uint32_t j = 0; j < shardSize; ++j) {
+      for (uint32_t j = 0; j < batchSizePerShard; ++j) {
         uint32_t rankInShard = j + 1;
         obliMove(rankInShard > shardLoads[i], rankInShard, shardLoads[i]);
-        prefixSumSecondCompaction[i * shardSize + j + 1] =
+        prefixSumSecondCompaction[i * batchSizePerShard + j + 1] =
             shardLoadPrefixSum[i] + rankInShard;
       }
     }
 
     Algorithm::OrDistributeSeparateMark(keyVec.begin(), keyVec.end(),
                                         prefixSumSecondCompaction.begin());
-    std::vector<uint8_t> foundVec(shardCount * shardSize);
+    std::vector<uint8_t> foundVec(shardCount * batchSizePerShard);
 #pragma omp parallel for schedule(static)
     for (uint32_t i = 0; i < shardCount; ++i) {
       uint32_t numReal = shardLoads[i];
-      for (uint32_t j = 0; j < shardSize; ++j) {
-        foundVec[i * shardSize + j] =
-            shards[i].OErase(keyVec[i * shardSize + j], j >= numReal);
+      for (uint32_t j = 0; j < batchSizePerShard; ++j) {
+        foundVec[i * batchSizePerShard + j] =
+            shards[i].OErase(keyVec[i * batchSizePerShard + j], j >= numReal);
       }
     }
 

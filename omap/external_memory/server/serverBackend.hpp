@@ -1,5 +1,6 @@
 #pragma once
 #include <cinttypes>
+#include <concepts>
 #include <cstring>
 #include <vector>
 
@@ -7,15 +8,10 @@
 #include "common/tracing/tracer.hpp"
 #include "external_memory/server/serverAllocator.hpp"
 
-#ifndef ENCLAVE_MODE
-#include <concepts>
-#endif
-
 namespace EM {
 enum PageSlotState { EMPTY_PAGE, PENDING_PAGE, DONE_PAGE };
 namespace Backend {
 
-#ifndef ENCLAVE_MODE
 template <class FS>
 concept BackendServer = requires(
     FS fs, uint64_t indexType, const EM::LargeBlockAllocator::AllocatorSlot cas,
@@ -28,7 +24,6 @@ concept BackendServer = requires(
   { fs.Write(indexType, indexType, cu8p) };
   { fs.Read(indexType, indexType, u8p) };
 };
-#endif
 
 #define SERVER_SIZE (1 << 16)
 
@@ -38,7 +33,7 @@ struct ServerBackend : EM::LargeBlockAllocator {
   using typename EM::LargeBlockAllocator::AllocatorSlot;
   using typename EM::LargeBlockAllocator::Size_t;
 
-  ServerBackend(uint64_t _size) : EM::LargeBlockAllocator(_size) {}
+  explicit ServerBackend(uint64_t _size) : EM::LargeBlockAllocator(_size) {}
 };
 
 struct MemServerBackend : ServerBackend {
@@ -61,7 +56,7 @@ struct MemServerBackend : ServerBackend {
   }
 #endif
 
-  MemServerBackend(uint64_t _size) : ServerBackend(_size) {
+  explicit MemServerBackend(uint64_t _size) : ServerBackend(_size) {
     ocall_InitServer(&data, 4096, (size - 1) / 4096 + 1);
   }
 
@@ -74,19 +69,6 @@ struct MemServerBackend : ServerBackend {
   void Write(uint64_t offset, uint64_t sz, const uint8_t* from) {
     ocall_Write(offset, sz, from);
   }
-
-  const static uint64_t maxChunkNum = 16;
-  struct Chunks {
-    uint8_t tmp[4096 * maxChunkNum];
-    uint8_t* addrs[maxChunkNum];
-    uint64_t offsets[maxChunkNum];
-    uint64_t sizes[maxChunkNum];
-    PageSlotState* states[maxChunkNum];
-    uint64_t chunkNum = 0;
-    uint64_t tmpOffset = 0;
-  };
-
-  Chunks readChunks, writeChunks;
 
 #ifndef DISK_IO
   void ocall_Read_Batch(uint64_t* offsets, uint64_t* sizes, uint8_t* tmp,
@@ -109,8 +91,20 @@ struct MemServerBackend : ServerBackend {
       pos += size;
     }
   }
-#endif
 
+#else
+  const static uint64_t maxChunkNum = 16;
+  struct Chunks {
+    uint8_t tmp[4096 * maxChunkNum];
+    uint8_t* addrs[maxChunkNum];
+    uint64_t offsets[maxChunkNum];
+    uint64_t sizes[maxChunkNum];
+    PageSlotState* states[maxChunkNum];
+    uint64_t chunkNum = 0;
+    uint64_t tmpOffset = 0;
+  };
+
+  Chunks readChunks, writeChunks;
   void ReadLazy(uint64_t offset, uint64_t sz, uint8_t* to,
                 PageSlotState& state) {
     Assert(state == PENDING_PAGE);
@@ -204,6 +198,7 @@ struct MemServerBackend : ServerBackend {
     chunkNum = 0;
     tmpOffset = 0;
   }
+#endif
 };
 extern MemServerBackend* g_DefaultBackend;
 }  // namespace Backend

@@ -96,7 +96,6 @@ struct FreshEncrypted {
 
 #ifndef ENCLAVE_MODE
   friend std::ostream& operator<<(std::ostream& o, const FreshEncrypted& x) {
-    T v;
     o << "E{" << typeid(T).name() << "}";
     return o;
   }

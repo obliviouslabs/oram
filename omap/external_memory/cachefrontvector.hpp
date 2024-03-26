@@ -35,7 +35,7 @@ struct Vector {
  public:
   Vector() : intVec(0), cacheSize(0) {}
 
-  Vector(uint64_t N) : intVec(N), cacheSize(N) {}
+  explicit Vector(uint64_t N) : intVec(N), cacheSize(N) {}
 
   Vector(uint64_t N, uint64_t cacheSize) { SetSize(N, cacheSize); }
 

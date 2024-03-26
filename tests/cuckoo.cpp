@@ -199,11 +199,6 @@ void testOHashMapFindBatch() {
       for (int i = 0; i < batchSize; ++i) {
         keys[i] = rand() % keySpace;
       }
-      if (std_map.size() < mapSize) {
-        for (int i = 0; i < batchSize && std_map.size() < mapSize; ++i) {
-          map.Find(keys[i], vals[i].value);
-        }
-      }
       std::vector<uint8_t> findExistFlag;
       map.FindBatchDeferWriteBack(keys.begin(), keys.end(), vals.begin());
 #pragma omp parallel for num_threads(2)

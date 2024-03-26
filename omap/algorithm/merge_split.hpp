@@ -158,8 +158,8 @@ void Permute(Iterator begin, Iterator end, MarkIterator marksBegin,
   uint64_t reversePathMask = path.retrieveAndFlipEdge(lastLeft, lastRight);
   path.flipEdge(-reversePathMask);
   Iterator left = begin, right = mid;
-  for (MarkIterator marksLeft = marksBegin, marksRight = marksMid;
-       marksLeft != marksMid - 1; ++marksLeft, ++marksRight, ++left, ++right) {
+  for (marksLeft = marksBegin, marksRight = marksMid; marksLeft != marksMid - 1;
+       ++marksLeft, ++marksRight, ++left, ++right) {
     uint8_t leftMark = *marksLeft & 0xFU;
     uint8_t rightMark = *marksRight & 0xFU;
     bool swapFlag = path.retrieveAndFlipEdge(leftMark, rightMark);
@@ -169,8 +169,8 @@ void Permute(Iterator begin, Iterator end, MarkIterator marksBegin,
   Permute(begin, mid, marksBegin, marksMid, level + 1);
   Permute(mid, end, marksMid, marksEnd, level + 1);
   left = begin, right = mid;
-  for (MarkIterator marksLeft = marksBegin, marksRight = marksMid;
-       marksRight != marksEnd; ++marksLeft, ++marksRight, ++left, ++right) {
+  for (marksLeft = marksBegin, marksRight = marksMid; marksRight != marksEnd;
+       ++marksLeft, ++marksRight, ++left, ++right) {
     bool swapFlag = !(*marksRight & (0X10U << level));
 
     obliSwap(swapFlag, *left, *right);

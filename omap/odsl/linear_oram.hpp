@@ -185,7 +185,7 @@ struct ORAM {
     for (size_t i = 0; i < batchSize; ++i) {
       UidType newUid = uid[i];
       bool isDup = i > 0 && uid[i] == uid[i - 1];
-      obliMove(!keepFlag[i] | isDup, newUid, DUMMY<UidType>());
+      obliMove((!keepFlag[i]) | isDup, newUid, DUMMY<UidType>());
       Write(newUid, in[i]);
     }
   }
@@ -208,7 +208,7 @@ struct ORAM {
     prefixSum[1] = 1;  // the first uid must be kept
     for (size_t i = 0; i < batchSize; ++i) {
       UidType newUid = uid[i];
-      bool isDup = (i > 0 && uid[i] == uid[i - 1]) | !keepFlag[i];
+      bool isDup = (i > 0 && uid[i] == uid[i - 1]) | (!keepFlag[i]);
       newUid -= prefixSum[i];
       obliMove(isDup, newUid, DUMMY<UidType>());
       uidCopy[i] = newUid;

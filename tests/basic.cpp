@@ -14,7 +14,7 @@ template <const uint64_t size>
 void testObliMov() {
   TestBlock<size>* b = new TestBlock<size>();
   TestBlock<size>* b2 = new TestBlock<size>();
-  printf("Test size: %lu\n", size);
+  std::cout << "Test size: " << size << std::endl;
   for (uint64_t i = 0; i < size; i++) {
     b->data[i] = 7 * i + 3;
     b2->data[i] = 11 * i + 5;
@@ -39,7 +39,7 @@ template <const uint64_t size>
 void testObliSwap() {
   TestBlock<size>* b = new TestBlock<size>();
   TestBlock<size>* b2 = new TestBlock<size>();
-  printf("Test size: %lu\n", size);
+  std::cout << "Test size: " << size << std::endl;
   for (uint64_t i = 0; i < size; i++) {
     b->data[i] = 7 * i + 3;
     b2->data[i] = 11 * i + 5;
@@ -64,7 +64,7 @@ template <const uint64_t size>
 void testObliMovPerf() {
   TestBlock<size>* b = new TestBlock<size>();
   TestBlock<size>* b2 = new TestBlock<size>();
-  printf("Test size: %lu\n", size);
+  std::cout << "Test size: " << size << std::endl;
   auto start = std::chrono::system_clock::now();
   for (uint64_t i = 0; i < size; i++) {
     b->data[i] = 7 * i + 3;
@@ -86,7 +86,7 @@ template <const uint64_t size>
 void testObliSwapPerf() {
   TestBlock<size>* b = new TestBlock<size>();
   TestBlock<size>* b2 = new TestBlock<size>();
-  printf("Test size: %lu\n", size);
+  std::cout << "Test size: " << size << std::endl;
   auto start = std::chrono::system_clock::now();
   for (uint64_t i = 0; i < size; i++) {
     b->data[i] = 7 * i + 3;
@@ -190,8 +190,8 @@ void testEncrypted() {
   e.Encrypt(b);
   TestBlock b2;
   e.Decrypt(b2);
-  for (size_t i = 0; i < size; i++) {
-    ASSERT_EQ(b.data[i], b2.data[i]);
+  for (size_t j = 0; j < size; j++) {
+    ASSERT_EQ(b.data[j], b2.data[j]);
   }
   size_t i = UniformRandom(size - 1);
   // Check changing the encrypted data gets different decrypted data
@@ -199,8 +199,8 @@ void testEncrypted() {
   TestBlock b3;
   e.Decrypt(b3);
   bool isDifferent = false;
-  for (size_t i = 0; i < size; i++) {
-    if (b.data[i] != b3.data[i]) {
+  for (size_t j = 0; j < size; j++) {
+    if (b.data[j] != b3.data[j]) {
       isDifferent = true;
       break;
     }
@@ -211,8 +211,8 @@ void testEncrypted() {
   Encrypted<TestBlock> e2;
   e2.Encrypt(b);
   bool isDifferent2 = false;
-  for (size_t i = 0; i < size; i++) {
-    if (e.data[i] != e2.data[i]) {
+  for (size_t j = 0; j < size; j++) {
+    if (e.data[j] != e2.data[j]) {
       isDifferent2 = true;
       break;
     }
@@ -226,16 +226,16 @@ void testEncrypted() {
   fe.Encrypt(b, iv);
   TestBlock b4;
   fe.Decrypt(b4, iv);
-  for (size_t i = 0; i < size; i++) {
-    ASSERT_EQ(b.data[i], b4.data[i]);
+  for (size_t j = 0; j < size; j++) {
+    ASSERT_EQ(b.data[j], b4.data[j]);
   }
   FreshEncrypted<TestBlock> fe2;
   fe2.Encrypt(b, iv);
-  for (size_t i = 0; i < size; i++) {
-    ASSERT_EQ(fe.data[i], fe2.data[i]);
+  for (size_t j = 0; j < size; j++) {
+    ASSERT_EQ(fe.data[j], fe2.data[j]);
   }
-  for (size_t i = 0; i < MAC_SIZE; i++) {
-    ASSERT_EQ(fe.tag[i], fe2.tag[i]);
+  for (size_t j = 0; j < MAC_SIZE; j++) {
+    ASSERT_EQ(fe.tag[j], fe2.tag[j]);
   }
   // Check changing the encrypted data can be detected
   i = UniformRandom(size - 1);
@@ -244,7 +244,7 @@ void testEncrypted() {
   try {
     fe.Decrypt(b5, iv);
     ASSERT_TRUE(false);
-  } catch (std::exception& e) {
+  } catch (std::exception& err) {
     ASSERT_TRUE(true);
   }
   fe.data[i]--;
@@ -254,7 +254,7 @@ void testEncrypted() {
   try {
     fe.Decrypt(b5, iv);
     ASSERT_TRUE(false);
-  } catch (std::exception& e) {
+  } catch (std::exception& err) {
     ASSERT_TRUE(true);
   }
   fe.tag[i]--;
@@ -264,7 +264,7 @@ void testEncrypted() {
   try {
     fe.Decrypt(b5, iv);
     ASSERT_TRUE(false);
-  } catch (std::exception& e) {
+  } catch (std::exception& err) {
     ASSERT_TRUE(true);
   }
 }

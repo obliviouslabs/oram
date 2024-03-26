@@ -70,6 +70,6 @@ struct Mutex {
 template <typename LockType>
 struct Critical {
   LockType& _lock;
-  Critical(LockType& _lock) : _lock(_lock) { _lock.lock(); }
+  explicit Critical(LockType& _lock) : _lock(_lock) { _lock.lock(); }
   ~Critical() { _lock.unlock(); }
 };

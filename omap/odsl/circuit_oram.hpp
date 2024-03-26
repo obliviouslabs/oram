@@ -80,7 +80,7 @@ struct ORAM {
     // first level including the stash
     for (int idx = 0; idx < stashSize + Z; ++idx) {
       int deepestLevel = CommonSuffixLength(path[idx].position, pos);
-      bool deeperFlag = !path[idx].IsDummy() & (deepestLevel > sg.goal);
+      bool deeperFlag = (!path[idx].IsDummy()) & (deepestLevel > sg.goal);
       obliMove(deeperFlag, sg.goal, deepestLevel);
       obliMove(deeperFlag, deepestIdx[0], idx);
     }
@@ -97,7 +97,7 @@ struct ORAM {
         hasEmpty[i] |= isEmpty;
         // cache if each empty has empty slot, so in the second scan, we don't
         // need to access the buckets
-        bool deeperFlag = !isEmpty & (deepestLevel > bucketDeepestLevel);
+        bool deeperFlag = (!isEmpty) & (deepestLevel > bucketDeepestLevel);
         obliMove(deeperFlag, bucketDeepestLevel, deepestLevel);
         obliMove(deeperFlag, deepestIdx[i], idx);
       }
@@ -134,7 +134,7 @@ struct ORAM {
     int dest = target[0];
     for (int i = 1; i < depth - 1; ++i) {
       bool hasTargetFlag = target[i] != -1;
-      bool placeDummyFlag = (i == dest) & !hasTargetFlag;
+      bool placeDummyFlag = (i == dest) & (!hasTargetFlag);
 
       int offset = stashSize + i * Z;
       for (int j = 0; j < Z; ++j) {
@@ -171,7 +171,7 @@ struct ORAM {
     bool written = false;
     for (int j = 0; j < Z; ++j) {
       int idx = offset + j;
-      bool writeFlag = (path[idx].IsDummy() & placeDummyFlag) & !written;
+      bool writeFlag = (path[idx].IsDummy() & placeDummyFlag) & (!written);
       written |= writeFlag;
       obliMove(writeFlag, path[idx], hold);
     }

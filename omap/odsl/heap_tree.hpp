@@ -64,7 +64,7 @@ struct HeapTree {
  public:
   HeapTree() {}
 
-  HeapTree(PositionType _size, int _cacheLevel = 62) {
+  explicit HeapTree(PositionType _size, int _cacheLevel = 62) {
     Init(_size, _cacheLevel);
   }
 

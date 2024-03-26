@@ -8,7 +8,7 @@ struct EdgeRec {
   uint16_t k;
 
  public:
-  EdgeRec(uint16_t k) : k(k) {  // k is number of vertices
+  explicit EdgeRec(uint16_t k) : k(k) {  // k is number of vertices
     static_assert(std::is_same<Bits, uint64_t>::value,
                   "unrecognized type for recording edge");
     edges = 0;
