@@ -568,7 +568,7 @@ struct OHashMap {
    * @param bucket the bucket to search
    * @return true if the key is found, false otherwise
    */
-  static bool searchBucket(const K& key, V& value, BucketType& bucket) {
+  static bool searchBucket(const K& key, V& value, const BucketType& bucket) {
     if constexpr (isOblivious) {
       bool found = false;
       for (int i = 0; i < bucketSize; ++i) {

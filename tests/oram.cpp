@@ -673,3 +673,72 @@ TEST(RecursiveORAM, testBatchAccessDefer) {
     }
   }
 }
+
+TEST(RecursiveORAM, testBatchAccessDeferLarge) {
+  uint32_t size = 654321;
+  StdVector<uint64_t> ref(size);
+  if (EM::Backend::g_DefaultBackend) {
+    delete EM::Backend::g_DefaultBackend;
+  }
+  size_t BackendSize = 2e9;
+  EM::Backend::g_DefaultBackend =
+      new EM::Backend::MemServerBackend(BackendSize);
+  ODSL::RecursiveORAM<TestElement, uint32_t> oram(size, 1UL << 25);
+  for (uint32_t i = 0; i < size; i++) {
+    ref[i] = UniformRandom();
+  }
+  EM::VirtualVector::VirtualReader<TestElement> reader(size, [&](uint64_t i) {
+    TestElement e;
+    e.key = ref[i];
+    for (int j = 0; j < sizeof(e.payload) / sizeof(e.payload[0]); j++) {
+      e.payload[j] = (uint8_t)ref[i];
+    }
+    return e;
+  });
+  oram.InitFromReader(reader);
+  for (int round = 0; round < 1e3; ++round) {
+    std::vector<uint32_t> addrs(UniformRandom(1, 1000));
+    for (uint32_t& addr : addrs) {
+      addr = UniformRandom32(size - 1);
+    }
+    std::sort(addrs.begin(), addrs.end());
+    auto incFunc = [&](std::vector<TestElement>& xs) {
+      for (size_t i = 0; i < addrs.size(); ++i) {
+        if (xs[i].key != ref[addrs[i]]) {
+          printf("Read wrong result for uid %u, expected %lu, got %lu\n",
+                 addrs[i], ref[addrs[i]], xs[i].key);
+          abort();
+        }
+
+        for (int j = 0; j < sizeof(xs[i].payload) / sizeof(xs[i].payload[0]);
+             j++) {
+          if (xs[i].payload[j] != (uint8_t)ref[addrs[i]]) {
+            printf(
+                "Read wrong payload at index %d, ref[addrs[i]] = %lu, "
+                "xs[i].key = %lu, "
+                "xs[i].payload[j] = %lu\n",
+                j, ref[addrs[i]], xs[i].key, (uint64_t)xs[i].payload[j]);
+            abort();
+          }
+          ++xs[i].payload[j];
+        }
+        ++xs[i].key;
+      }
+    };
+
+    oram.BatchAccessDeferWriteBack(addrs, incFunc);
+    for (size_t i = 0; i < addrs.size(); ++i) {
+      if (i == 0 || addrs[i] != addrs[i - 1]) {
+        ++ref[addrs[i]];
+      }
+    }
+    oram.WriteBack();
+    for (uint64_t i = 0; i < addrs.size(); i++) {
+      if (rand() % 10 == 0) {
+        TestElement val;
+        oram.Read(addrs[i], val);
+        ASSERT_EQ(val.key, ref[addrs[i]]);
+      }
+    }
+  }
+}

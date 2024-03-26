@@ -14,7 +14,7 @@ template <unsigned NumElements, class Compare = void>
 class StaticSort {
   template <class A, class C>
   struct Swap {
-    inline Swap(A &a, const int &i0, const int &i1) {
+    inline Swap(const A &a, const int &i0, const int &i1) {
       bool cond = Compare()(*(a + i0), *(a + i1));
       obliSwap(cond, *(a + i0), *(a + i1));
     }
@@ -22,7 +22,7 @@ class StaticSort {
 
   template <class A>
   struct Swap<A, void> {
-    inline Swap(A &a, const int &i0, const int &i1) {
+    inline Swap(const A &a, const int &i0, const int &i1) {
       bool cond = *(a.second + i0) > *(a.second + i1);
       obliSwap(cond, *(a.first + i0), *(a.first + i1));
       obliSwap(cond, *(a.second + i0), *(a.second + i1));

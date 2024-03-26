@@ -157,11 +157,11 @@ struct RecursiveORAM {
     PositionType leafOramSize = (PositionType)divRoundUp(size, chunk_size);
     int numLevel = 0;
     PositionType internalSize = (PositionType)divRoundUp(leafOramSize, fan_out);
-    for (PositionType size = internalSize;;
-         size = (PositionType)divRoundUp(size, fan_out)) {
-      oramSizes.push_back(size);
+    for (PositionType oramSize = internalSize;;
+         oramSize = (PositionType)divRoundUp(oramSize, fan_out)) {
+      oramSizes.push_back(oramSize);
       ++numLevel;
-      if (size <= InternalORAM::linear_oram_threshold) {
+      if (oramSize <= InternalORAM::linear_oram_threshold) {
         break;
       }
     }
@@ -172,10 +172,10 @@ struct RecursiveORAM {
     // consume all its budget, so we can tune the budget for the larger ORAMs
     // according to the amount of cache size remained.
     size_t remainCacheBytes = cacheBytes;
-    for (PositionType size : oramSizes) {
+    for (PositionType oramSize : oramSizes) {
       size_t levelCacheBytes = remainCacheBytes / (numLevel + 1);
 
-      internalOrams.emplace_back(size, levelCacheBytes);
+      internalOrams.emplace_back(oramSize, levelCacheBytes);
 
       size_t memUsed = internalOrams.back().GetMemoryUsage();
       remainCacheBytes -= memUsed;
@@ -406,13 +406,13 @@ struct RecursiveORAM {
     int numLevel = (int)oramSizes.size();
     size_t batchSize = address.size();
     writeBackBuffer.Init(numLevel, batchSize);
-    std::vector<short> indices(numLevel * batchSize);
+    std::vector<short> indicesCache(numLevel * batchSize);
     for (size_t i = 0; i < address.size(); ++i) {
       UidType uid = address[i] / chunk_size;
       short index = address[i] % chunk_size;
       for (int level = (int)oramSizes.size() - 1; level >= 0; --level) {
         writeBackBuffer.GetUids(level)[i] = uid;
-        indices[level * batchSize + i] = index;
+        indicesCache[level * batchSize + i] = index;
         index = uid % fan_out;
         uid /= fan_out;
       }
@@ -424,12 +424,12 @@ struct RecursiveORAM {
     for (int level = 0; level < (int)oramSizes.size() - 1; ++level) {
       PositionType* nextNewPos = writeBackBuffer.GetNewPoses(level + 1);
       InternalNode* node = writeBackBuffer.GetInternalNodes(level);
-      UidType* uids = writeBackBuffer.GetUids(level);
+      UidType* uid = writeBackBuffer.GetUids(level);
       for (size_t i = 0; i < address.size(); ++i) {
         nextNewPos[i] = (PositionType)UniformRandom(oramSizes[level + 1] - 1);
       }
 
-      internalOrams[level].BatchReadAndRemove(address.size(), &pos[0], uids,
+      internalOrams[level].BatchReadAndRemove(address.size(), &pos[0], uid,
                                               node);
       uint64_t indexOffset = level * batchSize;
       for (int64_t i = address.size() - 1; i >= 0; --i) {
@@ -439,17 +439,17 @@ struct RecursiveORAM {
 
         // we first read the positions of the next level
         for (short j = 0; j < fan_out; ++j) {
-          bool match = j == indices[indexOffset + i];
+          bool match = j == indicesCache[indexOffset + i];
           obliMove(match, nextPos[i], node[i].children[j]);
         }
         // then duplicate what we already updated
         if (i != (int64_t)address.size() - 1) {
-          bool copyFlag = uids[i] == uids[i + 1];
+          bool copyFlag = uid[i] == uid[i + 1];
           obliMove(copyFlag, node[i], node[i + 1]);
         }
         // and finally update the node to point to the new children
         for (short j = 0; j < fan_out; ++j) {
-          bool match = j == indices[indexOffset + i];
+          bool match = j == indicesCache[indexOffset + i];
 
           obliMove(match, node[i].children[j], nextNewPos[i]);
         }
@@ -468,7 +468,7 @@ struct RecursiveORAM {
       if constexpr (chunk_size == 1) {
         data[i] = leafNodes[i].data[0];
       } else {
-        short idx = indices[indexOffset + i];
+        short idx = indicesCache[indexOffset + i];
         for (short j = 0; j < chunk_size; ++j) {
           obliMove(j == idx, data[i], leafNodes[i].data[j]);
         }
@@ -483,7 +483,7 @@ struct RecursiveORAM {
       }
     } else {
       for (size_t i = address.size() - 1; i != (size_t)-1; --i) {
-        short idx = indices[indexOffset + i];
+        short idx = indicesCache[indexOffset + i];
         bool copyFlag = i != address.size() - 1 &&
                         writeBackBuffer.GetUids(numLevel - 1)[i] ==
                             writeBackBuffer.GetUids(numLevel - 1)[i + 1];

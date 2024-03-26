@@ -63,8 +63,8 @@ struct TaggedT {
 /// @brief Example of a sort element
 struct TestElement {
   uint64_t key;  // key for comparison
-  char payload[ELEMENT_SIZE -
-               sizeof(key)];  // a payload that is typically longer
+  uint8_t payload[ELEMENT_SIZE -
+                  sizeof(key)];  // a payload that is typically longer
   static consteval inline TestElement DUMMY() {
     return TestElement{static_cast<uint64_t>(-1), {}};
   }

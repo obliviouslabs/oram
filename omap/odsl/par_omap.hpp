@@ -481,6 +481,7 @@ struct ParOMap {
       if (load >= omap.size()) {
         throw std::runtime_error("Too many elements inserted during init");
       }
+      ++load;
       prevKey = key;
       Element& elem = batch[currBktIdx * bktSize + currBktOffset];
       elem.v.key = key;
