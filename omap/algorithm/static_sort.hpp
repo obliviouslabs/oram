@@ -31,7 +31,7 @@ class StaticSort {
 
   template <class A, class C, int I, int J, int X, int Y>
   struct PB {
-    inline PB(A &a) {
+    inline PB(const A &a) {
       enum {
         L = X >> 1,
         M = (X & 1 ? Y : Y + 1) >> 1,
@@ -46,12 +46,12 @@ class StaticSort {
 
   template <class A, class C, int I, int J>
   struct PB<A, C, I, J, 1, 1> {
-    inline PB(A &a) { Swap<A, C> s(a, I - 1, J - 1); }
+    inline PB(const A &a) { Swap<A, C> s(a, I - 1, J - 1); }
   };
 
   template <class A, class C, int I, int J>
   struct PB<A, C, I, J, 1, 2> {
-    inline PB(A &a) {
+    inline PB(const A &a) {
       Swap<A, C> s0(a, I - 1, J);
       Swap<A, C> s1(a, I - 1, J - 1);
     }
@@ -59,7 +59,7 @@ class StaticSort {
 
   template <class A, class C, int I, int J>
   struct PB<A, C, I, J, 2, 1> {
-    inline PB(A &a) {
+    inline PB(const A &a) {
       Swap<A, C> s0(a, I - 1, J - 1);
       Swap<A, C> s1(a, I, J - 1);
     }
@@ -67,7 +67,7 @@ class StaticSort {
 
   template <class A, class C, int I, int M, bool Stop = false>
   struct PS {
-    inline PS(A &a) {
+    inline PS(const A &a) {
       enum { L = M >> 1, IAddL = I + L, MSubL = M - L };
       PS<A, C, I, L, (L <= 1)> ps0(a);
       PS<A, C, IAddL, MSubL, (MSubL <= 1)> ps1(a);
@@ -77,7 +77,7 @@ class StaticSort {
 
   template <class A, class C, int I, int M>
   struct PS<A, C, I, M, true> {
-    inline PS(A &a) {}
+    inline PS(const A &a) {}
   };
 
  public:

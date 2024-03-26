@@ -41,7 +41,7 @@ void testOHashMap() {
 
 template <bool isOblivious>
 void testOHashMapInitFromReader() {
-  for (int r = 0; r < 1e2; ++r) {
+  for (int rr = 0; rr < 1e2; ++rr) {
     int mapSize = 5000;
     int keySpace = 10000;
     OHashMap<int, int, isOblivious> map(mapSize);
@@ -70,10 +70,10 @@ void testOHashMapInitFromReader() {
       int key = rand() % keySpace;
       int value;
       bool foundFlag = map.Find(key, value);
-      auto it = std_map.find(key);
-      if (it != std_map.end()) {
+      auto itFind = std_map.find(key);
+      if (itFind != std_map.end()) {
         ASSERT_TRUE(foundFlag);
-        ASSERT_EQ(value, it->second);
+        ASSERT_EQ(value, itFind->second);
       } else {
         ASSERT_FALSE(foundFlag);
       }
@@ -82,7 +82,7 @@ void testOHashMapInitFromReader() {
 }
 
 void testOHashMapPushInit() {
-  for (int r = 0; r < 1e2; ++r) {
+  for (int rr = 0; rr < 1e2; ++rr) {
     int mapSize = 5000;
     int keySpace = 10000;
     OHashMap<int, int> map(mapSize);
@@ -92,7 +92,6 @@ void testOHashMapPushInit() {
       int value = rand();
       std_map[key] = value;
     }
-    auto it = std_map.begin();
     auto initContext = map.NewInitContext(1UL << 25);
     for (auto it = std_map.begin(); it != std_map.end();) {
       if (rand() % 2) {
@@ -134,7 +133,7 @@ void testOHashMapPushInit() {
 }
 
 void testOHashMapInitFromNonObliviousWithDummy() {
-  for (int r = 0; r < 1e1; ++r) {
+  for (int rr = 0; rr < 1e1; ++rr) {
     int mapSize = 5000;
     int keySpace = 10000;
     OHashMap<int, int, true> map(mapSize);
@@ -178,7 +177,7 @@ void testOHashMapInitFromNonObliviousWithDummy() {
 
 template <bool isOblivious>
 void testOHashMapFindBatch() {
-  for (int r = 0; r < 10; ++r) {
+  for (int rr = 0; rr < 10; ++rr) {
     int mapSize = 23456;
     int keySpace = mapSize;
     int batchSize = 1000;
@@ -210,10 +209,10 @@ void testOHashMapFindBatch() {
         map.WriteBackTable(i);
       }
       for (size_t i = 0; i < keys.size(); ++i) {
-        auto it = std_map.find(keys[i]);
-        if (it != std_map.end()) {
+        auto itFind = std_map.find(keys[i]);
+        if (itFind != std_map.end()) {
           ASSERT_EQ(vals[i].found, true);
-          ASSERT_EQ(vals[i].value, it->second);
+          ASSERT_EQ(vals[i].value, itFind->second);
         } else {
           ASSERT_EQ(vals[i].found, false);
         }

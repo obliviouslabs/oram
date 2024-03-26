@@ -15,7 +15,7 @@ struct StdVector : public std::vector<T> {
     Iterator() : std::vector<T>::iterator() {}
 
     // Constructor to initialize the base iterator and custom attribute
-    Iterator(const typename std::vector<T>::iterator& it)
+    explicit Iterator(const typename std::vector<T>::iterator& it)
         : std::vector<T>::iterator(it) {}
 
     friend Iterator operator+(const Iterator& it, size_t size) {

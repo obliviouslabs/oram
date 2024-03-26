@@ -1055,7 +1055,7 @@ struct OHashMap {
       obliMove(isDummy, entryToInsert.key, randKey);
     }
     PositionType idx0 = indexer.getHashIdx0(entryToInsert.key);
-
+    PositionType idx1;
     bool inserted = false;
     bool exist = false;
 
@@ -1066,7 +1066,7 @@ struct OHashMap {
         // found in table 0
         return;
       }
-      PositionType idx1 = indexer.getHashIdx1(entryToInsert.key);
+      idx1 = indexer.getHashIdx1(entryToInsert.key);
       auto table1UpdateFunc = [&](BucketType& bucket1) {
         if (replaceIfExist<hideDummy>(bucket1, entryToInsert)) {
           inserted = true;
@@ -1110,13 +1110,14 @@ struct OHashMap {
       std::swap(entryToInsert, bucket.entries[offset]);
     };
     for (int r = 0; r < 15; ++r) {
-      offset = (r + 1) % bucketSize;  // double check if it works
-      PositionType idx1 = indexer.getHashIdx1(entryToInsert.key);
+      offset = UniformRandom32() % bucketSize;
+      idx1 = indexer.getHashIdx1(entryToInsert.key);
       updateHelper(idx1, table1, swapUpdateFunc);
       if (inserted) {
         return false;
       }
-      PositionType idx0 = indexer.getHashIdx0(entryToInsert.key);
+      idx0 = indexer.getHashIdx0(entryToInsert.key);
+      offset = UniformRandom32() % bucketSize;
       updateHelper(idx0, table0, swapUpdateFunc);
       if (inserted) {
         return false;
@@ -1324,7 +1325,7 @@ struct OHashMap {
     updateHelper(idx1, table1, updateFunc);
     for (auto& entry : stash) {
       bool matchFlag = entry.valid & (entry.key == key);
-      entry.valid &= !matchFlag | erased;
+      entry.valid &= (!matchFlag) | erased;
       erased |= matchFlag;
     }
     load -= erased;

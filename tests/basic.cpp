@@ -336,7 +336,7 @@ void testHeapTreeCorrectness() {
   //     "Testing heap tree correctness for page size: %lu, packing %d
   //     levels\n", page_size, HeapTree<int, uint64_t, page_size>::packLevel);
   using HeapTree_ = HeapTree<int, uint64_t, page_size>;
-  for (size_t size = 2; size < 100000; size = 1.05 * size + 1) {
+  for (size_t size = 2; size < 100000; size = 1.1 * size + 1) {
     int totalLevel = GetLogBaseTwo(size - 1) + 2;
     for (int cacheLevel = 1; cacheLevel < GetLogBaseTwo(size) + 2;
          ++cacheLevel) {
@@ -352,6 +352,7 @@ void testHeapTreeCorrectness() {
         int commonSuffixLen = std::countr_zero(path1 ^ path2);
         int level1 = HeapTree_::GetNodeIdxArr(pathIdxs1.begin(), path1, size,
                                               totalLevel, cacheLevel);
+        // check increasing
         for (int i = 0; i < level1; ++i) {
           ASSERT_LT(pathIdxs1[i], size * 2 - 1);
           if (i > 0) {
@@ -366,9 +367,11 @@ void testHeapTreeCorrectness() {
             ASSERT_LT(pathIdxs2[i - 1], pathIdxs2[i]);
           }
         }
+        // check common suffix nodes are the same
         for (int i = 0; i <= commonSuffixLen; ++i) {
           ASSERT_EQ(pathIdxs1[i], pathIdxs2[i]);
         }
+        // check the rest are different
         for (int i = commonSuffixLen + 1; i < level1; ++i) {
           for (int j = commonSuffixLen + 1; j < level2; ++j) {
             ASSERT_NE(pathIdxs1[i], pathIdxs2[j]);
