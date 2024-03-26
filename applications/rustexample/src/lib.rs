@@ -21,4 +21,23 @@ mod tests {
         assert_eq!(rv1, 1);
         assert_eq!(rv2, 42);
     }
+
+    #[test]
+    fn test_omap() {
+        let sz = 10000u32;
+        let mut oraminterface: OMapBindingSingleton = unsafe { OMapBindingSingleton::new() };
+        unsafe {
+            oraminterface.InitOMap(sz);
+            oraminterface.Insert(123u64, 456u64);
+            oraminterface.Insert(789u64, 101112u64);
+        };
+        let mut rv1: u64 = 0;
+        let mut rv2: u64 = 0;
+        let flag1 = unsafe { oraminterface.Find(123u64, &mut rv1) };
+        let flag2 = unsafe { oraminterface.Find(789u64, &mut rv2) };
+        assert_eq!(rv1, 456u64);
+        assert_eq!(rv2, 101112u64);
+        assert_eq!(flag1, true);
+        assert_eq!(flag2, true);
+    }
 }

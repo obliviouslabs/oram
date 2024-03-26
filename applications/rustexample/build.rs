@@ -34,7 +34,7 @@ fn main() {
     println!("cargo:rustc-link-search=native=./BearSSL/build/");
     println!("cargo:rustc-link-lib=static=bearssl");
     println!("cargo:rustc-link-lib=crypto");
-    println!("cargo:rustc-link-lib=gomp");
+    println!("cargo:rustc-link-lib=static=gomp");
 
     println!(
         "cargo:rustc-link-search=native={}/build/omap",

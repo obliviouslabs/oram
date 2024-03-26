@@ -1,3 +1,4 @@
+#pragma once
 #include <cinttypes>
 
 typedef void* oram_t;
