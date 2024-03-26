@@ -1,6 +1,8 @@
 #!/bin/bash
 source /startsgxenv.sh
 
+cp ../../omap/common/encutils.cpp ./Enclave/TrustedLibrary/encutils.cpp
+
 SGX_MODE=SIM # HW or SIM
 
 # Algorithms:

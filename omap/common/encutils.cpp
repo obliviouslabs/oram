@@ -1,13 +1,17 @@
 #include <utility>
-#ifdef ENCLAVE_MODE
+#include <stdexcept>
+#ifdef ENCLAVE_MODE_ENCLAVE
 // #include "../Enclave.h"
 #include "Enclave_t.h"
 #endif
 
 #include <x86intrin.h>
 
+#ifndef ENCLAVE_MODE
 #include "bearssl_aead.h"
 #include "bearssl_hash.h"
+#endif
+
 #include "common/encutils.hpp"
 #define memset_s(s, smax, c, n) memset(s, c, n);
 
