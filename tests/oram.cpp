@@ -356,8 +356,8 @@ TEST(CircuitORAM, StashLoad) {
       posMap[idx] = pos;
 
       int stashLoad = 0;
-      for (int j = 0; j < stashSize; ++j) {
-        if (!oram.GetStash().blocks[j].IsDummy()) {
+      for (int k = 0; k < stashSize; ++k) {
+        if (!oram.GetStash().blocks[k].IsDummy()) {
           ++stashLoad;
         }
       }
@@ -575,7 +575,6 @@ TEST(RecursiveORAM, testReadAfterWrite) {
     oram.Write(i, i * 3);
   }
   for (uint64_t i = 0; i < size; i++) {
-    int64_t val;
     oram.Read(i, val);
     ASSERT_EQ(val, i * 3);
   }

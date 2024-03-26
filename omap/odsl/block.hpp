@@ -64,7 +64,7 @@ struct UidBlock {
   UidBlock() = default;
   UidBlock(const T& data, UidType uid) : data(data), uid(uid) {}
 
-  UidBlock(UidType uid) : uid(uid), data(DUMMY<T>()) {}
+  explicit UidBlock(UidType uid) : uid(uid), data(DUMMY<T>()) {}
   UidBlock(const UidBlock& other) = default;
   UidBlock(UidBlock&& other) = default;
   UidBlock& operator=(const UidBlock& other) = default;

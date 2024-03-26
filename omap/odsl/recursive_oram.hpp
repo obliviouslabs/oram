@@ -44,7 +44,7 @@ struct RecursiveORAM {
 #endif
   };
 
-  static constexpr short chunk_size = 1;
+  static constexpr short chunk_size = std::max(64 / (int)sizeof(T), 1);
   /**
    * @brief Defines the node of the oram that stores the actual data. Each
    * node can hold chunk_size data elements.
@@ -347,10 +347,11 @@ struct RecursiveORAM {
         buffer = (uint8_t*)malloc(offset);
         bufferSize = offset;
       }
-      uids = (UidType*)(buffer + uidOffset);
-      newPoses = (PositionType*)(buffer + newPosOffset);
-      internalNodes = (InternalNode*)(buffer + internalNodeOffset);
-      leafNodes = (LeafNode*)(buffer + leafNodeOffset);
+      uids = reinterpret_cast<UidType*>(buffer + uidOffset);
+      newPoses = reinterpret_cast<PositionType*>(buffer + newPosOffset);
+      internalNodes =
+          reinterpret_cast<InternalNode*>(buffer + internalNodeOffset);
+      leafNodes = reinterpret_cast<LeafNode*>(buffer + leafNodeOffset);
       this->numLevel = numLevel;
       this->batchSize = batchSize;
       memset(newPoses, 0,
@@ -475,11 +476,18 @@ struct RecursiveORAM {
     }
 
     accessor(data);
-    for (size_t i = 0; i < address.size(); ++i) {
-      if constexpr (chunk_size == 1) {
+
+    if constexpr (chunk_size == 1) {
+      for (size_t i = 0; i < address.size(); ++i) {
         leafNodes[i].data[0] = data[i];
-      } else {
+      }
+    } else {
+      for (size_t i = address.size() - 1; i != (size_t)-1; --i) {
         short idx = indices[indexOffset + i];
+        bool copyFlag = i != address.size() - 1 &&
+                        writeBackBuffer.GetUids(numLevel - 1)[i] ==
+                            writeBackBuffer.GetUids(numLevel - 1)[i + 1];
+        obliMove(copyFlag, leafNodes[i], leafNodes[i + 1]);
         for (short j = 0; j < chunk_size; ++j) {
           obliMove(j == idx, leafNodes[i].data[j], data[i]);
         }
@@ -511,19 +519,19 @@ struct RecursiveORAM {
   }
 
   /**
-   * @brief Write back the data in the global write back buffer to the ORAM, and
-   * release the lock.
+   * @brief Write back the data in the global write back buffer to the ORAM,
+   * and release the lock.
    *
    */
   void WriteBack() { WriteBack(oramWriteBackBuffer); }
 
   /**
-   * @brief Perform a batch access to the ORAM. The accessor function is called
-   * with a vector of data at the addresses. The accessor function may modify
-   * the data in the ORAM addresses. The data is then stored in the global write
-   * back buffer and the lock is held until WriteBack is called. Addresses must
-   * be sorted, and if there are duplicate addresses, the only the updated data
-   * of the first duplicate address will be written back.
+   * @brief Perform a batch access to the ORAM. The accessor function is
+   * called with a vector of data at the addresses. The accessor function may
+   * modify the data in the ORAM addresses. The data is then stored in the
+   * global write back buffer and the lock is held until WriteBack is called.
+   * Addresses must be sorted, and if there are duplicate addresses, the only
+   * the updated data of the first duplicate address will be written back.
    *
    * @tparam Func The type of the accessor function
    * @param address The addresses to access, must be sorted.

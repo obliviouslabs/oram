@@ -17,7 +17,7 @@ struct ORAM {
 
  public:
   ORAM() : _size(0), data(0) {}
-  ORAM(UidType size) : _size(size), data(size) {}
+  explicit ORAM(UidType size) : _size(size), data(size) {}
 
   template <typename Reader>
     requires Readable<Reader, T>

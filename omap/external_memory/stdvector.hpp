@@ -51,7 +51,7 @@ struct StdVector : public std::vector<T> {
     }
   };
   StdVector() : std::vector<T>() {}
-  StdVector(uint64_t N) : std::vector<T>(N) {}
+  explicit StdVector(uint64_t N) : std::vector<T>(N) {}
   StdVector(Iterator begin, Iterator end) : std::vector<T>(begin, end) {}
 
   StdVector(uint64_t N, const T& val) : std::vector<T>(N, val) {}

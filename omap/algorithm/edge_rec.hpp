@@ -37,9 +37,7 @@ struct EdgeRec {
   }
 
   INLINE bool retrieveEdge(uint16_t edgeOffset) const {
-    if constexpr (std::is_same<Bits, uint64_t>::value) {
-      return (edges >> edgeOffset) & 1UL;
-    }
+    return (edges >> edgeOffset) & 1UL;
   }
 
   INLINE bool retrieveEdge(uint16_t v0, uint16_t v1) const {

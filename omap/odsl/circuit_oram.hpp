@@ -264,10 +264,10 @@ struct ORAM {
    */
   int readPathWithoutStashAndGetNodeIdxArr(PositionType pos,
                                            PositionType nodeIdxArr[64]) {
-    int depth = tree.GetNodeIdxArr(nodeIdxArr, pos);
+    int pathDepth = tree.GetNodeIdxArr(nodeIdxArr, pos);
     if constexpr (check_freshness) {
       uint64_t expectedNonce = rootNonce;
-      for (int i = 0; i < depth; ++i) {
+      for (int i = 0; i < pathDepth; ++i) {
         const TreeNode_& node = tree.GetNodeByIdx(nodeIdxArr[i]);
 
         if (node.leftNonce + node.rightNonce != expectedNonce) {
@@ -282,12 +282,12 @@ struct ORAM {
                Z * sizeof(Block_));
       }
     } else {
-      for (int i = 0; i < depth; ++i) {
+      for (int i = 0; i < pathDepth; ++i) {
         const TreeNode_& node = tree.GetNodeByIdx(nodeIdxArr[i]);
         memcpy(&path[stashSize + i * Z], node.blocks, Z * sizeof(Block_));
       }
     }
-    return depth;
+    return pathDepth;
   }
 
   /**
@@ -423,7 +423,7 @@ struct ORAM {
    *
    * @param size Capacity of the ORAM
    */
-  ORAM(PositionType size) { SetSize(size); }
+  explicit ORAM(PositionType size) { SetSize(size); }
 
   /**
    * @brief Construct a new ORAM object
