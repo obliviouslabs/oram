@@ -40,13 +40,13 @@ struct ORAM {
  private:
   HeapTree_ tree;  // underlying tree structure
 
-  Stash* stash = nullptr;  // stash for Circuit ORAM
   int depth = 0;           // number of levels in the tree
   PositionType _size = 0;  // size of the ORAM (number of leaves in the tree)
 
   PositionType evictCounter = 0;  // counter for reverse lexicographic eviction
 
-  std::vector<Block_> path;  // a temporary buffer for reading and writing paths
+  std::vector<Block_> path;  // a buffer for reading and writing paths, the
+                             // first stashSize blocks are the stash
 
   uint64_t rootNonce = 0;  // nonce for the root bucket
 
@@ -180,33 +180,24 @@ struct ORAM {
   /**
    * @brief Read the path indexed by pos, evict it, and writeback.
    *
-   * @tparam copy_stash Whether to copy the stash to/from the path
    * @param pos The position of the path to evict
    */
-  template <const bool copy_stash = true>
   void evict(PositionType pos) {
     PositionType nodeIdxArr[64];
-    if constexpr (copy_stash) {
-      int pathDepth = readPathAndGetNodeIdxArr(pos, nodeIdxArr);
-      evictPath(pos, pathDepth);
-      writeBackPath(pos, pathDepth, nodeIdxArr);
-    } else {
-      int pathDepth = readPathWithoutStashAndGetNodeIdxArr(pos, nodeIdxArr);
-      evictPath(pos, pathDepth);
-      writeBackPathWithoutStash(pos, pathDepth, nodeIdxArr);
-    }
+    int pathDepth = readPathAndGetNodeIdxArr(pos, nodeIdxArr);
+    evictPath(pos, pathDepth);
+    writeBackPath(pos, pathDepth, nodeIdxArr);
   }
 
   /**
    * @brief Perform multiple evictions on paths given by evict counter.
    *
-   * @tparam copy_stash Whether to copy the stash to/from the path
    * @tparam _evict_freq The number of evictions to perform
    */
-  template <const bool copy_stash = true, const int _evict_freq = evict_freq>
+  template <const int _evict_freq = evict_freq>
   void evict() {
     for (int i = 0; i < _evict_freq; ++i) {
-      evict<copy_stash>((evictCounter++) % size());
+      evict((evictCounter++) % size());
     }
   }
 
@@ -216,7 +207,6 @@ struct ORAM {
    * evictions and retry. The retrying leaks some information, but it happens
    * only with negligible probability.
    *
-   * @tparam copy_stash whether to copy the stash to/from the path
    * @tparam _evict_freq Number of evictions to perform
    * @param newBlock The new block to write
    * @param pos The position of the path
@@ -224,7 +214,7 @@ struct ORAM {
    * @param nodeIdxArr The index of the nodes in the path
    * @param retry Maximum number of retries
    */
-  template <const bool copy_stash = true, const int _evict_freq = evict_freq>
+  template <const int _evict_freq = evict_freq>
   INLINE void writeBlockWithRetry(const Block_& newBlock, PositionType pos,
                                   int pathDepth, PositionType nodeIdxArr[64],
                                   int retry = 10) {
@@ -232,12 +222,8 @@ struct ORAM {
       bool success = WriteNewBlockToPath(
           path.begin(), path.begin() + stashSize + Z, newBlock);
       evictPath(pos, pathDepth);
-      if constexpr (copy_stash) {
-        writeBackPath(pos, pathDepth, nodeIdxArr);
-      } else {
-        writeBackPathWithoutStash(pos, pathDepth, nodeIdxArr);
-      }
-      evict<copy_stash, _evict_freq>();
+      writeBackPath(pos, pathDepth, nodeIdxArr);
+      evict<_evict_freq>();
       if (success) {
         break;
       }
@@ -247,23 +233,19 @@ struct ORAM {
       }
       --retry;
       pos = (evictCounter++) % size();
-      if constexpr (copy_stash) {
-        pathDepth = readPathAndGetNodeIdxArr(pos, nodeIdxArr);
-      } else {
-        pathDepth = readPathWithoutStashAndGetNodeIdxArr(pos, nodeIdxArr);
-      }
+      pathDepth = readPathAndGetNodeIdxArr(pos, nodeIdxArr);
     }
   }
 
   /**
-   * @brief Read a path in the ORAM, don't copy the stash into path
+   * @brief Read a path in the ORAM tree and output the path index for later
+   * write back.
    *
    * @param pos The position of the path
    * @param nodeIdxArr The buffer to output the path index
    * @return int The depth of the path
    */
-  int readPathWithoutStashAndGetNodeIdxArr(PositionType pos,
-                                           PositionType nodeIdxArr[64]) {
+  int readPathAndGetNodeIdxArr(PositionType pos, PositionType nodeIdxArr[64]) {
     int pathDepth = tree.GetNodeIdxArr(nodeIdxArr, pos);
     if constexpr (check_freshness) {
       uint64_t expectedNonce = rootNonce;
@@ -291,24 +273,12 @@ struct ORAM {
   }
 
   /**
-   * @brief Read a path in the ORAM
-   *
-   * @param pos The position of the path
-   * @param nodeIdxArr The buffer to output the path index
-   * @return int The depth of the path
-   */
-  int readPathAndGetNodeIdxArr(PositionType pos, PositionType nodeIdxArr[64]) {
-    memcpy(&path[0], stash->blocks, stashSize * sizeof(Block_));
-    return readPathWithoutStashAndGetNodeIdxArr(pos, nodeIdxArr);
-  }
-
-  /**
-   * @brief Write back the buffered path to the ORAM, don't copy the stash
+   * @brief Write back the buffered path to the ORAM tree
    *
    * @param pos The position of the path
    */
-  void writeBackPathWithoutStash(PositionType pos, int pathDepth,
-                                 const PositionType nodeIdxArr[64]) {
+  void writeBackPath(PositionType pos, int pathDepth,
+                     const PositionType nodeIdxArr[64]) {
     if constexpr (check_freshness) {
       ++rootNonce;
       for (int i = 0; i < pathDepth; ++i) {
@@ -328,17 +298,6 @@ struct ORAM {
         memcpy(node.blocks, &path[stashSize + i * Z], Z * sizeof(Block_));
       }
     }
-  }
-
-  /**
-   * @brief Write back the buffered path to the ORAM
-   *
-   * @param pos The position of the path
-   */
-  void writeBackPath(PositionType pos, int pathDepth,
-                     const PositionType nodeIdxArr[64]) {
-    memcpy(stash->blocks, &path[0], stashSize * sizeof(Block_));
-    writeBackPathWithoutStash(pos, pathDepth, nodeIdxArr);
   }
 
   /**
@@ -438,7 +397,7 @@ struct ORAM {
    *
    * @return Stash& Returns the stash
    */
-  const Stash& GetStash() { return *stash; }
+  const Stash& GetStash() { return *reinterpret_cast<Stash*>(&path[0]); }
 
   /**
    * @brief Set the size of the ORAM, and allocate the cache.
@@ -463,7 +422,6 @@ struct ORAM {
     if (depth > 64) {
       throw std::runtime_error("Circuit ORAM too large");
     }
-    stash = new Stash();
     path.resize(stashSize + Z * depth);
   }
 
@@ -518,13 +476,6 @@ struct ORAM {
    */
   PositionType size() const { return _size; }
 
-  ~ORAM() {
-    if (stash) {
-      delete stash;
-      stash = nullptr;
-    }
-  }
-
   /**
    * @brief Read a block from the ORAM and assign it to a new position
    *
@@ -575,8 +526,7 @@ struct ORAM {
     PositionType nodeIdxArr[64];
     int pathDepth = readPathAndGetNodeIdxArr(pos, nodeIdxArr);
     Block_ newBlock(in, newPos, uid);
-    writeBlockWithRetry<true, _evict_freq>(newBlock, pos, pathDepth,
-                                           nodeIdxArr);
+    writeBlockWithRetry<_evict_freq>(newBlock, pos, pathDepth, nodeIdxArr);
     return newPos;
   }
 
@@ -747,7 +697,7 @@ struct ORAM {
     // read and remove
     for (uint64_t i = 0; i < batchSize; ++i) {
       int pathDepth = tree.GetNodeIdxArr(&nodeIdxArr[0], pos[i]);
-      ReadElementAndRemoveFromPath(stash->blocks, stash->blocks + stashSize,
+      ReadElementAndRemoveFromPath(path.begin(), path.begin() + stashSize,
                                    uid[i], out[i]);
       if constexpr (check_freshness) {
         uint64_t expectedNonce = rootNonce++;
@@ -792,11 +742,10 @@ struct ORAM {
                       const PositionType* newPos, const T* in,
                       const std::vector<bool>& writeBackFlags) {
     // only copy stash once
-    memcpy(&path[0], stash->blocks, stashSize * sizeof(Block_));
     PositionType nodeIdxArr[64];
     for (uint64_t i = 0; i < batchSize; ++i) {
       PositionType p = evictCounter++ % size();
-      int pathDepth = readPathWithoutStashAndGetNodeIdxArr(p, nodeIdxArr);
+      int pathDepth = readPathAndGetNodeIdxArr(p, nodeIdxArr);
       Block_ toWrite = {in[i], newPos[i], DUMMY<UidType>()};
       bool writeBack = writeBackFlags[i];
       if (i > 0) {
@@ -804,10 +753,8 @@ struct ORAM {
         writeBack &= (uid[i] != uid[i - 1]);
       }
       obliMove(writeBack, toWrite.uid, uid[i]);
-      writeBlockWithRetry<false>(toWrite, p, pathDepth, nodeIdxArr);
+      writeBlockWithRetry(toWrite, p, pathDepth, nodeIdxArr);
     }
-
-    memcpy(stash->blocks, &path[0], stashSize * sizeof(Block_));
   }
 
   /**

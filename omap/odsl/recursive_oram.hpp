@@ -286,9 +286,9 @@ struct RecursiveORAM {
       if constexpr (chunk_size == 1) {
         accessor(node.data[0]);
       } else {
-        T data;
+        T data = node.data[0];
         short index = indices.back();
-        for (short i = 0; i < chunk_size; ++i) {
+        for (short i = 1; i < chunk_size; ++i) {
           obliMove(i == index, data, node.data[i]);
         }
         accessor(data);

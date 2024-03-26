@@ -356,7 +356,7 @@ TEST(ParOMap, MixedLarge) {
 
     ParOMap<uint64_t, uint64_t> parOMap(mapSize, shardCount);
 
-    std::unordered_map<uint64_t, uint64_t> kvMap;
+    std::map<uint64_t, uint64_t> kvMap;
     size_t mapInitSize = UniformRandom(mapSize);
     for (uint64_t i = 0; i < mapInitSize; ++i) {
       if (UniformRandomBit()) {
