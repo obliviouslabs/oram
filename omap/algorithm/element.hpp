@@ -47,7 +47,7 @@ struct TaggedT {
   inline bool isMarked(uint64_t bitMask) const { return !(tag & bitMask); }
 
   inline void condChangeMark(bool cond, uint64_t bitMask) {
-    CMOV(cond, tag, tag ^ bitMask);
+    obliMove(cond, tag, tag ^ bitMask);
   }
 
   inline uint8_t getMarkAndUpdate(uint64_t k) {

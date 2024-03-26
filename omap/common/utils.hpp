@@ -26,8 +26,8 @@ INLINE uint64_t GetLogBaseTwo(uint64_t n) {
   uint64_t r = 0;
   for (int32_t i = 5; i >= 0; i--) {
     const bool cond = n & masks[i];
-    CMOV(cond, n, n >> c);
-    CMOV(cond, r, r | c);
+    obliMove(cond, n, n >> c);
+    obliMove(cond, r, r | c);
     c >>= 1;
   }
   return r;

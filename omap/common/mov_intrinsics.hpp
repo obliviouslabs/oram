@@ -66,23 +66,28 @@ INLINE void CMOV_BOOL(const uint64_t& cond, bool& val1, const bool& val2) {
   val1 = v1;
 }
 
-template <typename T>
-INLINE void CMOV(const uint64_t& cond, T& val1, const T& val2) {
-  Assert(false,
-         "This should mov not be compiled check that you implemented CMOV"
-         "and that if you used overloading that you called "
-         "OVERLOAD_TSET_CXCHG. For type: ",
-         typeid(T).name());
-  if (cond) {
-    val1 = val2;
-  }
+INLINE void CXCHG1(const uint64_t& cond, uint8_t& A, uint8_t& B) {
+  const uint8_t C = A;
+  CMOV1(cond, A, B);
+  CMOV1(cond, B, C);
 }
 
-template <typename T>
-INLINE void CXCHG(const uint64_t& cond, T& A, T& B) {
-  const T C = A;
-  CMOV(cond, A, B);
-  CMOV(cond, B, C);
+INLINE void CXCHG2(const uint64_t& cond, uint16_t& A, uint16_t& B) {
+  const uint16_t C = A;
+  CMOV2(cond, A, B);
+  CMOV2(cond, B, C);
+}
+
+INLINE void CXCHG4(const uint64_t& cond, uint32_t& A, uint32_t& B) {
+  const uint32_t C = A;
+  CMOV4(cond, A, B);
+  CMOV4(cond, B, C);
+}
+
+INLINE void CXCHG8(const uint64_t& cond, uint64_t& A, uint64_t& B) {
+  const uint64_t C = A;
+  CMOV8(cond, A, B);
+  CMOV8(cond, B, C);
 }
 
 template <const uint64_t sz>
@@ -176,25 +181,25 @@ INLINE void CXCHG_internal(const bool cond, void* vec1, void* vec2) {
     constexpr uint64_t offset = 2 * (sz / 16);
     uint64_t* curr1_64 = (uint64_t*)vec1 + offset;
     uint64_t* curr2_64 = (uint64_t*)vec2 + offset;
-    CXCHG(cond, *curr1_64, *curr2_64);
+    CXCHG8(cond, *curr1_64, *curr2_64);
   }
   if constexpr (sz % 8 >= 4) {
     constexpr uint64_t offset = 2 * (sz / 8);
     uint32_t* curr1_32 = (uint32_t*)vec1 + offset;
     uint32_t* curr2_32 = (uint32_t*)vec2 + offset;
-    CXCHG(cond, *curr1_32, *curr2_32);
+    CXCHG4(cond, *curr1_32, *curr2_32);
   }
   if constexpr (sz % 4 >= 2) {
     constexpr uint64_t offset = 2 * (sz / 4);
     uint16_t* curr1_16 = (uint16_t*)vec1 + offset;
     uint16_t* curr2_16 = (uint16_t*)vec2 + offset;
-    CXCHG(cond, *curr1_16, *curr2_16);
+    CXCHG2(cond, *curr1_16, *curr2_16);
   }
   if constexpr (sz % 2 >= 1) {
     constexpr uint64_t offset = 2 * (sz / 2);
     uint8_t* curr1_8 = (uint8_t*)vec1 + offset;
     uint8_t* curr2_8 = (uint8_t*)vec2 + offset;
-    CXCHG(cond, *curr1_8, *curr2_8);
+    CXCHG1(cond, *curr1_8, *curr2_8);
   }
 }
 
@@ -253,25 +258,25 @@ INLINE void CMOV_internal(const bool cond, void* dest, const void* src) {
     constexpr uint64_t offset = 2 * (sz / 16);
     uint64_t* curr1_64 = (uint64_t*)dest + offset;
     const uint64_t* curr2_64 = (const uint64_t*)src + offset;
-    CMOV(cond, *curr1_64, *curr2_64);
+    CMOV8(cond, *curr1_64, *curr2_64);
   }
   if constexpr (sz % 8 >= 4) {
     constexpr uint64_t offset = 2 * (sz / 8);
     uint32_t* curr1_32 = (uint32_t*)dest + offset;
     const uint32_t* curr2_32 = (const uint32_t*)src + offset;
-    CMOV(cond, *curr1_32, *curr2_32);
+    CMOV4(cond, *curr1_32, *curr2_32);
   }
   if constexpr (sz % 4 >= 2) {
     constexpr uint64_t offset = 2 * (sz / 4);
     uint16_t* curr1_16 = (uint16_t*)dest + offset;
     const uint16_t* curr2_16 = (const uint16_t*)src + offset;
-    CMOV(cond, *curr1_16, *curr2_16);
+    CMOV2(cond, *curr1_16, *curr2_16);
   }
   if constexpr (sz % 2 >= 1) {
     constexpr uint64_t offset = 2 * (sz / 2);
     uint8_t* curr1_8 = (uint8_t*)dest + offset;
     const uint8_t* curr2_8 = (const uint8_t*)src + offset;
-    CMOV(cond, *curr1_8, *curr2_8);
+    CMOV1(cond, *curr1_8, *curr2_8);
   }
 }
 
@@ -308,53 +313,6 @@ INLINE bool obliMove(const bool mov, T& dest, const T& src) {
   return mov;
 }
 
-// Some CMOV specializations:
-//
-template <>
-INLINE void CMOV<uint64_t>(const uint64_t& cond, uint64_t& val1,
-                           const uint64_t& val2) {
-  CMOV8(cond, val1, val2);
-}
-
-template <>
-INLINE void CMOV<uint32_t>(const uint64_t& cond, uint32_t& val1,
-                           const uint32_t& val2) {
-  CMOV4(cond, val1, val2);
-}
-
-template <>
-INLINE void CMOV<uint16_t>(const uint64_t& cond, uint16_t& val1,
-                           const uint16_t& val2) {
-  CMOV2(cond, val1, val2);
-}
-
-template <>
-INLINE void CMOV<uint8_t>(const uint64_t& cond, uint8_t& val1,
-                          const uint8_t& val2) {
-  CMOV1(cond, val1, val2);
-}
-
-template <>
-INLINE void CMOV<bool>(const uint64_t& cond, bool& val1, const bool& val2) {
-  CMOV_BOOL(cond, val1, val2);
-}
-
-template <>
-INLINE void CMOV<int>(const uint64_t& cond, int& val1, const int& val2) {
-  CMOV4(cond, (uint32_t&)val1, val2);
-}
-
-template <>
-INLINE void CMOV<short>(const uint64_t& cond, short& val1, const short& val2) {
-  CMOV2(cond, (uint16_t&)val1, val2);
-}
-
-template <>
-INLINE void CMOV<int8_t>(const uint64_t& cond, int8_t& val1,
-                         const int8_t& val2) {
-  CMOV1(cond, (uint8_t&)val1, val2);
-}
-
 #ifdef __AVX2__
 #define m256i __m256i
 #define mm256_set1_epi32 _mm256_set1_epi32
@@ -385,14 +343,14 @@ static INLINE int32_t mm256_extract_epi32_var_indx(const m256i& vec,
                                                    const unsigned int i) {
   int32_t ans;
   for (unsigned int j = 0; j < 8; ++j) {
-    CMOV(i == j, ans, vec.data[j]);
+    obliMove(i == j, ans, vec.data[j]);
   }
   return ans;
 }
 static INLINE m256i mm256_decrement_epi32_var_indx(m256i vec,
                                                    const unsigned int i) {
   for (unsigned int j = 0; j < 8; ++j) {
-    CMOV(i == j, vec.data[j], vec.data[j] - 1);
+    obliMove(i == j, vec.data[j], vec.data[j] - 1);
   }
   return vec;
 }
