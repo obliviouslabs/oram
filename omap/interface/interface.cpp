@@ -4,9 +4,9 @@
 using namespace ODSL;
 
 ORAMBindingSingleton::ORAMBindingSingleton() {
-  uint64_t BackendSize = 1e10;
-  EM::Backend::g_DefaultBackend =
-      new EM::Backend::MemServerBackend(BackendSize);
+  // uint64_t BackendSize = 1e10;
+  // EM::Backend::g_DefaultBackend =
+  //     new EM::Backend::MemServerBackend(BackendSize);
   oram = nullptr;
 }
 
@@ -35,17 +35,15 @@ ORAMBindingSingleton::~ORAMBindingSingleton() {
 #include "interface/omap_interface.hpp"
 #include "odsl/omap.hpp"
 
-using namespace ODSL;
-
 using K = uint64_t;
 using V = uint64_t;
 using MapType = OHashMap<K, V, true, uint32_t>;
 using InitializerType = typename MapType::InitContext;
 
 OMapBindingSingleton::OMapBindingSingleton() {
-  uint64_t BackendSize = 1e10;
-  EM::Backend::g_DefaultBackend =
-      new EM::Backend::MemServerBackend(BackendSize);
+  // uint64_t BackendSize = 1e10;
+  // EM::Backend::g_DefaultBackend =
+  //     new EM::Backend::MemServerBackend(BackendSize);
   omap = nullptr;
   initializer = nullptr;
 }
@@ -55,8 +53,20 @@ void OMapBindingSingleton::InitEmpty(uint32_t size) {
   ((MapType*)omap)->Init();
 }
 
+void OMapBindingSingleton::InitEmptyExternal(uint32_t size,
+                                             uint64_t cacheBytes) {
+  omap = (void*)(new MapType(size, cacheBytes));
+  ((MapType*)omap)->Init();
+}
+
 void OMapBindingSingleton::StartInit(uint32_t size) {
   omap = (void*)(new MapType(size));
+  initializer = (void*)(((MapType*)omap)->NewInitContext());
+}
+
+void OMapBindingSingleton::StartInitExternal(uint32_t size,
+                                             uint64_t cacheBytes) {
+  omap = (void*)(new MapType(size, cacheBytes));
   initializer = (void*)(((MapType*)omap)->NewInitContext());
 }
 
@@ -104,5 +114,104 @@ OMapBindingSingleton::~OMapBindingSingleton() {
   }
   if (initializer) {
     delete (InitializerType*)initializer;
+  }
+}
+
+#include "interface/par_omap_interface.hpp"
+#include "odsl/par_omap.hpp"
+
+using K = uint64_t;
+using V = uint64_t;
+using ParMapType = ParOMap<K, V, uint32_t>;
+using ParInitializerType = typename ParMapType::InitContext;
+
+ParOMapBindingSingleton::ParOMapBindingSingleton() {
+  omap = nullptr;
+  initializer = nullptr;
+}
+
+void ParOMapBindingSingleton::InitEmpty(uint32_t size, uint32_t shardCount) {
+  omap = (void*)(new ParMapType(size, shardCount));
+  ((ParMapType*)omap)->Init();
+}
+
+void ParOMapBindingSingleton::InitEmptyExternal(uint32_t size,
+                                                uint32_t shardCount,
+                                                uint64_t cacheBytes) {
+  omap = (void*)(new ParMapType(size, shardCount));
+  ((ParMapType*)omap)->Init(cacheBytes);
+}
+
+void ParOMapBindingSingleton::StartInit(uint32_t size, uint32_t initSize,
+                                        uint32_t shardCount) {
+  omap = (void*)(new ParMapType(size, shardCount));
+  initializer = (void*)(((ParMapType*)omap)->NewInitContext(initSize));
+}
+
+void ParOMapBindingSingleton::StartInitExternal(uint32_t size,
+                                                uint32_t initSize,
+                                                uint32_t shardCount,
+                                                uint64_t cacheBytes) {
+  omap = (void*)(new ParMapType(size, shardCount));
+  initializer =
+      (void*)(((ParMapType*)omap)->NewInitContext(initSize, cacheBytes));
+}
+
+void ParOMapBindingSingleton::FinishInit() {
+  Assert(initializer, "FinishInit without StartInit");
+  ((ParInitializerType*)initializer)->Finalize();
+  delete (ParInitializerType*)initializer;
+  initializer = nullptr;
+}
+
+void ParOMapBindingSingleton::InsertBatch(uint32_t batchSize, const K* keys,
+                                          const V* vals, bool* existFlags) {
+  if (initializer) {
+    for (uint32_t i = 0; i < batchSize; ++i) {
+      ((ParInitializerType*)initializer)->Insert(keys[i], vals[i]);
+    }
+    return;
+  }
+  std::vector<uint8_t> resFlags =
+      ((ParMapType*)omap)->InsertBatch(keys, keys + batchSize, vals);
+  for (uint32_t i = 0; i < batchSize; ++i) {
+    existFlags[i] = resFlags[i];
+  }
+}
+
+void ParOMapBindingSingleton::FindBatch(uint32_t batchSize, const K* keys,
+                                        V* vals, bool* existFlags) {
+  Assert(!initializer, "Find during initialization");
+  std::vector<uint8_t> resFlags =
+      ((ParMapType*)omap)->FindBatch(keys, keys + batchSize, vals);
+  for (uint32_t i = 0; i < batchSize; ++i) {
+    existFlags[i] = resFlags[i];
+  }
+}
+
+void ParOMapBindingSingleton::FindBatchDeferMaintain(uint32_t batchSize,
+                                                     const K* keys, V* vals,
+                                                     bool* existFlags) {
+  Assert(!initializer, "Find during initialization");
+  std::vector<uint8_t> resFlags =
+      ((ParMapType*)omap)
+          ->FindBatchDeferWriteBack(keys, keys + batchSize, vals);
+  for (uint32_t i = 0; i < batchSize; ++i) {
+    existFlags[i] = resFlags[i];
+  }
+}
+
+void ParOMapBindingSingleton::FindBatchMaintain() {
+  Assert(!initializer, "Find during initialization");
+  ((ParMapType*)omap)->WriteBack();
+}
+
+void ParOMapBindingSingleton::EraseBatch(uint32_t batchSize, const K* keys,
+                                         bool* existFlags) {
+  Assert(!initializer, "Erase during initialization");
+  std::vector<uint8_t> resFlags =
+      ((ParMapType*)omap)->EraseBatch(keys, keys + batchSize);
+  for (uint32_t i = 0; i < batchSize; ++i) {
+    existFlags[i] = resFlags[i];
   }
 }

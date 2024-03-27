@@ -744,7 +744,7 @@ struct OHashMap {
    *
    * @param size the capacity of the hash map
    */
-  void SetSize(PositionType size) { SetSize(size, DEFAULT_HEAP_SIZE); }
+  void SetSize(PositionType size) { SetSize(size, 1UL << 62); }
 
   /**
    * @brief Allocate resources for the hash map.
