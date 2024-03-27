@@ -3,47 +3,46 @@
 
 using namespace ODSL;
 
-ORAMBindingSingleton::ORAMBindingSingleton() {
-  // uint64_t BackendSize = 1e10;
-  // EM::Backend::g_DefaultBackend =
-  //     new EM::Backend::MemServerBackend(BackendSize);
-  oram = nullptr;
-}
+ORAMBindingSingleton::ORAMBindingSingleton() { oram = nullptr; }
+
+using ORAMType = RecursiveORAM<T, uint32_t>;
 
 void ORAMBindingSingleton::InitORAM(uint32_t size) {
-  // ASSERT(oram == nullptr);
-  oram = (void*)(new RecursiveORAM<uint64_t, uint32_t>(size));
-  ((RecursiveORAM<uint64_t, uint32_t>*)oram)->InitDefault(0);
+  Assert(oram == nullptr);
+  oram = (void*)(new ORAMType(size));
+  ((ORAMType*)oram)->InitDefault(T());
 }
 
-void ORAMBindingSingleton::Write(uint32_t addr, uint64_t val) {
-  ((RecursiveORAM<uint64_t, uint32_t>*)oram)->Write(addr, val);
+void ORAMBindingSingleton::InitORAMExternal(uint32_t size,
+                                            uint64_t cacheBytes) {
+  Assert(oram == nullptr);
+  oram = (void*)(new ORAMType(size, cacheBytes));
+  ((ORAMType*)oram)->InitDefault(T());
 }
 
-uint64_t ORAMBindingSingleton::Read(uint32_t addr) {
-  uint64_t ret;
-  ((RecursiveORAM<uint64_t, uint32_t>*)oram)->Read(addr, ret);
+void ORAMBindingSingleton::Write(uint32_t addr, T val) {
+  ((ORAMType*)oram)->Write(addr, val);
+}
+
+T ORAMBindingSingleton::Read(uint32_t addr) {
+  T ret;
+  ((ORAMType*)oram)->Read(addr, ret);
   return ret;
 }
 
 ORAMBindingSingleton::~ORAMBindingSingleton() {
   if (oram) {
-    delete (RecursiveORAM<uint64_t, uint32_t>*)oram;
+    delete (ORAMType*)oram;
   }
 }
 
 #include "interface/omap_interface.hpp"
 #include "odsl/omap.hpp"
 
-using K = uint64_t;
-using V = uint64_t;
 using MapType = OHashMap<K, V, true, uint32_t>;
 using InitializerType = typename MapType::InitContext;
 
 OMapBindingSingleton::OMapBindingSingleton() {
-  // uint64_t BackendSize = 1e10;
-  // EM::Backend::g_DefaultBackend =
-  //     new EM::Backend::MemServerBackend(BackendSize);
   omap = nullptr;
   initializer = nullptr;
 }
@@ -120,8 +119,6 @@ OMapBindingSingleton::~OMapBindingSingleton() {
 #include "interface/par_omap_interface.hpp"
 #include "odsl/par_omap.hpp"
 
-using K = uint64_t;
-using V = uint64_t;
 using ParMapType = ParOMap<K, V, uint32_t>;
 using ParInitializerType = typename ParMapType::InitContext;
 

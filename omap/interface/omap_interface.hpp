@@ -3,7 +3,8 @@
 
 typedef void* omap_t;
 typedef void* initializer_t;
-
+typedef uint64_t K;
+typedef uint64_t V;
 /**
  * @brief Binds to OMap implementation.
  *
@@ -39,7 +40,7 @@ struct OMapBindingSingleton {
    * @return Always false if called during initialization. Otherwise, returns
    * true if the key already exists, false otherwise.
    */
-  bool Insert(uint64_t key, uint64_t val);
+  bool Insert(K key, V val);
 
   /**
    * @brief Inserts a key-value pair into the map obliviously. The method can be
@@ -52,7 +53,7 @@ struct OMapBindingSingleton {
    * @return true
    * @return false
    */
-  bool OInsert(uint64_t key, uint64_t val);
+  bool OInsert(K key, V val);
 
   /**
    * @brief Finds a key in the map. The method is oblivious.
@@ -61,7 +62,7 @@ struct OMapBindingSingleton {
    * @param val Outputs the value corresponding to the key.
    * @return true if the key is found, false otherwise.
    */
-  bool Find(uint64_t key, uint64_t& val);
+  bool Find(K key, V& val);
 
   /**
    * @brief Erases a key from the map. The method is not oblivious, and can leak
@@ -70,7 +71,7 @@ struct OMapBindingSingleton {
    * @param key The key to erase.
    * @return true if the key existed in the map, false otherwise.
    */
-  bool Erase(uint64_t key);
+  bool Erase(K key);
 
   /**
    * @brief Erases a key from the map obliviously. 1~2x slower than Erase.
@@ -78,7 +79,7 @@ struct OMapBindingSingleton {
    * @param key The key to erase.
    * @return true if the key existed in the map, false otherwise.
    */
-  bool OErase(uint64_t key);
+  bool OErase(K key);
 
   /**
    * @brief Start initializing the OMap. Assumes sufficiently large EPC. Cannot

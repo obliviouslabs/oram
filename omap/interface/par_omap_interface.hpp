@@ -3,6 +3,8 @@
 
 typedef void* par_omap_t;
 typedef void* initializer_t;
+typedef uint64_t K;
+typedef uint64_t V;
 
 /**
  * @brief Binds to Parallel OMap implementation.
@@ -51,8 +53,8 @@ struct ParOMapBindingSingleton {
    * @param existFlags Outputs array of flags indicating whether each key
    * already exists
    */
-  void InsertBatch(uint32_t batchSize, const uint64_t* keys,
-                   const uint64_t* vals, bool* existFlags);
+  void InsertBatch(uint32_t batchSize, const K* keys, const V* vals,
+                   bool* existFlags);
 
   /**
    * @brief Finds a batch of keys in the map. The operation is oblivious. Larger
@@ -64,8 +66,7 @@ struct ParOMapBindingSingleton {
    * @param existFlags Outputs array of flags indicating whether each key was
    * found.
    */
-  void FindBatch(uint32_t batchSize, const uint64_t* keys, uint64_t* vals,
-                 bool* existFlags);
+  void FindBatch(uint32_t batchSize, const K* keys, V* vals, bool* existFlags);
   /**
    * @brief Finds a batch of keys in the map, and defer the maintainence
    * steps so that the results can be obtained with lower latency. The operation
@@ -77,8 +78,8 @@ struct ParOMapBindingSingleton {
    * @param vals Outputs array of values found.
    * @param existFlags Outputs array of flags indicating whether each key was
    */
-  void FindBatchDeferMaintain(uint32_t batchSize, const uint64_t* keys,
-                              uint64_t* vals, bool* existFlags);
+  void FindBatchDeferMaintain(uint32_t batchSize, const K* keys, V* vals,
+                              bool* existFlags);
 
   /**
    * @brief The deferred maintainence steps after FindBatchDeferMaintain.
@@ -95,12 +96,12 @@ struct ParOMapBindingSingleton {
    * @param existFlags Outputs array of flags indicating whether each key
    * existed in the map.
    */
-  void EraseBatch(uint32_t batchSize, const uint64_t* keys, bool* existFlags);
+  void EraseBatch(uint32_t batchSize, const K* keys, bool* existFlags);
 
   /**
    * @brief Start initializing a non-empty map, assuming sufficiently large EPC.
    * The method cannot be called together with InitEmpty or InitEmptyExternal.
-   * Only insertBatch can be called during initialization (i.e. until FinishInit
+   * Only InsertBatch can be called during initialization (i.e. until FinishInit
    * is called).
    *
    * @param size Maximum number of key-value pairs the map can hold.
@@ -112,7 +113,7 @@ struct ParOMapBindingSingleton {
   /**
    * @brief Start initializing a non-empty map that uses at most cacheBytes
    * bytes of EPC memory. The method cannot be called together with InitEmpty or
-   * InitEmptyExternal. Only insertBatch can be called during initialization
+   * InitEmptyExternal. Only InsertBatch can be called during initialization
    * (i.e. untilFinishInit is called).
    *
    * @param size Maximum number of key-value pairs the map can hold.
