@@ -36,7 +36,7 @@ struct ParOMapBindingSingleton {
   /**
    * @brief Inserts a batch of key-value pairs into the map. The operation is
    * oblivious. The method can be called either at the initialization stage, or
-   * after initilization.
+   * after initilization. The insertion during initialization is more efficient.
    * During initialization, the keys must be strictly increasing (throughout the
    * initialization), and the batch size doesn't affect the efficiency per
    * key-value pair.
