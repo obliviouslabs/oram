@@ -142,7 +142,7 @@ struct ParOMap {
    * @param shardCount The number of shards
    * @return std::vector<uint64_t> The list of factors
    */
-  std::vector<uint64_t> factorizeShardCount(uint64_t shardCount) {
+  static std::vector<uint64_t> factorizeShardCount(uint64_t shardCount) {
     if (shardCount == 1) {
       throw std::runtime_error(
           "shardCount should be at least 2 for init with "
@@ -270,7 +270,8 @@ struct ParOMap {
    * @param emptyInit Whether the omap will be initialized with empty data.
    * @return uint32_t The suitable shard count.
    */
-  uint32_t GetSuitableShardCount(uint32_t numThreads, bool emptyInit = false) {
+  static uint32_t GetSuitableShardCount(uint32_t numThreads,
+                                        bool emptyInit = false) {
     if (numThreads <= 4) {
       // too few threads, use 2 shards
       return 2;
@@ -292,6 +293,7 @@ struct ParOMap {
         continue;
       }
     }
+    return 2;
   }
 
   /**
