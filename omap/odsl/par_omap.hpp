@@ -402,7 +402,7 @@ struct ParOMap {
      * @param initSize The number of elements to be inserted
      * @param cacheBytes The cache size for all shards
      */
-    InitContext(ParOMap& omap, uint64_t initSize,
+    InitContext(ParOMap& omap, PositionType initSize,
                 uint64_t cacheBytes = 1UL << 62)
         : omap(omap),
           cacheBytes(cacheBytes),
@@ -579,7 +579,7 @@ struct ParOMap {
    * @param cacheBytes The cache size for all shards.
    * @return InitContext The context object
    */
-  InitContext* NewInitContext(uint64_t initSize,
+  InitContext* NewInitContext(PositionType initSize,
                               uint64_t cacheBytes = 1UL << 62) {
     return new InitContext(*this, initSize, cacheBytes);
   }
