@@ -986,19 +986,20 @@ struct OHashMap {
    * can be either private or public (the initialization and subsequent accesses
    * are oblivious).
    * Example:
-   *  auto initContext = oMap.NewInitContext(1UL << 28);
+   *  auto* initContext = oMap.NewInitContext(1UL << 28);
       for (auto it = kvMap.begin(); it != kvMap.end(); ++it;) {
-        initContext.Insert(it->first, it->second);
+        initContext->Insert(it->first, it->second);
       }
-      initContext.Finalize();
+      initContext->Finalize();
+      delete initContext;
    *
    * @param additionalCacheBytes
    * @return InitContext
    */
-  InitContext NewInitContext(uint64_t additionalCacheBytes = 0) {
+  InitContext* NewInitContext(uint64_t additionalCacheBytes = 0) {
     static_assert(isOblivious,
                   "Only oblivious hash map can call this function");
-    return InitContext(*this, additionalCacheBytes);
+    return new InitContext(*this, additionalCacheBytes);
   }
 
   /**

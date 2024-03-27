@@ -98,13 +98,15 @@ TEST(ParOMap, PushInitInsertFind) {
       for (int i = 0; it != kvMap.end() && i < batchSize; ++it, ++i) {
         vec.push_back(*it);
       }
-      initContext.InsertBatch(vec.begin(), vec.end());
+      initContext->InsertBatch(vec.begin(), vec.end());
     } else {
-      initContext.Insert(it->first, it->second);
+      initContext->Insert(it->first, it->second);
       ++it;
     }
   }
-  initContext.Finalize();
+  initContext->Finalize();
+  delete initContext;
+  initContext = nullptr;
   std::cout << "omp max threads: " << omp_get_max_threads() << std::endl;
   for (uint64_t r = 0; r < round; ++r) {
     int batchSize = (rand() % 100) + 1;

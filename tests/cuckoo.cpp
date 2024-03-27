@@ -92,7 +92,7 @@ void testOHashMapPushInit() {
       int value = rand();
       std_map[key] = value;
     }
-    auto initContext = map.NewInitContext(1UL << 25);
+    auto* initContext = map.NewInitContext(1UL << 25);
     for (auto it = std_map.begin(); it != std_map.end();) {
       if (rand() % 2) {
         int batchSize = (rand() % 100) + 1;
@@ -100,13 +100,15 @@ void testOHashMapPushInit() {
         for (int i = 0; it != std_map.end() && i < batchSize; ++it, ++i) {
           vec.push_back(*it);
         }
-        initContext.InsertBatch(vec.begin(), vec.end());
+        initContext->InsertBatch(vec.begin(), vec.end());
       } else {
-        initContext.Insert(it->first, it->second);
+        initContext->Insert(it->first, it->second);
         ++it;
       }
     }
-    initContext.Finalize();
+    initContext->Finalize();
+    delete initContext;
+    initContext = nullptr;
     ASSERT_EQ(map.GetLoad(), std_map.size());
     for (int r = 0; r < 2 * keySpace; ++r) {
       if (std_map.size() < mapSize) {

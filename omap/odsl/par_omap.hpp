@@ -567,20 +567,21 @@ struct ParOMap {
    * can be either private or public (the initialization and subsequent accesses
    * are oblivious). The data needs to be sorted by key strictly increasing.
    * Example:
-   *  auto initContext = parOMap.NewInitContext(kvMap.size(), 1UL << 28);
+   *  auto* initContext = parOMap.NewInitContext(kvMap.size(), 1UL << 28);
       for (auto it = kvMap.begin(); it != kvMap.end(); ++it;) {
-        initContext.Insert(it->first, it->second);
+        initContext->Insert(it->first, it->second);
       }
-      initContext.Finalize();
+      initContext->Finalize();
+      delete initContext;
    *
    * @param initSize The number of elements to be inserted (could be an
    estimate, but should be no less than the actual number of elements)
    * @param cacheBytes The cache size for all shards.
    * @return InitContext The context object
    */
-  InitContext NewInitContext(uint64_t initSize,
-                             uint64_t cacheBytes = DEFAULT_HEAP_SIZE) {
-    return InitContext(*this, initSize, cacheBytes);
+  InitContext* NewInitContext(uint64_t initSize,
+                              uint64_t cacheBytes = DEFAULT_HEAP_SIZE) {
+    return new InitContext(*this, initSize, cacheBytes);
   }
 
   /**
