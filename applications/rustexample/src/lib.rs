@@ -135,8 +135,8 @@ mod tests {
         unsafe {
             oraminterface.StartInit(sz, 4u32, 4u32);
             let mut flags = vec![false; 2];
-            let keys1 = vec![123u64, 456u64, 789u64, 101112u64];
-            let values1 = vec![1u64, 2u64, 3u64, 4u64];
+            let keys1 = vec![123u64, 456u64];
+            let values1 = vec![1u64, 2u64];
             oraminterface.InsertBatch(2u32, keys1.as_ptr(), values1.as_ptr(), flags.as_mut_ptr());
             let keys2 = vec![789u64, 101112u64];
             let values2 = vec![3u64, 4u64];

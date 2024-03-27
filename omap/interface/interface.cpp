@@ -215,3 +215,17 @@ void ParOMapBindingSingleton::EraseBatch(uint32_t batchSize, const K* keys,
     existFlags[i] = resFlags[i];
   }
 }
+
+#include "interface/common_interface.hpp"
+void ResetBackend(uint64_t size) {
+  if (EM::Backend::g_DefaultBackend) {
+    delete EM::Backend::g_DefaultBackend;
+  }
+  EM::Backend::g_DefaultBackend = new EM::Backend::MemServerBackend(size);
+}
+
+void DeleteBackend() {
+  if (EM::Backend::g_DefaultBackend) {
+    delete EM::Backend::g_DefaultBackend;
+  }
+}
