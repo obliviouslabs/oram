@@ -39,7 +39,8 @@ struct ORAM {
 
   using TreeNode_ = std::conditional_t<check_freshness, FreshBucket_, Bucket_>;
 
-  using HeapTree_ = HeapTree<TreeNode_, PositionType, page_size, evict_freq>;
+  using HeapTree_ = HeapTree<TreeNode_, PositionType, page_size,
+                             divRoundUp(evict_freq, evict_group)>;
 
  private:
   HeapTree_ tree;  // underlying tree structure
