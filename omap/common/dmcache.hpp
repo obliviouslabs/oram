@@ -1,11 +1,12 @@
 #pragma once
-#include "common/defs.hpp"
+#include <algorithm>
 #include <list>
 #include <unordered_map>
-#include <algorithm>
+
+#include "common/defs.hpp"
 
 namespace CACHE {
-template<typename T, uint64_t CACHE_SIZE=SERVER__CACHE_SIZE>
+template <typename T, uint64_t cache_size = SERVER__CACHE_SIZE>
 struct DMCache {
   typedef uint64_t IndexType;
   struct CacheEntry {
@@ -13,27 +14,26 @@ struct DMCache {
     IndexType idx;
     bool dirty;
   };
-  
+
   uint64_t size;
   std::vector<CacheEntry> data;
 
-
   DMCache() {
-    size = CACHE_SIZE;
-    data.resize(CACHE_SIZE);
+    size = cache_size;
+    data.resize(cache_size);
   }
 
   bool CheckContains(const IndexType& rootIdx) {
-    return data[rootIdx % CACHE_SIZE].idx == rootIdx;
+    return data[rootIdx % cache_size].idx == rootIdx;
   }
 
   void Insert(const IndexType& newIndex, const T& val) {
-    data[newIndex % CACHE_SIZE] = { val, newIndex, false };
+    data[newIndex % cache_size] = {val, newIndex, false};
   }
 
-  T& Access(const IndexType& accessedIndex, bool dirty = true, bool writeBack = true) {
-
-    auto& data_to_access = data[accessedIndex % CACHE_SIZE];
+  T& Access(const IndexType& accessedIndex, bool dirty = true,
+            bool writeBack = true) {
+    auto& data_to_access = data[accessedIndex % cache_size];
     data_to_access.dirty = (data_to_access.dirty || dirty) && writeBack;
 
     return data_to_access.val;
@@ -48,7 +48,7 @@ struct DMCache {
   }
 
   CacheEntry& GetMappedSlot(IndexType indexToEvict) {
-    return data[indexToEvict % CACHE_SIZE];
+    return data[indexToEvict % cache_size];
   }
 };
-}
+}  // namespace CACHE

@@ -1,12 +1,14 @@
 #pragma once
-#include "common/defs.hpp"
+#include <algorithm>
 #include <list>
 #include <unordered_map>
-#include <algorithm>
+
+#include "common/defs.hpp"
 
 namespace CACHE {
-template<typename T, uint64_t CACHE_SIZE=SERVER__CACHE_SIZE, uint64_t TLB_SIZE = 2>
-struct Cache {
+template <typename T, uint64_t cache_size = SERVER__CACHE_SIZE,
+          uint64_t tlb_size = 2>
+struct LRUCache {
   struct CacheEntry {
     T val;
     bool dirty;
@@ -19,8 +21,8 @@ struct Cache {
 
   struct TLB_entry {
     IndexType idx;
-    uint64_t counter = 0; // 0 stands for invalid
-    CacheEntry* pentry; // rehashing should not invalidate pointer to value
+    uint64_t counter = 0;  // 0 stands for invalid
+    CacheEntry* pentry;    // rehashing should not invalidate pointer to value
   };
 
   uint64_t TLB_global_counter;
@@ -35,20 +37,21 @@ struct Cache {
 
   void resetTLBCounters() {
     sortTLBByCounter();
-    TLB_global_counter = TLB_SIZE + 1;
-    uint64_t counter = TLB_SIZE + 1;
-    for (TLB_entry& entry: TLB) {
+    TLB_global_counter = tlb_size + 1;
+    uint64_t counter = tlb_size + 1;
+    for (TLB_entry& entry : TLB) {
       entry.counter = --counter;
     }
   }
 
   // if write back is false, reset dirty to false
-  T* AccessTLB(const IndexType& accessedIndex, bool dirty = true, bool writeBack = true) {
+  T* AccessTLB(const IndexType& accessedIndex, bool dirty = true,
+               bool writeBack = true) {
     if (++TLB_global_counter == UINT64_MAX) {
       // to prevent overflow
       resetTLBCounters();
     }
-    for (TLB_entry& entry: TLB) {
+    for (TLB_entry& entry : TLB) {
       if (entry.idx == accessedIndex && entry.counter) {
         entry.counter = TLB_global_counter;
         entry.pentry->dirty = (entry.pentry->dirty || dirty) && writeBack;
@@ -77,41 +80,39 @@ struct Cache {
       }
     }
     *minIt = {accessedIndex, TLB_global_counter, &entry};
-    sortTLBByCounter(); // speed up future lookups
+    sortTLBByCounter();  // speed up future lookups
     return entry.val;
   }
 
-  Cache() {
+  LRUCache() {
     size = 0;
-    data.reserve(CACHE_SIZE);
-    dataRefs.reserve(CACHE_SIZE);
+    data.reserve(cache_size);
+    dataRefs.reserve(cache_size);
     TLB_global_counter = 0;
-    TLB.resize(TLB_SIZE);
+    TLB.resize(tlb_size);
   }
 
   bool CheckContains(const IndexType& rootIdx) {
     return data.count(rootIdx) > 0;
   }
 
-  bool IsFull() {
-    return size == CACHE_SIZE;
-  }
+  bool IsFull() { return size == cache_size; }
 
   CacheEntry& GetNextToEvict(IndexType& indexToEvict) {
     Assert(size > 0);
-    Assert(size == CACHE_SIZE);
+    Assert(size == cache_size);
     indexToEvict = LRU.back();
     Assert(data.count(indexToEvict) > 0);
     return data[indexToEvict];
   }
 
   void EvictLRU(const IndexType& evictedIndex) {
-    #ifndef NDEBUG
+#ifndef NDEBUG
     Assert(size > 0);
-    Assert(size == CACHE_SIZE);
+    Assert(size == cache_size);
     Assert(evictedIndex == LRU.back());
     Assert(data.count(evictedIndex) > 0);
-    #endif
+#endif
     size--;
     LRU.pop_back();
     data.erase(evictedIndex);
@@ -119,21 +120,22 @@ struct Cache {
   }
 
   void Insert(const IndexType& newIndex, const T& val) {
-    Assert(size < CACHE_SIZE);
+    Assert(size < cache_size);
     Assert(data.count(newIndex) == 0);
     size++;
     LRU.push_front(newIndex);
 
-    data[newIndex] = { val, false };
+    data[newIndex] = {val, false};
     dataRefs[newIndex] = (LRU.begin());
 
     // return data[newIndex].val;
   }
 
-  T& Access(const IndexType& accessedIndex, bool dirty = true, bool writeBack = true) {
+  T& Access(const IndexType& accessedIndex, bool dirty = true,
+            bool writeBack = true) {
     Assert(size > 0);
     Assert(data.count(accessedIndex) > 0);
-    
+
     LRU.erase(dataRefs[accessedIndex]);
     LRU.push_front(accessedIndex);
     dataRefs[accessedIndex] = LRU.begin();
@@ -151,4 +153,4 @@ struct Cache {
     return Access(accessedIndex, false, false);
   }
 };
-}
+}  // namespace CACHE

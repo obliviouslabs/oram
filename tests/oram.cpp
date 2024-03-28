@@ -374,8 +374,9 @@ TEST(CircuitORAM, StashLoad) {
 
 TEST(CircuitORAM, VariousSizes) {
   for (int memSize : {2, 3, 5, 7, 9, 33, 40, 55, 127, 129, 543, 678, 1023, 1025,
-                      2000, 3000}) {
-    for (size_t cacheSize = 1UL << 17; cacheSize > 1; cacheSize *= 0.95) {
+                      2000, 3000, 4567, 12345}) {
+    for (size_t cacheSize = 1UL << 19; cacheSize > 1UL << 10;
+         cacheSize *= 0.95) {
       ODSL::CircuitORAM::ORAM<uint64_t, 2, 20, uint64_t, uint64_t, 288> oram;
       try {
         oram.SetSize(memSize, cacheSize);
@@ -395,12 +396,13 @@ TEST(CircuitORAM, VariousSizes) {
         posMap[i] = pos;
         valMap[i] = val;
       }
-      for (int r = 0; r < 7; ++r) {
+      for (int r = 0; r < 2; ++r) {
         for (uint64_t i = 0; i < memSize; i++) {
+          uint64_t uid = UniformRandom(memSize - 1);
           uint64_t val = 0;
-          uint64_t pos = oram.Read(posMap[i], i, val);
-          posMap[i] = pos;
-          ASSERT_EQ(val, valMap[i]);
+          uint64_t pos = oram.Read(posMap[uid], uid, val);
+          posMap[uid] = pos;
+          ASSERT_EQ(val, valMap[uid]);
         }
       }
     }

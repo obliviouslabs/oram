@@ -11,12 +11,14 @@ using EM::ExtVector::EncryptType;
 template <typename T,
           uint64_t page_size = std::max((1UL << 14) - 32, sizeof(T)),
           const EncryptType enc_type = EncryptType::ENCRYPT_AND_AUTH,
-          const uint64_t ext_cache_bytes = (1UL << 16)>
+          const uint64_t ext_cache_bytes = (1UL << 17)>
 struct Vector {
  private:
-  using ExtVec =
-      EM::ExtVector::Vector<T, page_size, enc_type,
-                            std::max(1UL, ext_cache_bytes / page_size)>;
+  // Set to log base 2, so compiler can optimize division in the direct map
+  // cache
+  static constexpr uint64_t cache_size =
+      (1UL << GetLogBaseTwoConstexpr(ext_cache_bytes / page_size));
+  using ExtVec = EM::ExtVector::Vector<T, page_size, enc_type, cache_size>;
   using IntVec = std::vector<T>;
   using value_type = T;
   using reference = T&;
@@ -225,7 +227,7 @@ struct Vector {
       return intVec[i];
     } else {
       Assert(extVec);
-      return (*extVec)[i - cacheSize];
+      return extVec->Get(i - cacheSize);
     }
   }
 

@@ -22,19 +22,13 @@ struct Vector {
         std::conditional_t<ENCRYPTED, Encrypted<Page>, NonEncrypted<Page>>>;
   };
 
-  // don't make the cache size a power of 2, avoid severe cache conflict
-  static constexpr uint64_t DMCacheSize =
-      cache_size != GetNextPowerOfTwo(cache_size)
-          ? cache_size
-          : std::max(1UL, cache_size - 1);
-
   using Server = EM::MemoryServer::ServerFrontendInstance<
-      Page, ::EM::Backend::MemServerBackend, enc_type, DMCacheSize>;
+      Page, ::EM::Backend::MemServerBackend, enc_type, cache_size>;
 
   uint64_t N;
   Server server;
 
-  static uint64_t GetMemoryUsage() { return DMCacheSize * sizeof(Page); }
+  static uint64_t GetMemoryUsage() { return Server::GetMemoryUsage(); }
 
   // https://www.internalpointers.com/post/writing-custom-iterators-modern-cpp
   struct Iterator {
@@ -63,6 +57,7 @@ struct Vector {
     }
 
     const_reference operator*() const {
+      printf("const\n");
       Assert(m_ptr < vec_ptr->N);
       const size_t realIdx = m_ptr;
       const size_t pageIdx = realIdx / item_per_page;

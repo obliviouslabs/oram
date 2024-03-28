@@ -8,23 +8,24 @@
 #include "common/lrucache.hpp"
 #include "common/tracing/perf.hpp"
 
-#define USE_LRU_FLAG false
-
 namespace CACHE {
 enum CacheType {
   LRU,
   DM  // direct map
 };
-template <typename T, typename S, uint64_t CACHE_SIZE = SERVER__CACHE_SIZE,
-          uint64_t TLB_SIZE = 2>
+template <typename T, typename S, uint64_t cache_size = SERVER__CACHE_SIZE,
+          uint64_t tlb_size = 2, CacheType cache_type = CacheType::DM>
 struct Cached : S {
-  using Cache = typename std::conditional<USE_LRU_FLAG,
-                                          CACHE::Cache<T, CACHE_SIZE, TLB_SIZE>,
-                                          CACHE::DMCache<T, CACHE_SIZE> >::type;
-  Cache cache;
+ private:
+  using S::S;
   using typename S::IndexType;
 
-  using S::S;
+  static constexpr bool use_lru_flag = cache_type == LRU;
+  using Cache =
+      typename std::conditional<use_lru_flag,
+                                CACHE::LRUCache<T, cache_size, tlb_size>,
+                                CACHE::DMCache<T, cache_size> >::type;
+  Cache cache;
 
   template <bool dirty = true, bool skip_read = false, bool writeBack = true>
   T& AccessLRU(const IndexType i) {
@@ -75,9 +76,14 @@ struct Cached : S {
     return mappedSlot.val;
   }
 
+ public:
+  static uint64_t GetMemoryUsage() {
+    return cache_size * sizeof(typename Cache::CacheEntry);
+  }
+
   template <bool dirty = true, bool skip_read = false, bool writeBack = true>
   T& Access(const IndexType i) {
-    if constexpr (USE_LRU_FLAG) {
+    if constexpr (use_lru_flag) {
       return AccessLRU<dirty, skip_read, writeBack>(i);
     } else {
       return AccessDM<dirty, skip_read, writeBack>(i);

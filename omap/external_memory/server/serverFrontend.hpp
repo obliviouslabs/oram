@@ -199,10 +199,10 @@ struct NonCachedServerFrontendInstance {
 
 template <typename T, typename BackendType = ::EM::Backend::MemServerBackend,
           const EncryptType enc_type = EncryptType::ENCRYPT_AND_AUTH,
-          uint64_t CACHE_SIZE = SERVER__CACHE_SIZE, uint64_t TLB_SIZE = 2>
+          uint64_t cache_size = SERVER__CACHE_SIZE, uint64_t tlb_size = 2>
 using ServerFrontendInstance = CACHE::Cached<
     T, NonCachedServerFrontendInstance<T, BackendType, enc_type, false>,
-    CACHE_SIZE, TLB_SIZE>;
+    cache_size, tlb_size>;
 
 }  // namespace MemoryServer
 }  // namespace EM
