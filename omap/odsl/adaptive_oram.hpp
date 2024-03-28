@@ -85,7 +85,7 @@ struct ORAM {
     }
   }
 
-  void SetSize(PositionType size, size_t cacheBytes = 1UL << 62) {
+  void SetSize(PositionType size, size_t cacheBytes = MAX_CACHE_SIZE) {
     if (linearOram || treeOram || cachedTreeOram) {
       throw std::runtime_error("SetSize can only be called on empty oram");
     }
@@ -104,7 +104,8 @@ struct ORAM {
     }
   }
 
-  static size_t GetMemoryUsage(size_t size, size_t cacheBytes = 1UL << 62) {
+  static size_t GetMemoryUsage(size_t size,
+                               size_t cacheBytes = MAX_CACHE_SIZE) {
     if (size <= linear_oram_threshold) {
       return LinearORAM_::GetMemoryUsage(size);
     } else {

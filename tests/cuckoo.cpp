@@ -185,7 +185,7 @@ void testOHashMapFindBatch() {
     int batchSize = 1000;
     int numBatch = 10;
     using CHMap = OHashMap<int, int, isOblivious, uint64_t, true>;
-    CHMap map(mapSize, 1UL << 62);
+    CHMap map(mapSize, MAX_CACHE_SIZE);
     std::unordered_map<int, int> std_map;
     for (int r = 0; r < mapSize * 2 / 3; ++r) {
       int key = rand() % keySpace;
@@ -234,7 +234,7 @@ void testReplaceCount() {
 
   std::vector<uint64_t> stashLoads(30, 0);
   for (int rr = 0; rr < outerRound; ++rr) {
-    OHashMap<int, int, false> map(mapSize, 1UL << 62);
+    OHashMap<int, int, false> map(mapSize, MAX_CACHE_SIZE);
     map.Init();
     const auto& stash = map.GetStash();
     for (int i = 0; i < mapSize; ++i) {

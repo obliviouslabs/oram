@@ -51,8 +51,8 @@ struct OHashMapIndexer {
     HashIndices hashIndices;
     secure_hash_with_salt(key, salts, (uint8_t*)&hashIndices,
                           sizeof(hashIndices));
-    pos0 = (PositionType)hashIndices.h0 % _size;
-    pos1 = (PositionType)hashIndices.h1 % _size;
+    pos0 = (PositionType)(hashIndices.h0 % _size);
+    pos1 = (PositionType)(hashIndices.h1 % _size);
   }
 
   /**
@@ -653,10 +653,8 @@ struct OHashMap {
   bool insertEntryOblivious(KVEntry& entryToInsert) {
     PositionType idx0, idx1;
     indexer.getHashIndices(entryToInsert.key, idx0, idx1);
-    obliMove(!entryToInsert.valid, idx0,
-             (PositionType)UniformRandom(tableSize - 1));
-    obliMove(!entryToInsert.valid, idx1,
-             (PositionType)UniformRandom(tableSize - 1));
+    obliMove(!entryToInsert.valid, idx0, UniformRandom(tableSize - 1));
+    obliMove(!entryToInsert.valid, idx1, UniformRandom(tableSize - 1));
     bool exist = false;
     auto table0UpdateFunc = [&](BucketType& bucket0) {
       bool replaceSucceed = replaceIfExistOblivious(bucket0, entryToInsert);
@@ -744,7 +742,7 @@ struct OHashMap {
    *
    * @param size the capacity of the hash map
    */
-  void SetSize(PositionType size) { SetSize(size, 1UL << 62); }
+  void SetSize(PositionType size) { SetSize(size, MAX_CACHE_SIZE); }
 
   /**
    * @brief Allocate resources for the hash map.
@@ -1189,13 +1187,13 @@ struct OHashMap {
       PositionType idx0, idx1;
       indexer.getHashIndices(key, idx0, idx1);
 
-      obliMove(isDummy, idx0, (PositionType)UniformRandom(tableSize - 1));
+      obliMove(isDummy, idx0, UniformRandom(tableSize - 1));
 
       BucketType bucket;
       readHelper(idx0, table0, bucket);
       found = searchBucket(key, value, bucket);
 
-      obliMove(isDummy, idx1, (PositionType)UniformRandom(tableSize - 1));
+      obliMove(isDummy, idx1, UniformRandom(tableSize - 1));
       readHelper(idx1, table1, bucket);
       found |= searchBucket(key, value, bucket);
       found |= searchStash(key, value, stash);

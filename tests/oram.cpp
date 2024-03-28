@@ -63,7 +63,7 @@ TEST(CircuitORAM, SingleAccess) {
 
 TEST(CircuitORAM, BatchUpdate) {
   int memSize = 400;
-  ODSL::AdaptiveORAM::ORAM<uint64_t> oram(memSize, 1UL << 62);
+  ODSL::AdaptiveORAM::ORAM<uint64_t> oram(memSize, MAX_CACHE_SIZE);
   std::vector<uint64_t> posMap(memSize);
   std::vector<uint64_t> valMap(memSize);
   for (uint64_t i = 0; i < memSize; i++) {
@@ -125,7 +125,7 @@ TEST(CircuitORAM, BatchUpdateLarge) {
   int memSize = 1e5;
   uint64_t round = 5000;
   uint64_t maxBatchSize = 1000;
-  ODSL::CircuitORAM::ORAM<uint64_t> oram(memSize, 1UL << 62);
+  ODSL::CircuitORAM::ORAM<uint64_t> oram(memSize, MAX_CACHE_SIZE);
   std::vector<uint64_t> posMap(memSize);
   std::vector<uint64_t> valMap(memSize);
   for (uint64_t i = 0; i < memSize; i++) {
@@ -143,7 +143,7 @@ TEST(CircuitORAM, BatchUpdateLarge) {
       posMap[uid] = pos;
       ASSERT_EQ(val, valMap[uid]);
     }
-    uint64_t batchSize = UniformRandom(1, maxBatchSize);
+    uint64_t batchSize = UniformRandom(1UL, maxBatchSize);
     std::vector<uint64_t> batchUid(batchSize);
     std::vector<uint64_t> batchPos(batchSize);
     for (uint64_t j = 0; j < batchSize; j++) {
@@ -197,7 +197,7 @@ TEST(CircuitORAM, BatchReadAndRemovePerf) {
   int memSize = 1e5;
   uint64_t round = 5000;
   uint64_t batchSize = 1000;
-  ODSL::CircuitORAM::ORAM<TestElement> oram(memSize, 1UL << 62);
+  ODSL::CircuitORAM::ORAM<TestElement> oram(memSize, MAX_CACHE_SIZE);
   std::vector<uint64_t> posMap(memSize, 0);
   std::vector<uint64_t> batchUid(batchSize, 0);
   std::vector<uint64_t> batchPos(batchSize);
@@ -636,7 +636,7 @@ TEST(RecursiveORAM, testMixed) {
 TEST(RecursiveORAM, testBatchAccessDefer) {
   uint64_t size = 1234;
   StdVector<uint64_t> ref(size);
-  ODSL::RecursiveORAM<uint64_t, uint64_t> oram(size, 1UL << 62);
+  ODSL::RecursiveORAM<uint64_t, uint64_t> oram(size, MAX_CACHE_SIZE);
   for (uint64_t i = 0; i < size; i++) {
     ref[i] = UniformRandom();
   }

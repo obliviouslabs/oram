@@ -19,11 +19,11 @@ constexpr INLINE uint64_t GetNextPowerOfTwo(uint64_t n) {
   return n;
 }
 
-INLINE uint64_t GetLogBaseTwo(uint64_t n) {
+INLINE int GetLogBaseTwo(uint64_t n) {
   const uint64_t masks[6] = {0x2,    0xC,         0xF0,
                              0xFF00, 0xFFFF'0000, 0xFFFF'FFFF'0000'0000};
-  uint64_t c = 32;
-  uint64_t r = 0;
+  int c = 32;
+  int r = 0;
   for (int32_t i = 5; i >= 0; i--) {
     const bool cond = n & masks[i];
     obliMove(cond, n, n >> c);
@@ -33,11 +33,11 @@ INLINE uint64_t GetLogBaseTwo(uint64_t n) {
   return r;
 }
 
-constexpr INLINE uint64_t GetLogBaseTwoConstexpr(uint64_t n) {
+constexpr INLINE int GetLogBaseTwoConstexpr(uint64_t n) {
   const uint64_t masks[6] = {0x2,    0xC,         0xF0,
                              0xFF00, 0xFFFF'0000, 0xFFFF'FFFF'0000'0000};
-  uint64_t c = 32;
-  uint64_t r = 0;
+  int c = 32;
+  int r = 0;
   for (int32_t i = 5; i >= 0; i--) {
     const bool cond = n & masks[i];
     if (cond) {
@@ -70,9 +70,10 @@ INLINE uint64_t CeilLog2(uint64_t x) {
 
 extern RandGen default_rand;
 
-// [left,right]
-inline uint64_t UniformRandom(uint64_t left, uint64_t right) {
-  return default_rand.rand64() % (right - left + 1) + left;
+// [left, right]
+template <typename T>
+inline T UniformRandom(T left, T right) {
+  return (T)(default_rand.rand64() % (right - left + 1) + left);
 }
 
 inline uint32_t UniformRandom32(uint32_t left, uint32_t right) {
@@ -82,8 +83,9 @@ inline uint32_t UniformRandom32(uint32_t left, uint32_t right) {
 inline bool UniformRandomBit() { return default_rand.rand1(); }
 
 // [0,right]
-INLINE uint64_t UniformRandom(uint64_t right) {
-  return UniformRandom(0, right);
+template <typename T>
+INLINE T UniformRandom(T right) {
+  return UniformRandom((T)0, right);
 }
 
 // [0,right]
@@ -102,8 +104,9 @@ INLINE void GetRandIV(uint8_t* out) {
 }
 
 // x/y round up
-INLINE constexpr uint64_t divRoundUp(size_t x, size_t y) {
-  return (x + y - 1) / y;
+template <typename xT, typename yT>
+INLINE constexpr xT divRoundUp(xT x, yT y) {
+  return (xT)((x + y - 1) / y);
 }
 
 /**

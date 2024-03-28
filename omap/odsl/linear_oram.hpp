@@ -123,7 +123,7 @@ struct ORAM {
         uidCopy.begin(), uidCopy.begin() + batchSize, prefixSum.begin());
 
     // prepare marks for distributing uids to there corresponding location
-    int distributeLevel = (int)GetLogBaseTwo(_size - 1);
+    int distributeLevel = GetLogBaseTwo(_size - 1);
     for (uint64_t mask = 1UL << distributeLevel; mask != 0; mask >>= 1) {
       for (int64_t i = _size - mask - 1; i >= 0; --i) {
         bool movFlag =
@@ -218,7 +218,7 @@ struct ORAM {
     Algorithm::OrCompactSeparateMark(
         uidCopy.begin(), uidCopy.begin() + batchSize, prefixSum.begin());
 
-    int distributeLevel = (int)GetLogBaseTwo(_size - 1);
+    int distributeLevel = GetLogBaseTwo(_size - 1);
     for (uint64_t mask = 1UL << distributeLevel; mask != 0; mask >>= 1) {
       for (int64_t i = _size - mask - 1; i >= 0; --i) {
         bool movFlag =

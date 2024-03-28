@@ -189,7 +189,7 @@ void ParBitonicSortSepPayload(KeyIterator keyBegin, KeyIterator keyEnd,
   size_t size = keyEnd - keyBegin;
   size_t maxThread = size * (sizeof(*keyBegin) + sizeof(*payloadBegin)) >> 17;
   numThreads = (int)std::min((uint64_t)numThreads, maxThread);
-  int logNumThreads = (int)GetLogBaseTwo(numThreads);
+  int logNumThreads = GetLogBaseTwo(numThreads);
   numThreads = 1 << logNumThreads;
   if (numThreads > 1) {
     std::vector<uint64_t> threadSize(numThreads);

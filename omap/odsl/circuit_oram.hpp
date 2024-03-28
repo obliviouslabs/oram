@@ -305,9 +305,7 @@ struct ORAM {
    *
    * @return PositionType the random position
    */
-  INLINE PositionType getRandPos() {
-    return (PositionType)UniformRandom(size() - 1);
-  }
+  INLINE PositionType getRandPos() { return UniformRandom(size() - 1); }
 
   /**
    * @brief Get a vector of random positions.
@@ -405,7 +403,7 @@ struct ORAM {
    * @param size Capacity of the ORAM
    * @param cacheBytes The maximum size of the tree-top cache in bytes.
    */
-  void SetSize(PositionType size, uint64_t cacheBytes = 1UL << 62) {
+  void SetSize(PositionType size, uint64_t cacheBytes = MAX_CACHE_SIZE) {
     if (_size) {
       throw std::runtime_error("Circuit ORAM double initialization");
     }
@@ -418,7 +416,7 @@ struct ORAM {
     }
     TreeNode_ dummyNode = TreeNode_();
     tree.InitWithDefault(size, dummyNode, cacheLevel);
-    depth = (int)GetLogBaseTwo(size - 1) + 2;
+    depth = GetLogBaseTwo(size - 1) + 2;
     if (depth > 64) {
       throw std::runtime_error("Circuit ORAM too large");
     }
@@ -433,7 +431,7 @@ struct ORAM {
    * @return uint64_t The memory usage in bytes
    */
   static uint64_t GetMemoryUsage(PositionType size,
-                                 uint64_t cacheBytes = 1UL << 62) {
+                                 uint64_t cacheBytes = MAX_CACHE_SIZE) {
     return sizeof(Stash) +
            HeapTree_::GetMemoryUsage(
                size, GetMaxCacheLevel<T, Z, stashSize, PositionType, UidType,

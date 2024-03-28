@@ -154,11 +154,11 @@ struct RecursiveORAM {
    */
   void SetSize(PositionType size, size_t cacheBytes = DEFAULT_HEAP_SIZE) {
     _size = size;
-    PositionType leafOramSize = (PositionType)divRoundUp(size, chunk_size);
+    PositionType leafOramSize = divRoundUp(size, chunk_size);
     int numLevel = 0;
-    PositionType internalSize = (PositionType)divRoundUp(leafOramSize, fan_out);
+    PositionType internalSize = divRoundUp(leafOramSize, fan_out);
     for (PositionType oramSize = internalSize;;
-         oramSize = (PositionType)divRoundUp(oramSize, fan_out)) {
+         oramSize = divRoundUp(oramSize, fan_out)) {
       oramSizes.push_back(oramSize);
       ++numLevel;
       if (oramSize <= InternalORAM::linear_oram_threshold) {
@@ -266,8 +266,7 @@ struct RecursiveORAM {
       PositionType nextPos = 0;
       // here we pre-calculate the next position, so that we can update the
       // position map in one go
-      PositionType nextNewPos =
-          (PositionType)UniformRandom(oramSizes[level + 1] - 1);
+      PositionType nextNewPos = UniformRandom(oramSizes[level + 1] - 1);
       auto updateFunc = [&](InternalNode& node) -> bool {
         PositionType localNextPos = 0;
         for (short i = 0; i < fan_out; ++i) {
@@ -426,7 +425,7 @@ struct RecursiveORAM {
       InternalNode* node = writeBackBuffer.GetInternalNodes(level);
       UidType* uid = writeBackBuffer.GetUids(level);
       for (size_t i = 0; i < address.size(); ++i) {
-        nextNewPos[i] = (PositionType)UniformRandom(oramSizes[level + 1] - 1);
+        nextNewPos[i] = UniformRandom(oramSizes[level + 1] - 1);
       }
 
       internalOrams[level].BatchReadAndRemove(address.size(), &pos[0], uid,

@@ -132,7 +132,7 @@ bool WriteNewBlockToPath(Iterator begin, Iterator end, const Block_& block) {
 template <typename T, const int Z, const int stashSize,
           typename PositionType = uint64_t, typename UidType = uint64_t,
           const bool check_freshness = true>
-int GetMaxCacheLevel(PositionType size, size_t cacheBytes = 1UL << 62) {
+int GetMaxCacheLevel(PositionType size, size_t cacheBytes = MAX_CACHE_SIZE) {
   using Bucket_ = Bucket<T, Z, PositionType, UidType>;
   using FreshBucket_ = FreshBucket<Bucket_>;
 
@@ -140,9 +140,9 @@ int GetMaxCacheLevel(PositionType size, size_t cacheBytes = 1UL << 62) {
   using Stash = Bucket<T, stashSize, PositionType, UidType>;
   using HeapTree_ = HeapTree<TreeNode_, PositionType>;
   int maxCacheLevel = 0;
-  if (cacheBytes >= HeapTree_::GetMemoryUsage(size, 62)) {
+  if (cacheBytes >= HeapTree_::GetMemoryUsage(size, MAX_CACHE_LEVEL)) {
     // default value
-    return 62;
+    return MAX_CACHE_LEVEL;
   }
   if (cacheBytes < sizeof(Stash)) {
     return -1;

@@ -1,7 +1,8 @@
 #pragma once
 #include "common/utils.hpp"
 #include "external_memory/cachefrontvector.hpp"
-
+#define MAX_CACHE_LEVEL 62
+#define MAX_CACHE_SIZE (1UL << MAX_CACHE_LEVEL)
 /**
  * @brief A tree stored in a heap structure, but pack several levels together,
  * and optimize for reverse lexico order eviction.
@@ -31,7 +32,7 @@ struct HeapTree {
   /** By reducing the size of each packed subtree and store the packed tree in
    * each level following the reverse lexico order. We can trade off locality on
    * each path to locality in eviction*/
-  static constexpr int findBestLexicoGroupLevel() {
+  static consteval int findBestLexicoGroupLevel() {
     double minMissRate = 1.0 + double(evict_freq);
     int bestLevel = 0;
     for (int i = 0; i < node_per_page_log2; ++i) {
@@ -64,7 +65,7 @@ struct HeapTree {
  public:
   HeapTree() {}
 
-  explicit HeapTree(PositionType _size, int _cacheLevel = 62) {
+  explicit HeapTree(PositionType _size, int _cacheLevel = MAX_CACHE_LEVEL) {
     Init(_size, _cacheLevel);
   }
 
@@ -79,13 +80,13 @@ struct HeapTree {
    * layout of the tree.
    */
   void InitWithDefault(PositionType _size, const T& defaultVal,
-                       int _cacheLevel = 62) {
+                       int _cacheLevel = MAX_CACHE_LEVEL) {
     if (totalSize != 0) {
       throw std::runtime_error("Init called on non-empty tree");
     }
     cacheLevel = _cacheLevel;
     leafCount = _size;
-    totalLevel = (int)GetLogBaseTwo(_size - 1) + 2;
+    totalLevel = GetLogBaseTwo(_size - 1) + 2;
     if (totalLevel > 64) {
       throw std::runtime_error("ORAM size too large.");
     }
@@ -96,7 +97,7 @@ struct HeapTree {
     extSize = totalSize - cacheSize;
   }
 
-  void Init(PositionType _size, int _cacheLevel = 62) {
+  void Init(PositionType _size, int _cacheLevel = MAX_CACHE_LEVEL) {
     InitWithDefault(_size, T(), _cacheLevel);
   }
 
@@ -107,7 +108,8 @@ struct HeapTree {
    * @param _cacheLevel The number of top levels to cache.
    * @return uint64_t The memory usage in bytes
    */
-  static uint64_t GetMemoryUsage(PositionType _size, int _cacheLevel = 62) {
+  static uint64_t GetMemoryUsage(PositionType _size,
+                                 int _cacheLevel = MAX_CACHE_LEVEL) {
     size_t totalSize = 2 * _size - 1;
     size_t cacheSize = std::min((uint64_t)totalSize, (2UL << _cacheLevel) - 1);
     return Vec::GetMemoryUsage(totalSize, cacheSize);

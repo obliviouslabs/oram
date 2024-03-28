@@ -308,7 +308,7 @@ struct ParOMap {
    *
    * @param cacheBytes The cache size in bytes (for all shards in total).
    */
-  void Init(size_t cacheBytes = 1UL << 62) {
+  void Init(size_t cacheBytes = MAX_CACHE_SIZE) {
     if (_size == 0) {
       throw std::runtime_error("ParOMap size not set. Call SetSize first.");
     }
@@ -405,7 +405,7 @@ struct ParOMap {
      * @param cacheBytes The cache size for all shards
      */
     InitContext(ParOMap& omap, PositionType initSize,
-                uint64_t cacheBytes = 1UL << 62)
+                uint64_t cacheBytes = MAX_CACHE_SIZE)
         : omap(omap),
           cacheBytes(cacheBytes),
           currBktIdx(0),
@@ -582,7 +582,7 @@ struct ParOMap {
    * @return InitContext The context object
    */
   InitContext* NewInitContext(PositionType initSize,
-                              uint64_t cacheBytes = 1UL << 62) {
+                              uint64_t cacheBytes = MAX_CACHE_SIZE) {
     return new InitContext(*this, initSize, cacheBytes);
   }
 
@@ -599,7 +599,7 @@ struct ParOMap {
    */
   template <class Reader>
     requires Readable<Reader, std::pair<K, V>>
-  void InitFromReader(Reader& reader, uint64_t cacheBytes = 1UL << 62) {
+  void InitFromReader(Reader& reader, uint64_t cacheBytes = MAX_CACHE_SIZE) {
     InitContext context(*this, reader.size(), cacheBytes);
     while (!reader.eof()) {
       std::pair<K, V> kvPair = reader.read();

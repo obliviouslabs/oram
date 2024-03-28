@@ -148,7 +148,7 @@ void OrShuffle(Iterator begin, Iterator end, MarkIterator markBegin) {
   *it = currsum;
   ++it;
   for (size_t N = n; N > 0; --N) {
-    bool chooseFlag = UniformRandom(0, N - 1) < k;
+    bool chooseFlag = UniformRandom(N - 1) < k;
     obliMove(chooseFlag, k, k - 1);
     obliMove(chooseFlag, currsum, currsum + 1);  // prefix sum
     *it = currsum;
