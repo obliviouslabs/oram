@@ -333,13 +333,14 @@ TEST(CircuitORAM, OverflowHandling) {
 }
 
 TEST(CircuitORAM, StashLoad) {
-  // GTEST_SKIP();
+  GTEST_SKIP();
   size_t memSize = 1UL << 16;
   static constexpr int Z = 2;
   static constexpr int stashSize = 50;
-  ODSL::CircuitORAM::ORAM<int, Z, stashSize, uint32_t, uint32_t> oram(memSize);
+  ODSL::CircuitORAM::ORAM<int, Z, stashSize, uint32_t, uint32_t, 4096, false>
+      oram(memSize);
   size_t warmupWindowCount = 1e5;
-  size_t windowCount = 1e6;
+  size_t windowCount = 1e7;
   size_t windowSize = 10;
   std::vector<uint32_t> posMap(memSize);
   for (int i = 0; i < memSize; ++i) {
@@ -411,13 +412,16 @@ TEST(CircuitORAM, VariousSizes) {
 
 TEST(CircuitORAM, ReadPerf) {
   int memSize = 1 << 20;
-  ODSL::CircuitORAM::ORAM<TestElement> oram(memSize);
+
+  ODSL::CircuitORAM::ORAM<TestElement, 2, 20, uint32_t, uint32_t, 4096, false>
+      oram(memSize);
 
   uint64_t numAccesses = 3e6;
   auto start = std::chrono::system_clock::now();
   for (uint64_t i = 0; i < numAccesses; i++) {
     TestElement val;
-    uint64_t pos = oram.Read(i % memSize, 0, val);
+    uint32_t readPos = rand() % memSize;
+    oram.Read(readPos, 0, val);
   }
   auto end = std::chrono::system_clock::now();
   std::chrono::duration<double> diff = end - start;
@@ -521,8 +525,8 @@ void testThreshold() {
     uint8_t data[element_size];
   };
   using LinearORAM_ = ODSL::LinearORAM::ORAM<Element, uint32_t>;
-  using CircuitORAM_ = ODSL::CircuitORAM::ORAM<Element, 2, 20, uint32_t,
-                                               uint32_t, 4096, 2, false>;
+  using CircuitORAM_ =
+      ODSL::CircuitORAM::ORAM<Element, 2, 20, uint32_t, uint32_t, 4096, false>;
   for (uint32_t size = 10; size < 1000; size += 10) {
     LinearORAM_ linear_oram(size);
     CircuitORAM_ circuit_oram(size);

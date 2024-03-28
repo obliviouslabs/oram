@@ -19,13 +19,17 @@ namespace ODSL::CircuitORAM {
 /// bucket.
 /// @tparam page_size   The size of the page if part of the data is stored in
 /// external memory, default to 4096 bytes
-/// @tparam evict_freq  The number of reverse lexico evictions per random access
-/// @tparam check_freshness  Whether to check freshness of the buckets swapped
+/// @tparam check_freshness Whether to check freshness of the buckets swapped
 /// from external memory
+/// @tparam evict_freq  The number of reverse lexico evictions per random
+/// access
+/// @tparam evict_group The number of evictions to perform for each position.
+/// Experiment shows that performing two evictions on one path is not much worse
+/// than performing two evictions on two paths.
 template <typename T, const int Z = 2, const int stashSize = 20,
           typename PositionType = uint64_t, typename UidType = uint64_t,
-          const uint64_t page_size = 4096, int evict_freq = 2,
-          const bool check_freshness = true>
+          const uint64_t page_size = 4096, const bool check_freshness = true,
+          int evict_freq = 2, int evict_group = 2>
 struct ORAM {
   using Stash = Bucket<T, stashSize, PositionType, UidType>;
   using Block_ = Block<T, PositionType, UidType>;
@@ -86,12 +90,10 @@ struct ORAM {
     }
     obliMove(sg.goal >= 0, sg.src, 0);
     // the remaining levels
-    for (int i = 1; i < depth; ++i) {
+    for (int i = 1, idx = stashSize + Z; i < depth; ++i) {
       obliMove(sg.goal >= i, deepest[i], sg.src);
       int bucketDeepestLevel = -1;
-      int offset = stashSize + i * Z;
-      for (int j = 0; j < Z; ++j) {
-        int idx = offset + j;
+      for (int j = 0; j < Z; ++j, ++idx) {
         int deepestLevel = CommonSuffixLength(path[idx].position, pos);
         bool isEmpty = path[idx].IsDummy();
         hasEmpty[i] |= isEmpty;
@@ -132,12 +134,10 @@ struct ORAM {
       obliMove(readAndRemoveFlag, path[idx].uid, DUMMY<UidType>());
     }
     int dest = target[0];
-    for (int i = 1; i < depth - 1; ++i) {
+    for (int i = 1, idx = stashSize + Z; i < depth - 1; ++i) {
       bool hasTargetFlag = target[i] != -1;
       bool placeDummyFlag = (i == dest) & (!hasTargetFlag);
-
-      int offset = stashSize + i * Z;
-      for (int j = 0; j < Z; ++j) {
+      for (int j = 0; j < Z; ++j, ++idx) {
         // case 0: level i is neither a dest and not a src
         //         hasTargetFlag = false, placeDummyFlag = false
         //         nothing will change
@@ -155,7 +155,6 @@ struct ORAM {
         //         hasTargetFlag = true, placeDummyFlag = false
         //         hold will be swapped with the slot that evicts to deepest,
         //         which fulfills both src and dest requirements.
-        int idx = offset + j;
         bool isDeepest = (idx == deepestIdx[i]);
         bool readAndRemoveFlag = isDeepest & hasTargetFlag;
         bool writeFlag = path[idx].IsDummy() & placeDummyFlag;
@@ -180,12 +179,16 @@ struct ORAM {
   /**
    * @brief Read the path indexed by pos, evict it, and writeback.
    *
+   * @tparam _evict_group The number of evictions to perform for the path
    * @param pos The position of the path to evict
    */
+  template <const int _evict_group = evict_group>
   void evict(PositionType pos) {
     PositionType nodeIdxArr[64];
     int pathDepth = readPathAndGetNodeIdxArr(pos, nodeIdxArr);
-    evictPath(pos, pathDepth);
+    for (int i = 0; i < evict_group; ++i) {
+      evictPath(pos, pathDepth);
+    }
     writeBackPath(pos, pathDepth, nodeIdxArr);
   }
 
@@ -193,11 +196,20 @@ struct ORAM {
    * @brief Perform multiple evictions on paths given by evict counter.
    *
    * @tparam _evict_freq The number of evictions to perform
+   * @tparam _evict_group The number of evictions to perform for each position.
+   * Experiment shows that performing two evictions on one path is not much
+   * worse than performing two evictions on two paths.
    */
-  template <const int _evict_freq = evict_freq>
+  template <const int _evict_freq = evict_freq,
+            const int _evict_group = evict_group>
   void evict() {
-    for (int i = 0; i < _evict_freq; ++i) {
-      evict((evictCounter++) % size());
+    static constexpr int numGroup = _evict_freq / _evict_group;
+    static constexpr int remaining = _evict_freq % _evict_group;
+    for (int i = 0; i < numGroup; ++i) {
+      evict<_evict_group>((evictCounter++) % size());
+    }
+    if constexpr (remaining) {
+      evict<remaining>((evictCounter++) % size());
     }
   }
 

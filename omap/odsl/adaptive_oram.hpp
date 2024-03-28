@@ -18,9 +18,8 @@ struct ORAM {
   // cached oram means the entire oram is cached in the enclave, so we don't
   // need to add checks for freshness
   using CachedORAM_ =
-      CircuitORAM::ORAM<T, 2, 20, PositionType, UidType, 4096, 2, false>;
-  using ORAM_ =
-      CircuitORAM::ORAM<T, 2, 20, PositionType, UidType, 4096, 2, true>;
+      CircuitORAM::ORAM<T, 2, 20, PositionType, UidType, 4096, false>;
+  using ORAM_ = CircuitORAM::ORAM<T, 2, 20, PositionType, UidType, 4096, true>;
 
   LinearORAM_* linearOram = NULL;
   CachedORAM_* cachedTreeOram = NULL;
