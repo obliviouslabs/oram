@@ -75,6 +75,29 @@ TEST(ParOMap, InitInsertFind) {
   }
 }
 
+TEST(ParOMap, InitCatchDup) {
+  uint64_t mapSize = UniformRandom(100, 500000);
+  uint64_t shardCount = 5;
+  ParOMap<uint64_t, uint64_t> parOMap(mapSize, shardCount);
+  if (EM::Backend::g_DefaultBackend) {
+    delete EM::Backend::g_DefaultBackend;
+  }
+  size_t BackendSize = 2e9;
+  EM::Backend::g_DefaultBackend =
+      new EM::Backend::MemServerBackend(BackendSize);
+
+  size_t initSize = mapSize * 2 / 3;
+  EM::VirtualVector::VirtualReader<std::pair<uint64_t, uint64_t>> reader(
+      initSize,
+      [&](uint64_t i) { return std::make_pair(i % (initSize / 2), 0UL); });
+  try {
+    parOMap.InitFromReader(reader, 128UL << 20);
+    ASSERT_TRUE(false);  // should not reach here
+  } catch (std::exception& e) {
+    std::cout << e.what() << std::endl;
+  }
+}
+
 TEST(ParOMap, PushInitInsertFind) {
   uint64_t mapSize = UniformRandom(100, 500000);
   uint64_t shardCount = 32;

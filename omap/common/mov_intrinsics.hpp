@@ -7,16 +7,6 @@
 #include <utility>
 
 #include "cpp_extended.hpp"
-INLINE void CSWAP8(const uint64_t cond, uint64_t& guy1, uint64_t& guy2) {
-  asm volatile(
-      "test %[mcond], %[mcond]\n\t"
-      "mov %[i1], %%r9\n\t"
-      "cmovnz %[i2], %[i1]\n\t"
-      "cmovnz %%r9, %[i2]\n\t"
-      : [i1] "=r"(guy1), [i2] "=r"(guy2)
-      : [mcond] "r"(cond), "[i1]"(guy1), "[i2]"(guy2)
-      : "r9");
-}
 
 INLINE void CMOV8_internal(const uint64_t cond, uint64_t& guy1,
                            const uint64_t& guy2) {

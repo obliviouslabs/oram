@@ -554,36 +554,9 @@ void testOMap() {
   printf("oram find time %f us\n", (double)timediff * 1e-3 / (double)round);
 }
 
-struct ETH_Addr {
-  // 20 bytes
+using ETH_Addr = LargeUnsigned<20>;
 
-  uint32_t part[5];
-
-  // define less operator
-  bool operator<(const ETH_Addr& other) const {
-    bool res = false;
-    bool eq = true;
-    for (int i = 0; i < 5; ++i) {
-      res |= (eq & (part[i] < other.part[i]));
-      eq &= part[i] == other.part[i];
-    }
-    return res;
-  }
-
-  bool operator==(const ETH_Addr& other) const {
-    bool eq = true;
-    for (int i = 0; i < 5; ++i) {
-      eq &= (part[i] == other.part[i]);
-    }
-    return eq;
-  }
-
-  bool operator!=(const ETH_Addr& other) const { return !(*this == other); }
-};
-
-struct ERC20_Balance {
-  uint64_t part[4];
-};
+using ERC20_Balance = LargeUnsigned<32>;
 
 void testOMapPerf() {
   printf("test omap perf with %d threads\n", TCS_NUM);
@@ -668,7 +641,6 @@ void testOHashMapPerf(size_t mapSize = 5e6) {
   ocall_measure_time(&start);
   for (size_t r = 0; r < round; ++r) {
     ETH_Addr addr;
-    addr.part[0] = (uint32_t)r;
     ERC20_Balance balance;
     omap.Insert(addr, balance);
   }
@@ -679,7 +651,7 @@ void testOHashMapPerf(size_t mapSize = 5e6) {
   ocall_measure_time(&start);
   for (size_t r = 0; r < round; ++r) {
     ETH_Addr addr;
-    addr.part[0] = (uint32_t)r;
+    addr.SetRand();
     ERC20_Balance balance;
     omap.Find(addr, balance);
   }
@@ -795,7 +767,7 @@ void testParOMapPerf(size_t mapSize = 5e6,
   std::function<std::pair<ETH_Addr, ERC20_Balance>(uint64_t)> readerFunc =
       [](uint64_t i) {
         std::pair<ETH_Addr, ERC20_Balance> pr;
-        pr.first.part[0] = (uint32_t)i;
+        pr.first.SetRand();
         return pr;
       };
 
@@ -817,9 +789,6 @@ void testParOMapPerf(size_t mapSize = 5e6,
     for (size_t r = 0; r < round / batchSize; ++r) {
       std::vector<ETH_Addr> addr(batchSize);
       std::vector<ERC20_Balance> balance(batchSize);
-      for (uint32_t i = 0; i < batchSize; ++i) {
-        addr[i].part[0] = (uint32_t)(initSize + r * batchSize + i);
-      }
       omap.InsertBatch(addr.begin(), addr.end(), balance.begin());
     }
     ocall_measure_time(&end);
@@ -830,7 +799,7 @@ void testParOMapPerf(size_t mapSize = 5e6,
       std::vector<ETH_Addr> addr(batchSize);
       std::vector<ERC20_Balance> balance(batchSize);
       for (size_t i = 0; i < batchSize; ++i) {
-        addr[i].part[0] = (uint32_t)(initSize + r * batchSize + i);
+        addr[i].SetRand();
       }
       omap.FindBatch(addr.begin(), addr.end(), balance.begin());
     }
@@ -847,7 +816,7 @@ void testParOMapPerfDeferWriteBack(size_t mapSize = 5e6,
   std::function<std::pair<ETH_Addr, ERC20_Balance>(uint64_t)> readerFunc =
       [](uint64_t i) {
         std::pair<ETH_Addr, ERC20_Balance> pr;
-        pr.first.part[0] = (uint32_t)i;
+        pr.first.SetRand();
         return pr;
       };
 
@@ -875,9 +844,6 @@ void testParOMapPerfDeferWriteBack(size_t mapSize = 5e6,
       ocall_measure_time(&queryStart);
       std::vector<ETH_Addr> addr(batchSize);
       std::vector<ERC20_Balance> balance(batchSize);
-      for (uint32_t i = 0; i < batchSize; ++i) {
-        addr[i].part[0] = (uint32_t)(initSize + r * batchSize + i);
-      }
       omap.FindBatchDeferWriteBack(addr.begin(), addr.end(), balance.begin());
       ocall_measure_time(&queryEnd);
       queryTimediff += queryEnd - queryStart;

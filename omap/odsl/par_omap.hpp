@@ -352,7 +352,6 @@ struct ParOMap {
     uint64_t currBktIdx;         // current bucket index in the current batch
     uint64_t currBktOffset;      // current offset in the current bucket
     uint64_t load;       // number of elements inserted in the current batch
-    K prevKey;           // previous key inserted
     int butterflyLevel;  // number of levels in the butterfly network
 
     /**
@@ -362,6 +361,7 @@ struct ParOMap {
      */
     void route() {
       // route the data through the butterfly network in parallel
+      bool initFailed = false;
       for (int level = 0, stride = parBatchCount; level < butterflyLevel;
            ++level) {
         uint64_t way = factors[level];
@@ -378,12 +378,19 @@ struct ParOMap {
           size_t tempBktsSize = way * bktSize * sizeof(Element);
           Element* localTempElements = tempElements + parIdx * way * bktSize;
           uint8_t* localTempMarks = tempMarks + parIdx * way * bktSize;
-          MergeSplitKWay(KWayIts, way, bktSize, localTempElements,
-                         localTempMarks);
+          try {
+            MergeSplitKWay(KWayIts, way, bktSize, localTempElements,
+                           localTempMarks);
+          } catch (const std::runtime_error& e) {
+            initFailed = true;
+          }
         }
         stride *= way;
       }
-
+      if (initFailed) {
+        throw std::runtime_error(
+            "Initialization failed due to bucket overflow. Please retry.");
+      }
       // insert the data into the non-oblivious maps in parallel
 #pragma omp parallel for schedule(static)
       for (uint32_t i = 0; i < shardCount; ++i) {
@@ -391,9 +398,17 @@ struct ParOMap {
           const Element& elem = batch[i * perBatchShardSize + j];
           const KVPair& kvPair = elem.v;
           // insert dummies like normal elements
-          nonOMaps[i]->template Insert<true>(kvPair.key, kvPair.value,
-                                             elem.IsDummy());
+          bool existFlag = nonOMaps[i]->template Insert<true>(
+              kvPair.key, kvPair.value, elem.IsDummy());
+          if (existFlag & !elem.IsDummy()) {
+            initFailed = true;
+            break;
+          }
         }
+      }
+      if (initFailed) {
+        throw std::runtime_error(
+            "Initialization failed. Encountered duplicate keys.");
       }
     }
 
@@ -468,7 +483,7 @@ struct ParOMap {
 
     /**
      * @brief Insert a new key-value pair into the batch. The key must be
-     * strictly increasing. The running time of this function can be unstable.
+     * unique. The running time of this function can be unstable.
      * The method may throw error with some negligible probability (when some
      * bucket overflows), in which case one may retry the initialization.
      *
@@ -476,15 +491,10 @@ struct ParOMap {
      * @param value
      */
     void Insert(const K& key, const V& value) {
-      if (load > 0 && !(prevKey < key)) {
-        throw std::runtime_error(
-            "Keys not strictly increasing during initialization");
-      }
       if (load >= omap.size()) {
         throw std::runtime_error("Too many elements inserted during init");
       }
       ++load;
-      prevKey = key;
       Element& elem = batch[currBktIdx * bktSize + currBktOffset];
       elem.v.key = key;
       elem.v.value = value;
@@ -514,9 +524,9 @@ struct ParOMap {
     }
 
     /**
-     * @brief Finished inserting elements. Close the context and initialize the
-     * map. The method may throw error with some negligible probability, in
-     * which case one may retry the initialization.
+     * @brief Finished inserting elements. Close the context and initialize
+     * the map. The method may throw error with some negligible probability,
+     * in which case one may retry the initialization.
      *
      */
     void Finalize() {
@@ -565,9 +575,11 @@ struct ParOMap {
   };
 
   /**
-   * @brief Obtain a new context to initialize this map. The initialization data
-   * can be either private or public (the initialization and subsequent accesses
-   * are oblivious). The data needs to be sorted by key strictly increasing.
+   * @brief Obtain a new context to initialize this map. The initialization
+   data
+   * can be either private or public (the initialization and subsequent
+   accesses
+   * are oblivious). The data needs to be unique.
    * Example:
    *  auto* initContext = parOMap.NewInitContext(kvMap.size(), 1UL << 28);
       for (auto it = kvMap.begin(); it != kvMap.end(); ++it;) {
@@ -587,11 +599,12 @@ struct ParOMap {
   }
 
   /**
-   * @brief Initialize the map from a reader. The data is fetched in batches and
-   * for each batch, we route the data in parallel through a multi-way butterfly
-   * network to load balance them to each shard. Used techniques described in
-   * https://eprint.iacr.org/2023/1258. Might throw error with some negligible
-   * probability (when some bucket overflows), in which case one may retry.
+   * @brief Initialize the map from a reader. The data is fetched in batches
+   * and for each batch, we route the data in parallel through a multi-way
+   * butterfly network to load balance them to each shard. Used techniques
+   * described in https://eprint.iacr.org/2023/1258. Might throw error with
+   * some negligible probability (when some bucket overflows), in which case
+   * one may retry.
    *
    * @tparam Reader The type of the reader
    * @param reader The reader object

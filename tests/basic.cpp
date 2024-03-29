@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
 
+#include "common/cmp_intrinsics.hpp"
 #include "common/encrypted.hpp"
 #include "common/mov_intrinsics.hpp"
 #include "odsl/heap_tree.hpp"
@@ -61,6 +62,48 @@ void testObliSwap() {
 }
 
 template <const uint64_t size>
+void testObliCheckEqual() {
+  uint8_t* a = new uint8_t[size];
+  uint8_t* b = new uint8_t[size];
+  printf("Test size: %lu\n", size);
+  for (uint64_t round = 0; round < 10000; ++round) {
+    uint64_t commonPrefixLen = UniformRandom(size);
+    read_rand(a, size);
+    read_rand(b, size);
+    for (uint64_t i = 0; i < commonPrefixLen; i++) {
+      b[i] = a[i];
+    }
+    bool res = obliCheckEqual<size>(a, b);
+    bool refRes = memcmp(a, b, size) == 0;
+    ASSERT_EQ(res, refRes);
+  }
+  delete a;
+  delete b;
+}
+
+template <const uint64_t size>
+void testObliCheckLess() {
+  uint8_t* a = new uint8_t[size];
+  uint8_t* b = new uint8_t[size];
+  printf("Test size: %lu\n", size);
+  for (uint64_t round = 0; round < 10000; ++round) {
+    uint64_t commonPrefixLen = UniformRandom(size);
+    read_rand(a, size);
+    read_rand(b, size);
+    for (uint64_t i = 0; i < commonPrefixLen; i++) {
+      b[i] = a[i];
+    }
+    bool res1 = obliCheckLess<size>(a, b);
+    bool res2 = obliCheckLess<size>(b, a);
+    bool resEq = obliCheckEqual<size>(a, b);
+    ASSERT_TRUE(res1 ^ res2 ^ resEq);
+    ASSERT_FALSE(res1 && res2 && resEq);
+  }
+  delete a;
+  delete b;
+}
+
+template <const uint64_t size>
 void testObliMovPerf() {
   TestBlock<size>* b = new TestBlock<size>();
   TestBlock<size>* b2 = new TestBlock<size>();
@@ -102,6 +145,34 @@ void testObliSwapPerf() {
 
   delete b;
   delete b2;
+}
+
+template <const uint64_t size>
+void testObliCheckEqualPerf() {
+  uint8_t* a = new uint8_t[size];
+  uint8_t* b = new uint8_t[size];
+  bool res = false;
+  for (uint64_t round = 0; round < 1000000000; ++round) {
+    *(uint64_t*)&a[0] = round;
+    res ^= obliCheckEqual<size>(a, b);
+  }
+  printf("res: %d\n", res);
+  delete a;
+  delete b;
+}
+
+template <const uint64_t size>
+void testObliCheckLessPerf() {
+  uint8_t* a = new uint8_t[size];
+  uint8_t* b = new uint8_t[size];
+  bool res = false;
+  for (uint64_t round = 0; round < 1000000000; ++round) {
+    *(uint64_t*)&a[0] = round;
+    res ^= obliCheckLess<size>(a, b);
+  }
+  printf("res: %d\n", res);
+  delete a;
+  delete b;
 }
 
 TEST(Basic, ObliMove) {
@@ -172,9 +243,81 @@ TEST(Basic, ObliSwap) {
   testObliSwap<2000>();
 }
 
+TEST(Basic, ObliCheckEq) {
+  testObliCheckEqual<1>();
+  testObliCheckEqual<2>();
+  testObliCheckEqual<3>();
+  testObliCheckEqual<7>();
+  testObliCheckEqual<8>();
+  testObliCheckEqual<9>();
+  testObliCheckEqual<12>();
+  testObliCheckEqual<15>();
+  testObliCheckEqual<16>();
+  testObliCheckEqual<17>();
+  testObliCheckEqual<30>();
+  testObliCheckEqual<31>();
+  testObliCheckEqual<32>();
+  testObliCheckEqual<33>();
+  testObliCheckEqual<63>();
+  testObliCheckEqual<64>();
+  testObliCheckEqual<65>();
+  testObliCheckEqual<127>();
+  testObliCheckEqual<128>();
+  testObliCheckEqual<129>();
+  testObliCheckEqual<200>();
+  testObliCheckEqual<256>();
+  testObliCheckEqual<257>();
+  testObliCheckEqual<300>();
+  testObliCheckEqual<512>();
+  testObliCheckEqual<513>();
+  testObliCheckEqual<600>();
+  testObliCheckEqual<1023>();
+  testObliCheckEqual<1024>();
+  testObliCheckEqual<1025>();
+  testObliCheckEqual<2000>();
+}
+
+TEST(Basic, ObliCheckLess) {
+  testObliCheckLess<1>();
+  testObliCheckLess<2>();
+  testObliCheckLess<3>();
+  testObliCheckLess<7>();
+  testObliCheckLess<8>();
+  testObliCheckLess<9>();
+  testObliCheckLess<12>();
+  testObliCheckLess<15>();
+  testObliCheckLess<16>();
+  testObliCheckLess<17>();
+  testObliCheckLess<30>();
+  testObliCheckLess<31>();
+  testObliCheckLess<32>();
+  testObliCheckLess<33>();
+  testObliCheckLess<63>();
+  testObliCheckLess<64>();
+  testObliCheckLess<65>();
+  testObliCheckLess<127>();
+  testObliCheckLess<128>();
+  testObliCheckLess<129>();
+  testObliCheckLess<200>();
+  testObliCheckLess<256>();
+  testObliCheckLess<257>();
+  testObliCheckLess<300>();
+  testObliCheckLess<512>();
+  testObliCheckLess<513>();
+  testObliCheckLess<600>();
+  testObliCheckLess<1023>();
+  testObliCheckLess<1024>();
+  testObliCheckLess<1025>();
+  testObliCheckLess<2000>();
+}
+
 TEST(Basic, MovPerf) { testObliMovPerf<200>(); }
 
 TEST(Basic, SwapPerf) { testObliSwapPerf<200>(); }
+
+TEST(Basic, CheckEqualPerf) { testObliCheckEqualPerf<20>(); }
+
+TEST(Basic, CheckLessPerf) { testObliCheckLessPerf<20>(); }
 
 template <const uint64_t size>
 void testEncrypted() {

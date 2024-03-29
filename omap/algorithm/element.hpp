@@ -1,4 +1,5 @@
 #pragma once
+#include "common/cmp_intrinsics.hpp"
 #include "common/defs.hpp"
 #include "common/dummy.hpp"
 #include "common/mov_intrinsics.hpp"
@@ -73,6 +74,40 @@ struct TestElement {
 #ifndef ENCLAVE_MODE
   friend std::ostream& operator<<(std::ostream& o, const TestElement& x) {
     o << x.key;
+    return o;
+  }
+#endif
+};
+
+template <const size_t size>
+struct LargeUnsigned {
+ private:
+  uint8_t data[size];
+
+ public:
+  LargeUnsigned() { memset(data, 0, size); }
+
+  bool operator==(const LargeUnsigned<size>& other) const {
+    return obliCheckEqual<size>(data, other.data);
+  }
+
+  bool operator!=(const LargeUnsigned<size>& other) const {
+    return !(*this == other);
+  }
+
+  bool operator<(const LargeUnsigned<size>& other) const {
+    return obliCheckLess<size>(data, other.data);
+  }
+
+  void SetRand() { read_rand(data, size); }
+
+// out stream
+#ifndef ENCLAVE_MODE
+  friend std::ostream& operator<<(std::ostream& o,
+                                  const LargeUnsigned<size>& x) {
+    for (size_t i = 0; i < size; ++i) {
+      o << std::hex << std::setw(2) << std::setfill('0') << (int)x.data[i];
+    }
     return o;
   }
 #endif
