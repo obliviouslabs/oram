@@ -14,6 +14,12 @@
 
 #define MB << 20
 
+#define ASSERT_TRUE(expr)                           \
+  if (!expr) {                                      \
+    printf("assert failed at line %d\n", __LINE__); \
+    abort();                                        \
+  }
+
 using namespace ODSL;
 EM::Backend::MemServerBackend* EM::Backend::g_DefaultBackend = nullptr;
 
@@ -278,14 +284,18 @@ void testOmpSpeedup() {
   ocall_measure_time(&start);
 #pragma omp parallel for schedule(static)
   for (int i = 0; i < maxThread; ++i) {
-    CircuitORAM::ORAM<TestElement> oram;
-    uint64_t size = 65536;
-    oram.SetSize(size);
-    for (int r = 0; r < 1e5; ++r) {
-      oram.Update(UniformRandom() % size, 0, [](TestElement& val) {
-        val.key++;
-        return true;
-      });
+    try {
+      CircuitORAM::ORAM<TestElement> oram;
+      uint64_t size = 8192;
+      oram.SetSize(size);
+      for (int r = 0; r < 1e5; ++r) {
+        oram.Update(UniformRandom() % size, 0, [](TestElement& val) {
+          val.key++;
+          return true;
+        });
+      }
+    } catch (std::runtime_error& e) {
+      printf("%s\n", e.what());
     }
   }
   ocall_measure_time(&end);
@@ -294,50 +304,6 @@ void testOmpSpeedup() {
          (double)timediffMultipleThread * 1e-9);
   printf("one thread %f s\n", (double)timediffOneThread * 1e-9);
   printf("speedup for circuit oram benchmark = %f\n",
-         (double)timediffOneThread / (double)timediffMultipleThread);
-
-  printf("\nMulti Circuit ORAM update benchmark\n");
-  ocall_measure_time(&start);
-
-  for (int i = 0; i < maxThread; ++i) {
-    std::vector<CircuitORAM::ORAM<TestElement>> orams(8);
-    uint64_t size = 8192;
-    for (int i = 0; i < 8; ++i) {
-      orams[i].SetSize(size);
-    }
-    for (int r = 0; r < 1e5; ++r) {
-      orams[r % 8].Update(UniformRandom() % size, 0, [](TestElement& val) {
-        val.key++;
-        return true;
-      });
-    }
-  }
-
-  ocall_measure_time(&end);
-  timediffOneThread = end - start;
-  printf("one thread %f s\n", (double)timediffOneThread * 1e-9);
-
-  ocall_measure_time(&start);
-#pragma omp parallel for schedule(static)
-  for (int i = 0; i < maxThread; ++i) {
-    std::vector<CircuitORAM::ORAM<TestElement>> orams(8);
-    uint64_t size = 8192;
-    for (int i = 0; i < 8; ++i) {
-      orams[i].SetSize(size);
-    }
-    for (int r = 0; r < 1e5; ++r) {
-      orams[r % 8].Update(UniformRandom() % size, 0, [](TestElement& val) {
-        val.key++;
-        return true;
-      });
-    }
-  }
-  ocall_measure_time(&end);
-  timediffMultipleThread = end - start;
-  printf("%d thread %f s\n", omp_get_max_threads(),
-         (double)timediffMultipleThread * 1e-9);
-
-  printf("speedup for multiple (round robin) circuit oram benchmark = %f\n",
          (double)timediffOneThread / (double)timediffMultipleThread);
 
   printf("\nLinear ORAM update benchmark\n");
@@ -421,6 +387,122 @@ void testOmpSpeedup() {
 
   printf("speedup for recursive oram benchmark = %f\n",
          (double)timediffOneThread / (double)timediffMultipleThread);
+}
+
+template <const uint64_t size>
+void testEncrypted() {
+  struct TestBlock {
+    uint8_t data[size];
+  };
+  TestBlock b;
+  for (uint64_t i = 0; i < size; i++) {
+    b.data[i] = 7 * i + 3;
+  }
+  // check decryption correctness
+  Encrypted<TestBlock> e;
+  e.Encrypt(b);
+  TestBlock b2;
+  e.Decrypt(b2);
+  for (size_t j = 0; j < size; j++) {
+    ASSERT_EQ(b.data[j], b2.data[j]);
+  }
+  size_t i = UniformRandom(size - 1);
+  // Check changing the encrypted data gets different decrypted data
+  e.data[i]++;
+  TestBlock b3;
+  e.Decrypt(b3);
+  bool isDifferent = false;
+  for (size_t j = 0; j < size; j++) {
+    if (b.data[j] != b3.data[j]) {
+      isDifferent = true;
+      break;
+    }
+  }
+  ASSERT_TRUE(isDifferent);
+  e.data[i]--;
+  // Check encryption is not deterministic
+  Encrypted<TestBlock> e2;
+  e2.Encrypt(b);
+  bool isDifferent2 = false;
+  for (size_t j = 0; j < size; j++) {
+    if (e.data[j] != e2.data[j]) {
+      isDifferent2 = true;
+      break;
+    }
+  }
+  ASSERT_TRUE(isDifferent2);
+
+  // Check FreshEncrypted
+  FreshEncrypted<TestBlock> fe;
+  uint8_t iv[IV_SIZE];
+  GetRandIV(iv);
+  fe.Encrypt(b, iv);
+  TestBlock b4;
+  fe.Decrypt(b4, iv);
+  for (size_t j = 0; j < size; j++) {
+    ASSERT_EQ(b.data[j], b4.data[j]);
+  }
+  FreshEncrypted<TestBlock> fe2;
+  fe2.Encrypt(b, iv);
+  for (size_t j = 0; j < size; j++) {
+    ASSERT_EQ(fe.data[j], fe2.data[j]);
+  }
+  for (size_t j = 0; j < MAC_SIZE; j++) {
+    ASSERT_EQ(fe.tag[j], fe2.tag[j]);
+  }
+  // Check changing the encrypted data can be detected
+  i = UniformRandom(size - 1);
+  fe.data[i]++;
+  TestBlock b5;
+  try {
+    fe.Decrypt(b5, iv);
+    ASSERT_TRUE(false);
+  } catch (std::exception& err) {
+    ASSERT_TRUE(true);
+  }
+  fe.data[i]--;
+  // Check changing the tag can be detected
+  i = UniformRandom(MAC_SIZE - 1);
+  fe.tag[i]++;
+  try {
+    fe.Decrypt(b5, iv);
+    ASSERT_TRUE(false);
+  } catch (std::exception& err) {
+    ASSERT_TRUE(true);
+  }
+  fe.tag[i]--;
+  // Check changing the iv can be detected
+  i = UniformRandom(IV_SIZE - 1);
+  iv[i]++;
+  try {
+    fe.Decrypt(b5, iv);
+    ASSERT_TRUE(false);
+  } catch (std::exception& err) {
+    ASSERT_TRUE(true);
+  }
+}
+
+template <const uint64_t size>
+void testEncryptPerf() {
+  uint64_t start, end;
+  uint64_t round = 1000000UL;
+  ocall_measure_time(&start);
+  for (uint64_t r = 0; r < round; ++r) {
+    struct TestBlock {
+      uint8_t data[size];
+    };
+    TestBlock b;
+    for (uint64_t i = 0; i < size; i++) {
+      b.data[i] = 7 * i + r;
+    }
+    uint8_t iv[IV_SIZE];
+    FreshEncrypted<TestBlock> e2;
+    e2.Encrypt(b, iv);
+    e2.Decrypt(b, iv);
+  }
+  ocall_measure_time(&end);
+  uint64_t timediff = end - start;
+  printf("encrypt + decrypt %f us\n", (double)timediff * 1e-3 / (double)round);
 }
 
 void testORAMReadWrite() {
@@ -620,10 +702,12 @@ void testOMapPerf() {
   printf("oram erase time %f us\n", (double)timediff * 1e-3 / (double)round);
 }
 
-void testOHashMapPerf(size_t mapSize = 5e6) {
+void testOHashMapPerf(size_t mapSize = 1e6) {
   size_t round = 1e5;
-  size_t initSize = mapSize - round;
-  OHashMap<ETH_Addr, ERC20_Balance, true, uint32_t> omap((uint32_t)mapSize);
+  size_t initSize = mapSize;
+  printf("default heap size %lu\n", DEFAULT_HEAP_SIZE);
+  OHashMap<ETH_Addr, ERC20_Balance, true, uint32_t, false> omap(
+      (uint32_t)mapSize, DEFAULT_HEAP_SIZE / 2);
 
   std::function<std::pair<ETH_Addr, ERC20_Balance>(uint64_t)> readerFunc =
       [](uint64_t) { return std::pair<ETH_Addr, ERC20_Balance>(); };
@@ -962,10 +1046,12 @@ void ecall_omap_perf() {
       new EM::Backend::MemServerBackend(BackendSize);
   try {
     // testOmpSpeedup();
-    testParOMapPerfDiffCond();
+    // testParOMapPerfDiffCond();
     // testParOMapPerf(5e6, 32);
     // testParOMapPerfDeferWriteBack(5e6, 32);
-    // testOHashMapPerf();
+    testOHashMapPerf();
+    // testEncrypted<4096>();
+    // testEncryptPerf<4096>();
     // testOHashMapPerfDiffCond();
     // testRecursiveORAMPerf();
     // testOMapPerf();

@@ -74,3 +74,6 @@ temp/
 applications/balance-checker/Enclave/TrustedLibrary/encutils.cpp
 applications/omap/Enclave/TrustedLibrary/encutils.cpp
 applications/rustexample/BearSSL/
+
+tools/test-sgx/SGX-hardware
+mvp-pox-node/

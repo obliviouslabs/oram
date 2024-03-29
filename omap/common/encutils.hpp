@@ -16,7 +16,6 @@
 #include "sgx_tcrypto.h"
 #include "sgx_trts.h"
 
-#define Assert(x)
 #endif
 #ifndef AES_BLOCK_SIZE
 #define AES_BLOCK_SIZE 32
@@ -131,7 +130,6 @@ void secure_hash_with_salt(const T& data, const uint8_t (&salt)[16],
 template <typename T>
 void secure_hash_with_salt(const T& data, const uint8_t (&salt)[16], void* res,
                            uint8_t resSize) {
-  Assert(resSize < sizeof(sgx_sha256_hash_t));
   uint8_t data_with_salt[sizeof(T) + 16];
   memcpy(data_with_salt, &data, sizeof(T));
   memcpy(data_with_salt + sizeof(T), salt, 16);
