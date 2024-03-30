@@ -636,9 +636,9 @@ void testOMap() {
   printf("oram find time %f us\n", (double)timediff * 1e-3 / (double)round);
 }
 
-using ETH_Addr = LargeUnsigned<20>;
+using ETH_Addr = Bytes<20>;
 
-using ERC20_Balance = LargeUnsigned<32>;
+using ERC20_Balance = Bytes<32>;
 
 void testOMapPerf() {
   printf("test omap perf with %d threads\n", TCS_NUM);
@@ -753,11 +753,6 @@ void testOHashMapPerf(size_t mapSize = 1e6) {
   printf("oram erase time %f us\n", (double)timediff * 1e-3 / (double)round);
 }
 
-template <const size_t size>
-struct Bytes {
-  uint8_t data[size];
-};
-
 void testOHashMapPerfSignal(size_t mapSize = 5e6) {
   size_t round = 1e5;
   size_t initSize = mapSize - round;
@@ -780,7 +775,7 @@ void testOHashMapPerfSignal(size_t mapSize = 5e6) {
   for (size_t r = 0; r < round; ++r) {
     uint64_t addr;
     addr = r;
-    Bytes<240> balance = {0};
+    Bytes<240> balance;
     omap.Insert(addr, balance);
   }
   ocall_measure_time(&end);

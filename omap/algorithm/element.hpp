@@ -80,22 +80,20 @@ struct TestElement {
 };
 
 template <const size_t size>
-struct LargeUnsigned {
+struct Bytes {
  private:
   uint8_t data[size];
 
  public:
-  LargeUnsigned() { memset(data, 0, size); }
+  Bytes() { memset(data, 0, size); }
 
-  bool operator==(const LargeUnsigned<size>& other) const {
+  bool operator==(const Bytes<size>& other) const {
     return obliCheckEqual<size>(data, other.data);
   }
 
-  bool operator!=(const LargeUnsigned<size>& other) const {
-    return !(*this == other);
-  }
+  bool operator!=(const Bytes<size>& other) const { return !(*this == other); }
 
-  bool operator<(const LargeUnsigned<size>& other) const {
+  bool operator<(const Bytes<size>& other) const {
     return obliCheckLess<size>(data, other.data);
   }
 
@@ -103,8 +101,7 @@ struct LargeUnsigned {
 
 // out stream
 #ifndef ENCLAVE_MODE
-  friend std::ostream& operator<<(std::ostream& o,
-                                  const LargeUnsigned<size>& x) {
+  friend std::ostream& operator<<(std::ostream& o, const Bytes<size>& x) {
     for (size_t i = 0; i < size; ++i) {
       o << std::hex << std::setw(2) << std::setfill('0') << (int)x.data[i];
     }
