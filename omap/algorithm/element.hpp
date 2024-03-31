@@ -99,6 +99,8 @@ struct Bytes {
 
   void SetRand() { read_rand(data, size); }
 
+  const uint8_t* GetData() const { return data; }
+
 // out stream
 #ifndef ENCLAVE_MODE
   friend std::ostream& operator<<(std::ostream& o, const Bytes<size>& x) {
@@ -109,3 +111,13 @@ struct Bytes {
   }
 #endif
 };
+
+namespace std {
+template <const size_t size>
+struct hash<Bytes<size>> {
+  std::size_t operator()(const Bytes<size>& bytes) const {
+    return std::hash<std::string_view>()(
+        std::string_view((const char*)bytes.GetData(), size));
+  }
+};
+}  // namespace std
