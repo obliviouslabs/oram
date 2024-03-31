@@ -859,14 +859,14 @@ struct ORAM {
         uint32_t prefetchBatchSize =
             (uint32_t)std::min((uint64_t)maxPrefetchBatchSize, batchSize - i);
 
-        for (uint32_t j = 0; j < prefetchBatchSize * numPathPerAccess; ++j) {
-          pathDepths[j] = treeAccessor.GetNodeIdxArrAndPrefetch(
-              nodeIdxArrs[j], (prefetchEvictCounter++) % size(),
-              prefetchReceipts[j]);
+        for (uint32_t pathOffset = 0;
+             pathOffset < prefetchBatchSize * numPathPerAccess; ++pathOffset) {
+          PositionType p = prefetchEvictCounter++ % size();
+          pathDepths[pathOffset] = treeAccessor.GetNodeIdxArrAndPrefetch(
+              nodeIdxArrs[pathOffset], p, prefetchReceipts[pathOffset]);
         }
         treeAccessor.FlushRead();
-        prefetchEvictCounter = evictCounter;
-        for (uint32_t j = 0; j < prefetchBatchSize; ++j, ++i) {
+        for (uint32_t j = 0, pathOffset = 0; j < prefetchBatchSize; ++j, ++i) {
           Block_ toWrite = {in[i], newPos[i], DUMMY<UidType>()};
           bool writeBack = writeBackFlags[i];
           if (i > 0) {
@@ -875,26 +875,25 @@ struct ORAM {
           }
           obliMove(writeBack, toWrite.uid, uid[i]);
           bool success = false;
-          for (int k = 0; k < numPathPerAccess; ++k) {
-            uint32_t pathIdxInBatch = evictCounter - prefetchEvictCounter;
-            int pathDepth = pathDepths[pathIdxInBatch];
-            PositionType pathIdx = (evictCounter++) % size();
-            readPathFromAccessor(treeAccessor, pathIdx, pathDepth,
-                                 nodeIdxArrs[pathIdxInBatch],
-                                 prefetchReceipts[pathIdxInBatch]);
+          for (int k = 0; k < numPathPerAccess; ++k, ++pathOffset) {
+            int pathDepth = pathDepths[pathOffset];
+            PositionType p = evictCounter++ % size();
+            readPathFromAccessor(treeAccessor, p, pathDepth,
+                                 nodeIdxArrs[pathOffset],
+                                 prefetchReceipts[pathOffset]);
             if (k == 0) {
               success = WriteNewBlockToPath(
                   path.begin(), path.begin() + stashSize + Z, toWrite);
-              evictPath(pathIdx, pathDepth);
+              evictPath(p, pathDepth);
             } else {
               for (int h = 0; h < evict_group; ++h) {
-                evictPath(pathIdx, pathDepth);
+                evictPath(p, pathDepth);
               }
             }
 
-            writePathToAccessor(treeAccessor, pathIdx, pathDepth,
-                                nodeIdxArrs[pathIdxInBatch],
-                                prefetchReceipts[pathIdxInBatch]);
+            writePathToAccessor(treeAccessor, p, pathDepth,
+                                nodeIdxArrs[pathOffset],
+                                prefetchReceipts[pathOffset]);
           }
           if (!success) {
             PERFCTR_INCREMENT(CIRCUITORAM_OVERFLOW);
@@ -902,7 +901,6 @@ struct ORAM {
           }
         }
         treeAccessor.FlushWrite();
-        evictCounter %= size();
       }
       return;
     }
