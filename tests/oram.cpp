@@ -115,15 +115,16 @@ TEST(CircuitORAM, BatchUpdate) {
   }
 }
 
-TEST(CircuitORAM, BatchUpdateLarge) {
+template <const int stashSize = 20>
+void testBatchUpdateLargeCustomStashSize() {
   if (EM::Backend::g_DefaultBackend) {
     delete EM::Backend::g_DefaultBackend;
   }
   size_t BackendSize = 1e9;
   EM::Backend::g_DefaultBackend =
       new EM::Backend::MemServerBackend(BackendSize);
-  int memSize = 1e5;
-  uint64_t round = 5000;
+  int memSize = UniformRandom(20000, 100000);
+  uint64_t round = 500;
   uint64_t maxBatchSize = 1000;
   ODSL::CircuitORAM::ORAM<uint64_t> oram(memSize, 1UL << 20);
   std::vector<uint64_t> posMap(memSize);
@@ -185,6 +186,14 @@ TEST(CircuitORAM, BatchUpdateLarge) {
     ASSERT_EQ(val, valMap[i]);
     // printf("read %lu %lu\n", i, val);
   }
+}
+
+TEST(CircuitORAM, BatchUpdateLarge) {
+  testBatchUpdateLargeCustomStashSize<20>();
+}
+
+TEST(CircuitORAM, BatchUpdateLargeOverflows) {
+  testBatchUpdateLargeCustomStashSize<3>();
 }
 
 TEST(CircuitORAM, BatchReadAndRemovePerf) {

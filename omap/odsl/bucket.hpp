@@ -35,9 +35,14 @@ struct Bucket {
 };
 
 template <typename BucketType>
-struct FreshBucket {
+struct FreshORAMNode {
   BucketType bucket;
   uint64_t leftNonce = 0;
   uint64_t rightNonce = 0;
+};
+
+template <typename BucketType>
+struct NonFreshORAMNode {
+  BucketType bucket;
 };
 };  // namespace ODSL
