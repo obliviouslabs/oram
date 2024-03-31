@@ -2,6 +2,7 @@
 #include <algorithm>
 #include <list>
 #include <unordered_map>
+#include <vector>
 
 #include "common/defs.hpp"
 #include "common/dmcache.hpp"
@@ -24,7 +25,7 @@ struct Cached : S {
   using Cache =
       typename std::conditional<use_lru_flag,
                                 CACHE::LRUCache<T, cache_size, tlb_size>,
-                                CACHE::DMCache<T, cache_size> >::type;
+                                CACHE::DMCache<T, cache_size>>::type;
   Cache cache;
 
   template <bool dirty = true, bool skip_read = false, bool writeBack = true>
@@ -76,6 +77,42 @@ struct Cached : S {
     return mappedSlot.val;
   }
 
+  void ReadLazy(const IndexType idx, T& out) {
+    PERFCTR_INCREMENT(accessCount);
+    S::ReadLazy(idx, out);
+  }
+
+  void WriteLazy(const IndexType idx, const T& in) {
+    PERFCTR_INCREMENT(accessCount);
+    S::WriteLazy(idx, in);
+  }
+
+  void flushRead() { S::flushRead(); }
+
+  void flushWrite() { S::flushWrite(); }
+
+  void ReadThruDMLazy(const IndexType idx, T& out) {
+    const auto& mappedSlot = cache.GetMappedSlot(idx);
+    if (mappedSlot.idx != idx) {
+      ReadLazy(idx, out);
+    } else {
+      out = mappedSlot.val;
+      // std::memcpy(&out[i], &mappedSlot.val, sizeof(T));
+    }
+  }
+
+  void WriteBackDMLazy(const IndexType idx, const T& in) {
+    auto& mappedSlot = cache.GetMappedSlot(idx);
+    if (mappedSlot.idx != idx) {
+      if (mappedSlot.dirty) {
+        WriteLazy(mappedSlot.idx, mappedSlot.val);
+      }
+    }
+    mappedSlot.val = in;
+    mappedSlot.idx = idx;
+    mappedSlot.dirty = true;
+  }
+
  public:
   static uint64_t GetMemoryUsage() {
     return cache_size * sizeof(typename Cache::CacheEntry);
@@ -101,5 +138,74 @@ struct Cached : S {
   void Write(const IndexType i, const T& in) { S::Write(i, in); }
 
   void Read(const IndexType i, T& out) { S::Read(i, out); }
+
+  struct BatchAccessor {
+   private:
+    Cached& parent;
+    std::vector<std::pair<IndexType, uint32_t>> indices;
+    std::vector<uint32_t> prefetchCachePosMap;
+    std::vector<T> prefetchCache;
+
+    void readBatch() {
+      prefetchCachePosMap.resize(indices.size());
+      std::sort(indices.begin(), indices.end(),
+                [](const auto& a, const auto& b) { return a.first < b.first; });
+      for (uint32_t i = 0; i < indices.size(); ++i) {
+        IndexType idx = indices[i].first;
+        if (i == 0 || idx != indices[i - 1].first) {
+          prefetchCachePosMap[indices[i].second] = prefetchCache.size();
+          if (prefetchCache.size() == prefetchCache.capacity()) {
+            parent.flushRead();  // we have to read everything to the prefetch
+                                 // cache before the reference is invalidated
+          }
+          prefetchCache.emplace_back();
+          // TODO change to batch read
+          parent.ReadThruDMLazy(idx, prefetchCache.back());
+        } else {
+          prefetchCachePosMap[indices[i].second] = prefetchCache.size() - 1;
+        }
+      }
+      parent.flushRead();
+    }
+
+    void writeBackBatch() {
+      for (uint32_t i = 0, cacheIdx = 0; i < indices.size(); ++i) {
+        IndexType idx = indices[i].first;
+        if (i == 0 || idx != indices[i - 1].first) {
+          parent.WriteBackDMLazy(idx, prefetchCache[cacheIdx++]);
+        }
+      }
+      parent.flushWrite();
+    }
+
+   public:
+    BatchAccessor(Cached& parent, uint32_t prefetchCapacity) : parent(parent) {
+      indices.reserve(prefetchCapacity * 2);
+      prefetchCache.reserve(prefetchCapacity);
+    }
+
+    uint32_t Prefetch(const IndexType idx) {
+      indices.emplace_back(idx, indices.size());
+      return indices.size() - 1;
+    }
+
+    void FlushRead() { readBatch(); }
+
+    T& Access(uint32_t prefetchReceipt) {
+      return prefetchCache[prefetchCachePosMap[prefetchReceipt]];
+    }
+
+    void FlushWrite() {
+      writeBackBatch();
+      indices.clear();
+      prefetchCache.clear();
+    }
+
+    ~BatchAccessor() {
+      if (!indices.empty()) {
+        FlushWrite();
+      }
+    }
+  };
 };
 }  // namespace CACHE

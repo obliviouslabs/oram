@@ -312,5 +312,38 @@ struct Vector {
 
     INLINE void flush() {}
   };
+
+  struct BatchAccessor {
+    IntVec& intVec;
+    size_t cacheSize;
+    typename ExtVec::BatchAccessor extAccessor;
+
+    BatchAccessor(Vector& vec)
+        : intVec(vec.intVec),
+          cacheSize(vec.cacheSize),
+          extAccessor(*(vec.extVec)) {
+      Assert(vec.extVec);
+    }
+
+    uint32_t Prefetch(const uint64_t idx) {
+      if (idx < cacheSize) {
+        return -1;
+      } else {
+        return extAccessor.Prefetch(idx - cacheSize);
+      }
+    }
+
+    void FlushRead() { extAccessor.FlushRead(); }
+
+    T& At(uint32_t prefetchReceipt, uint64_t idx) {
+      if (idx < cacheSize) {
+        return intVec[idx];
+      } else {
+        return extAccessor.At(prefetchReceipt, idx - cacheSize);
+      }
+    }
+
+    void FlushWrite() { extAccessor.FlushWrite(); }
+  };
 };
 }  // namespace EM::CacheFrontVector

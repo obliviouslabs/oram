@@ -224,4 +224,37 @@ struct HeapTree {
    * @return T& The reference to the node
    */
   T& GetNodeByIdx(PositionType idx) { return arr[idx]; }
+
+  struct BatchAccessor {
+    HeapTree& tree;
+    Vec::BatchAccessor arrAccessor;
+
+    BatchAccessor(HeapTree& _tree) : tree(_tree), arrAccessor(_tree.arr) {}
+
+    template <class Iterator>
+    int GetNodeIdxArrAndPrefetch(Iterator outputBegin, PositionType idx,
+                                 uint32_t& pathPrefetchReceipt) {
+      int pathLen = tree.GetNodeIdxArr(outputBegin, idx);
+      uint32_t levelReceipt = -1;
+      for (int i = 0; i < pathLen; ++i) {
+        levelReceipt = arrAccessor.Prefetch(outputBegin[i]);
+        // printf("prefetches %d and get receipt %d\n", (int)outputBegin[i],
+        //        (int)levelReceipt);
+      }
+      // the receipt of cached levels can be arbitrary
+      pathPrefetchReceipt = levelReceipt - (pathLen - 1);
+      return pathLen;
+    };
+
+    void FlushRead() { arrAccessor.FlushRead(); }
+
+    T& GetPrefetchedNode(PositionType idx, int level,
+                         uint32_t pathPrefetchReceipt) {
+      // printf("get node %d at level %d with receipt %d\n", (int)idx, level,
+      //        (int)pathPrefetchReceipt + level);
+      return arrAccessor.At(pathPrefetchReceipt + level, idx);
+    }
+
+    void FlushWrite() { arrAccessor.FlushWrite(); }
+  };
 };

@@ -1042,7 +1042,7 @@ void ecall_omap_perf() {
   try {
     // testOmpSpeedup();
     // testParOMapPerfDiffCond();
-    // testParOMapPerf(5e6, 32);
+    // testParOMapPerf(5e6, 2);
     // testParOMapPerfDeferWriteBack(5e6, 32);
     testOHashMapPerf();
     // testEncrypted<4096>();

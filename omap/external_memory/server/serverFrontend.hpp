@@ -44,9 +44,9 @@ struct NonCachedServerFrontendInstance {
 
   typedef uint64_t IndexType;
   BackendType& backend;
-
+  using Encrypted_t = typename T::Encrypted_t;
   static inline constexpr auto sizeOfT =
-      ENCRYPTED ? sizeof(typename T::Encrypted_t) : sizeof(T);
+      ENCRYPTED ? sizeof(Encrypted_t) : sizeof(T);
 
   T defaultVal;
 
@@ -121,24 +121,41 @@ struct NonCachedServerFrontendInstance {
     slot.size = 0;
   }
 
+  void Encrypt(const T& in, Encrypted_t& inEnc, const IndexType i) {
+    if constexpr (AUTH) {
+      nounce_t nounceCopy = nounce;
+      nounceCopy.index ^= i;
+      if constexpr (FRESH_CHECK) {
+        nounceCopy.counter ^= ++counters[i];
+      }
+      inEnc.Encrypt(in, nounceCopy.bytes);
+    } else {
+      inEnc.Encrypt(in);
+    }
+  }
+
+  void Decrypt(Encrypted_t& inEnc, T& out, const IndexType i) {
+    if constexpr (AUTH) {
+      nounce_t nounceCopy = nounce;
+      nounceCopy.index ^= i;
+      if constexpr (FRESH_CHECK) {
+        nounceCopy.counter ^= counters[i];
+      }
+
+      inEnc.Decrypt(out, nounceCopy.bytes);
+    } else {
+      inEnc.Decrypt(out);
+    }
+  }
+
   void Write(const IndexType i, const T& in) {
     if constexpr (LATE_INIT) {
       modified[i] = true;
     }
     PERFCTR_INCREMENT(writeCount);
     if constexpr (ENCRYPTED) {
-      typename T::Encrypted_t inEnc;
-      if constexpr (AUTH) {
-        nounce_t nounceCopy = nounce;
-        nounceCopy.index ^= i;
-        if constexpr (FRESH_CHECK) {
-          nounceCopy.counter ^= ++counters[i];
-        }
-        inEnc.Encrypt(in, nounceCopy.bytes);
-      } else {
-        inEnc.Encrypt(in);
-      }
-
+      Encrypted_t inEnc;
+      Encrypt(in, inEnc, i);
       backend.Write(slot.base + i * sizeOfT, sizeOfT,
                     reinterpret_cast<const uint8_t*>(&inEnc));
     } else {
@@ -147,10 +164,18 @@ struct NonCachedServerFrontendInstance {
     }
   }
 
+  std::vector<Encrypted_t> writeBackBuffer;
+  std::vector<uint64_t> writeBackBufferOffsets;
+
   // dummy implementation to be overloaded
-  uint64_t WriteLazy(const IndexType i, const T& in) {
-    Write(i, in);
-    return 0;
+  void WriteLazy(const IndexType i, const T& in) {
+    // #ifdef DISK_IO
+    writeBackBuffer.emplace_back();
+    Encrypt(in, writeBackBuffer.back(), i);
+    writeBackBufferOffsets.push_back(slot.base + i * sizeOfT);
+    // #else
+    //     Write(i, in);
+    // #endif
   }
 
   void Read(const IndexType i, T& out) {
@@ -161,40 +186,53 @@ struct NonCachedServerFrontendInstance {
       }
     }
     PERFCTR_INCREMENT(readCount);
-
     if constexpr (ENCRYPTED) {
-      typename T::Encrypted_t inEnc;
+      Encrypted_t inEnc;
       backend.Read(slot.base + i * sizeOfT, sizeOfT,
                    reinterpret_cast<uint8_t*>(&inEnc));
-      if constexpr (AUTH) {
-        nounce_t nounceCopy = nounce;
-        nounceCopy.index ^= i;
-        if constexpr (FRESH_CHECK) {
-          nounceCopy.counter ^= counters[i];
-        }
-
-        inEnc.Decrypt(out, nounceCopy.bytes);
-      } else {
-        inEnc.Decrypt(out);
-      }
+      Decrypt(inEnc, out, i);
     } else {
       backend.Read(slot.base + i * sizeOfT, sizeOfT,
                    reinterpret_cast<uint8_t*>(&out));
     }
   }
 
-  uint64_t ReadLazy(const IndexType i, T& out) {
-    Read(i, out);
-    return 0;
+  std::vector<Encrypted_t> readBuffer;
+  std::vector<uint64_t> readBufferOffsets;
+  std::vector<T*> readBufferOuts;
+
+  void ReadLazy(const IndexType i, T& out) {
+    // #ifdef DISK_IO
+    readBufferOffsets.push_back(slot.base + i * sizeOfT);
+    readBufferOuts.push_back(&out);
+    // #else
+    //     Read(i, out);
+    // #endif
   }
 
-  void flushRead() {}
+  void flushRead() {
+    uint64_t batchSize = readBufferOffsets.size();
+    readBuffer.resize(batchSize);
+    backend.ReadBatch(readBufferOffsets.size(), sizeOfT,
+                      readBufferOffsets.data(),
+                      reinterpret_cast<uint8_t*>(readBuffer.data()));
+    for (uint64_t i = 0; i < batchSize; i++) {
+      Decrypt(readBuffer[i], *readBufferOuts[i],
+              (IndexType)((readBufferOffsets[i] - slot.base) / sizeOfT));
+    }
+    readBufferOffsets.clear();
+    readBufferOuts.clear();
+    readBuffer.clear();
+  }
 
-  void flushRead(uint32_t counter) {}
-
-  void flushWrite() {}
-
-  void flushWrite(uint32_t counter) {}
+  void flushWrite() {
+    uint64_t batchSize = writeBackBufferOffsets.size();
+    backend.WriteBatch(writeBackBufferOffsets.size(), sizeOfT,
+                       writeBackBufferOffsets.data(),
+                       reinterpret_cast<uint8_t*>(writeBackBuffer.data()));
+    writeBackBufferOffsets.clear();
+    writeBackBuffer.clear();
+  }
 };
 
 template <typename T, typename BackendType = ::EM::Backend::MemServerBackend,

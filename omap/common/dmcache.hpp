@@ -50,5 +50,9 @@ struct DMCache {
   CacheEntry& GetMappedSlot(IndexType indexToEvict) {
     return data[indexToEvict % cache_size];
   }
+
+  const CacheEntry& GetMappedSlot(IndexType indexToEvict) const {
+    return data[indexToEvict % cache_size];
+  }
 };
 }  // namespace CACHE

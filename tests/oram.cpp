@@ -125,7 +125,7 @@ TEST(CircuitORAM, BatchUpdateLarge) {
   int memSize = 1e5;
   uint64_t round = 5000;
   uint64_t maxBatchSize = 1000;
-  ODSL::CircuitORAM::ORAM<uint64_t> oram(memSize, MAX_CACHE_SIZE);
+  ODSL::CircuitORAM::ORAM<uint64_t> oram(memSize, 1UL << 20);
   std::vector<uint64_t> posMap(memSize);
   std::vector<uint64_t> valMap(memSize);
   for (uint64_t i = 0; i < memSize; i++) {
@@ -689,7 +689,7 @@ TEST(RecursiveORAM, testBatchAccessDeferLarge) {
   size_t BackendSize = 2e9;
   EM::Backend::g_DefaultBackend =
       new EM::Backend::MemServerBackend(BackendSize);
-  ODSL::RecursiveORAM<TestElement, uint32_t> oram(size, 1UL << 25);
+  ODSL::RecursiveORAM<TestElement, uint32_t> oram(size, 1UL << 24);
   for (uint32_t i = 0; i < size; i++) {
     ref[i] = UniformRandom();
   }
