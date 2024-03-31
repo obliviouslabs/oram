@@ -759,6 +759,11 @@ struct ORAM {
         for (int j = 0; j < pathDepth; ++j) {
           TreeNode_& node = tree.GetNodeByIdx(nodeIdxArr[j]);
           if (node.leftNonce + node.rightNonce != expectedNonce) {
+            printf(
+                "read & rm: failed at pos %d, level %d should be %lu, but "
+                "%lu\n",
+                (int)pos[i], j, expectedNonce,
+                node.leftNonce + node.rightNonce);
             throw std::runtime_error("ORAM freshness check failed");
           }
           if ((pos[i] >> j) & 1) {
@@ -790,6 +795,68 @@ struct ORAM {
     duplicateVal(batchSize, out, uid);
   }
 
+  void readPathFromAccessor(typename HeapTree_::BatchAccessor& treeAccessor,
+                            PositionType pos, int pathDepth,
+                            PositionType* nodeIdxArr,
+                            uint32_t pathPrefetchReceipt) {
+    if constexpr (check_freshness) {
+      uint64_t expectedNonce = rootNonce;
+      for (int i = 0; i < pathDepth; ++i) {
+        const TreeNode_& node = treeAccessor.GetPrefetchedNode(
+            nodeIdxArr[i], i, pathPrefetchReceipt);
+
+        if (node.leftNonce + node.rightNonce != expectedNonce) {
+          printf(
+              "read path from accessor: failed at level %d / %d should be %lu, "
+              "but "
+              "%lu\n",
+              i, pathDepth, expectedNonce, node.leftNonce + node.rightNonce);
+          throw std::runtime_error("ORAM freshness check failed");
+        }
+        if ((pos >> i) & 1) {
+          expectedNonce = node.rightNonce;
+        } else {
+          expectedNonce = node.leftNonce;
+        }
+        memcpy(&path[stashSize + i * Z], node.bucket.blocks,
+               Z * sizeof(Block_));
+      }
+    } else {
+      for (int i = 0; i < pathDepth; ++i) {
+        const TreeNode_& node = treeAccessor.GetPrefetchedNode(
+            nodeIdxArr[i], i, pathPrefetchReceipt);
+        memcpy(&path[stashSize + i * Z], node.blocks, Z * sizeof(Block_));
+      }
+    }
+  }
+
+  void writePathToAccessor(typename HeapTree_::BatchAccessor& treeAccessor,
+                           PositionType pos, int pathDepth,
+                           PositionType* nodeIdxArr,
+                           uint32_t pathPrefetchReceipt) {
+    if constexpr (check_freshness) {
+      ++rootNonce;
+      for (int i = 0; i < pathDepth; ++i) {
+        TreeNode_& node = treeAccessor.GetPrefetchedNode(nodeIdxArr[i], i,
+                                                         pathPrefetchReceipt);
+
+        if ((pos >> i) & 1) {
+          ++node.rightNonce;
+        } else {
+          ++node.leftNonce;
+        }
+        memcpy(node.bucket.blocks, &path[stashSize + i * Z],
+               Z * sizeof(Block_));
+      }
+    } else {
+      for (int i = 0; i < pathDepth; ++i) {
+        TreeNode_& node = treeAccessor.GetPrefetchedNode(nodeIdxArr[i], i,
+                                                         pathPrefetchReceipt);
+        memcpy(node.blocks, &path[stashSize + i * Z], Z * sizeof(Block_));
+      }
+    }
+  }
+
   /**
    * @brief Write back a batch of blocks to the ORAM. For duplicate blocks,
    * ignore all but the first block.
@@ -804,7 +871,70 @@ struct ORAM {
   void BatchWriteBack(uint64_t batchSize, const UidType* uid,
                       const PositionType* newPos, const T* in,
                       const std::vector<bool>& writeBackFlags) {
-    // only copy stash once
+#ifdef DISK_IO
+    typename HeapTree_::BatchAccessor treeAccessor(tree);
+    constexpr uint32_t maxPrefetchBatchSize = 1;
+    constexpr int numPathPerAccess = 1 + divRoundUp(evict_freq, evict_group);
+    constexpr uint32_t maxPathCount = maxPrefetchBatchSize * numPathPerAccess;
+    PositionType nodeIdxArrs[maxPathCount][64];
+    int pathDepths[maxPathCount];
+    uint32_t prefetchReceipts[maxPathCount] = {0};
+
+    for (uint64_t i = 0; i < batchSize;) {
+      uint64_t prefetchEvictCounter = evictCounter;
+      uint32_t prefetchBatchSize =
+          (uint32_t)std::min((uint64_t)maxPrefetchBatchSize, batchSize - i);
+
+      for (uint32_t j = 0; j < prefetchBatchSize * numPathPerAccess; ++j) {
+        pathDepths[j] = treeAccessor.GetNodeIdxArrAndPrefetch(
+            nodeIdxArrs[j], (prefetchEvictCounter++) % size(),
+            prefetchReceipts[j]);
+      }
+      treeAccessor.FlushRead();
+      prefetchEvictCounter = evictCounter;
+
+      for (uint32_t j = 0; j < prefetchBatchSize; ++j, ++i) {
+        Block_ toWrite = {in[i], newPos[i], DUMMY<UidType>()};
+        bool writeBack = writeBackFlags[i];
+        if (i > 0) {
+          // don't write back duplicate blocks
+          writeBack &= (uid[i] != uid[i - 1]);
+        }
+        obliMove(writeBack, toWrite.uid, uid[i]);
+        uint32_t pathIdxInBatch = evictCounter - prefetchEvictCounter;
+        int pathDepth = pathDepths[pathIdxInBatch];
+        PositionType pathIdx = evictCounter % size();
+        readPathFromAccessor(treeAccessor, pathIdx, pathDepth,
+                             nodeIdxArrs[pathIdxInBatch],
+                             prefetchReceipts[pathIdxInBatch]);
+        bool success = WriteNewBlockToPath(
+            path.begin(), path.begin() + stashSize + Z, toWrite);
+        evictPath(pathIdx, pathDepth);
+        writePathToAccessor(treeAccessor, pathIdx, pathDepth,
+                            nodeIdxArrs[pathIdxInBatch],
+                            prefetchReceipts[pathIdxInBatch]);
+        ++evictCounter;
+        for (int k = 0; k < numPathPerAccess - 1; ++k) {
+          uint32_t pathIdxInBatch = evictCounter - prefetchEvictCounter;
+          int pathDepth = pathDepths[pathIdxInBatch];
+          PositionType pathIdx = evictCounter % size();
+          readPathFromAccessor(treeAccessor, pathIdx, pathDepth,
+                               nodeIdxArrs[pathIdxInBatch],
+                               prefetchReceipts[pathIdxInBatch]);
+          for (int h = 0; h < evict_group; ++h) {
+            evictPath(pathIdx, pathDepth);
+          }
+
+          writePathToAccessor(treeAccessor, pathIdx, pathDepth,
+                              nodeIdxArrs[pathIdxInBatch],
+                              prefetchReceipts[pathIdxInBatch]);
+          ++evictCounter;
+        }
+      }
+      treeAccessor.FlushWrite();
+      evictCounter %= size();
+    }
+#else
     PositionType nodeIdxArr[64];
     for (uint64_t i = 0; i < batchSize; ++i) {
       PositionType p = evictCounter++ % size();
@@ -818,6 +948,7 @@ struct ORAM {
       obliMove(writeBack, toWrite.uid, uid[i]);
       writeBlockWithRetry(toWrite, p, pathDepth, nodeIdxArr);
     }
+#endif
   }
 
   /**

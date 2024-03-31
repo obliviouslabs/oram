@@ -236,6 +236,7 @@ struct HeapTree {
                                  uint32_t& pathPrefetchReceipt) {
       int pathLen = tree.GetNodeIdxArr(outputBegin, idx);
       uint32_t levelReceipt = -1;
+      // printf("read path %d with %d nodes\n", (int)idx, pathLen);
       for (int i = 0; i < pathLen; ++i) {
         levelReceipt = arrAccessor.Prefetch(outputBegin[i]);
         // printf("prefetches %d and get receipt %d\n", (int)outputBegin[i],
@@ -251,7 +252,7 @@ struct HeapTree {
     T& GetPrefetchedNode(PositionType idx, int level,
                          uint32_t pathPrefetchReceipt) {
       // printf("get node %d at level %d with receipt %d\n", (int)idx, level,
-      //        (int)pathPrefetchReceipt + level);
+      //  (int)pathPrefetchReceipt + level);
       return arrAccessor.At(pathPrefetchReceipt + level, idx);
     }
 
