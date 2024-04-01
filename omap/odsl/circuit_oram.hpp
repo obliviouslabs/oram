@@ -225,8 +225,16 @@ struct ORAM {
     }
   }
 
+  /**
+   * @brief Get the nonce of the child node on the path.
+   *
+   * @param node The parent node
+   * @param level The level of the parent node
+   * @param pos The position of the path
+   * @return uint64_t The nonce of the child node
+   */
   INLINE uint64_t getChildNonce(const TreeNode_& node, int level,
-                                PositionType pos) {
+                                PositionType pos) const {
     static_assert(check_freshness);
     if ((pos >> level) & 1) {
       return node.rightNonce;
@@ -235,6 +243,14 @@ struct ORAM {
     }
   }
 
+  /**
+   * @brief Increment the nonce for the child node on the path.
+   *
+   * @param node The parent node
+   * @param level The level of the parent node
+   * @param pos The position of the path
+   * @return uint64_t The nonce of the child node
+   */
   INLINE void incrementNonce(TreeNode_& node, int level, PositionType pos) {
     static_assert(check_freshness);
     if ((pos >> level) & 1) {
@@ -244,6 +260,15 @@ struct ORAM {
     }
   }
 
+  /**
+   * @brief Increment the nonce for the child node on the path and return the
+   * original child nonce.
+   *
+   * @param node The parent node
+   * @param level The level of the parent node
+   * @param pos The position of the path
+   * @return uint64_t The original nonce of the child node
+   */
   INLINE uint64_t incrementNonceAndGetChildNonce(TreeNode_& node, int level,
                                                  PositionType pos) {
     static_assert(check_freshness);
@@ -762,9 +787,12 @@ struct ORAM {
     // mask duplicate positions
     deDuplicatePoses(batchSize, pos, uid);
 
-    // read and remove
-    if constexpr (check_freshness) {
+// read and remove
 #ifdef DISK_IO
+    if (!tree.IsFullyCached()) {
+      // if data is swapped to disk, minimize the number of ocalls by
+      // prefetching and grouping all the writebacks together
+      // freshness should only be checked when some data is out of the EPC
       typename HeapTree_::BatchAccessor treeAccessor(tree);
       const uint32_t maxPrefetchBatchSize = 16;
       PositionType nodeIdxArrs[maxPrefetchBatchSize][64];
@@ -782,48 +810,45 @@ struct ORAM {
         for (uint32_t j = 0; j < prefetchBatchSize; ++j, ++i) {
           ReadElementAndRemoveFromPath(path.begin(), path.begin() + stashSize,
                                        uid[i], out[i]);
-          uint64_t expectedNonce = rootNonce++;
+          uint64_t expectedNonce;
+          if constexpr (check_freshness) {
+            expectedNonce = rootNonce++;
+          }
           for (int k = 0; k < pathDepths[j]; ++k) {
             TreeNode_& node = treeAccessor.GetPrefetchedNode(
                 nodeIdxArrs[j][k], k, prefetchReceipts[j]);
-            assertNodeFreshness(node, expectedNonce);
-            expectedNonce = incrementNonceAndGetChildNonce(node, k, pos[i]);
+            if constexpr (check_freshness) {
+              assertNodeFreshness(node, expectedNonce);
+              expectedNonce = incrementNonceAndGetChildNonce(node, k, pos[i]);
+            }
             ReadElementAndRemoveFromPath(
                 node.bucket.blocks, node.bucket.blocks + Z, uid[i], out[i]);
           }
         }
         treeAccessor.FlushWrite();
       }
-#else
-      PositionType nodeIdxArr[64];
-      // read and remove
-      for (uint64_t i = 0; i < batchSize; ++i) {
-        int pathDepth = tree.GetNodeIdxArr(&nodeIdxArr[0], pos[i]);
-        ReadElementAndRemoveFromPath(path.begin(), path.begin() + stashSize,
-                                     uid[i], out[i]);
+      return;
+    }
+#endif
+    PositionType nodeIdxArr[64];
+    // read and remove
+    for (uint64_t i = 0; i < batchSize; ++i) {
+      int pathDepth = tree.GetNodeIdxArr(&nodeIdxArr[0], pos[i]);
+      ReadElementAndRemoveFromPath(path.begin(), path.begin() + stashSize,
+                                   uid[i], out[i]);
 
-        uint64_t expectedNonce = rootNonce++;
-        for (int j = 0; j < pathDepth; ++j) {
-          TreeNode_& node = tree.GetNodeByIdx(nodeIdxArr[j]);
+      uint64_t expectedNonce;
+      if constexpr (check_freshness) {
+        expectedNonce = rootNonce++;
+      }
+      for (int j = 0; j < pathDepth; ++j) {
+        TreeNode_& node = tree.GetNodeByIdx(nodeIdxArr[j]);
+        if constexpr (check_freshness) {
           assertNodeFreshness(node, expectedNonce);
           expectedNonce = incrementNonceAndGetChildNonce(node, j, pos[i]);
-          ReadElementAndRemoveFromPath(node.bucket.blocks,
-                                       node.bucket.blocks + Z, uid[i], out[i]);
         }
-      }
-#endif
-
-    } else {
-      PositionType nodeIdxArr[64];
-      for (uint64_t i = 0; i < batchSize; ++i) {
-        int pathDepth = tree.GetNodeIdxArr(&nodeIdxArr[0], pos[i]);
-        ReadElementAndRemoveFromPath(path.begin(), path.begin() + stashSize,
+        ReadElementAndRemoveFromPath(node.bucket.blocks, node.bucket.blocks + Z,
                                      uid[i], out[i]);
-        for (int j = 0; j < pathDepth; ++j) {
-          TreeNode_& node = tree.GetNodeByIdx(nodeIdxArr[j]);
-          ReadElementAndRemoveFromPath(node.bucket.blocks,
-                                       node.bucket.blocks + Z, uid[i], out[i]);
-        }
       }
     }
 
@@ -846,9 +871,12 @@ struct ORAM {
                       const PositionType* newPos, const T* in,
                       const std::vector<bool>& writeBackFlags) {
 #ifdef DISK_IO
-    if constexpr (check_freshness) {
+    // if data is swapped to disk, minimize the number of ocalls by
+    // prefetching and grouping all the writebacks together
+    if (!tree.IsFullyCached()) {
+      // freshness should only be checked when some data is out of the EPC
       typename HeapTree_::BatchAccessor treeAccessor(tree);
-      constexpr uint32_t maxPrefetchBatchSize = 1;
+      constexpr uint32_t maxPrefetchBatchSize = 8;
       constexpr int numPathPerAccess = 1 + divRoundUp(evict_freq, evict_group);
       constexpr uint32_t maxPathCount = maxPrefetchBatchSize * numPathPerAccess;
       PositionType nodeIdxArrs[maxPathCount][64];

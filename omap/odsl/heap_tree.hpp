@@ -123,6 +123,13 @@ struct HeapTree {
   uint64_t GetMemoryUsage() const { return arr.GetMemoryUsage(); }
 
   /**
+   * @brief Return whether the tree is fully cached
+   *
+   * @return true if the tree is fully cached
+   */
+  INLINE bool IsFullyCached() const { return cacheSize == totalSize; }
+
+  /**
    * @brief Retrieve the node indices on a path idx
    *
    * @tparam Iterator
