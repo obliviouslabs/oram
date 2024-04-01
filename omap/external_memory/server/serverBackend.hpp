@@ -39,20 +39,20 @@ struct ServerBackend : EM::LargeBlockAllocator {
 struct MemServerBackend : ServerBackend {
   uint8_t* data;
 #ifndef ENCLAVE_MODE
-  void ocall_InitServer(uint8_t** data_ptr, uint64_t pageSize,
+  void ocall_InitServer(uint8_t** data_ptr, uint64_t pageBytes,
                         uint64_t numPage) {
-    *data_ptr = new uint8_t[pageSize * numPage];
+    *data_ptr = new uint8_t[pageBytes * numPage];
   }
 
   void ocall_DeleteServer() { delete[] (data); }
 #endif
 
 #ifndef DISK_IO
-  void ocall_Read(uint64_t offset, uint64_t sz, uint8_t* tmp) {
-    std::memcpy(tmp, &data[offset], sz);
+  void ocall_Read(uint64_t offset, uint64_t sz, uint8_t* buffer) {
+    std::memcpy(buffer, &data[offset], sz);
   }
-  void ocall_Write(uint64_t offset, uint64_t sz, const uint8_t* tmp) {
-    std::memcpy(&data[offset], tmp, sz);
+  void ocall_Write(uint64_t offset, uint64_t sz, const uint8_t* buffer) {
+    std::memcpy(&data[offset], buffer, sz);
   }
 #endif
 
@@ -71,33 +71,35 @@ struct MemServerBackend : ServerBackend {
   }
 
 #ifndef DISK_IO
-  void ocall_Read_Batch(uint64_t* offsets, uint64_t size, uint8_t* tmp,
-                        uint64_t chunkNum, uint64_t totalSize) {
-    uint8_t* pos = tmp;
-    for (uint64_t i = 0; i < chunkNum; ++i) {
+  void ocall_Read_Batch(uint64_t batchSize, uint64_t pageBytes,
+                        uint64_t totalBytes, uint64_t* offsets,
+                        uint8_t* buffer) {
+    uint8_t* pos = buffer;
+    for (uint64_t i = 0; i < batchSize; ++i) {
       uint64_t offset = *(offsets + i);
-      ocall_Read(offset, size, pos);
-      pos += size;
+      ocall_Read(offset, pageBytes, pos);
+      pos += pageBytes;
     }
   }
-  void ocall_Write_Batch(uint64_t* offsets, uint64_t size, uint8_t* tmp,
-                         uint64_t chunkNum, uint64_t totalSize) {
-    uint8_t* pos = tmp;
-    for (uint64_t i = 0; i < chunkNum; ++i) {
+  void ocall_Write_Batch(uint64_t batchSize, uint64_t pageBytes,
+                         uint64_t totalBytes, uint64_t* offsets,
+                         uint8_t* buffer) {
+    uint8_t* pos = buffer;
+    for (uint64_t i = 0; i < batchSize; ++i) {
       uint64_t offset = *(offsets + i);
-      ocall_Write(offset, size, pos);
-      pos += size;
+      ocall_Write(offset, pageBytes, pos);
+      pos += pageBytes;
     }
   }
 #endif
-  void ReadBatch(uint64_t chunkNum, uint64_t pageSize, uint64_t* offsets,
+  void ReadBatch(uint64_t batchSize, uint64_t pageBytes, uint64_t* offsets,
                  uint8_t* out) {
-    ocall_Read_Batch(offsets, pageSize, out, chunkNum, pageSize * chunkNum);
+    ocall_Read_Batch(batchSize, pageBytes, pageBytes * batchSize, offsets, out);
   }
 
-  void WriteBatch(uint64_t chunkNum, uint64_t pageSize, uint64_t* offsets,
+  void WriteBatch(uint64_t batchSize, uint64_t pageBytes, uint64_t* offsets,
                   uint8_t* in) {
-    ocall_Write_Batch(offsets, pageSize, in, chunkNum, pageSize * chunkNum);
+    ocall_Write_Batch(batchSize, pageBytes, pageBytes * batchSize, offsets, in);
   }
 };
 extern MemServerBackend* g_DefaultBackend;

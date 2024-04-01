@@ -827,6 +827,7 @@ struct ORAM {
         }
         treeAccessor.FlushWrite();
       }
+      duplicateVal(batchSize, out, uid);
       return;
     }
 #endif
