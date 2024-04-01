@@ -10,9 +10,9 @@ enclave {
     uint64_t ocall_measure_time();
     uint8_t* ocall_InitServer(uint64_t sizeOfT, uint64_t N_);
     void ocall_DeleteServer();
-    void ocall_Read_Batch([in, count=chunkNum] uint64_t* offsets, [in, count=chunkNum] uint64_t* sizes, [out, count=totalSize] uint8_t* tmp, uint64_t chunkNum, uint64_t totalSize);
+    void ocall_Read_Batch(uint64_t batchSize, uint64_t pageBytes, uint64_t totalBytes, [in, count=batchSize] uint64_t* offsets,  [out, count=totalBytes] uint8_t* buffer);
     void ocall_Read(uint64_t pos, uint64_t length, [out, count=length] uint8_t* page);
-    void ocall_Write_Batch([in, count=chunkNum] uint64_t* offsets, [in, count=chunkNum] uint64_t* sizes, [in, count=totalSize] uint8_t* tmp, uint64_t chunkNum, uint64_t totalSize);
+    void ocall_Write_Batch(uint64_t batchSize, uint64_t pageBytes, uint64_t totalBytes, [in, count=batchSize] uint64_t* offsets,  [in, count=totalBytes] uint8_t* buffer);
     void ocall_Write(uint64_t pos, uint64_t length, [in, count=length] const uint8_t* page);
   };
 };

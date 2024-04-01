@@ -134,9 +134,10 @@ template <typename T, const int Z, const int stashSize,
           const bool check_freshness = true>
 int GetMaxCacheLevel(PositionType size, size_t cacheBytes = MAX_CACHE_SIZE) {
   using Bucket_ = Bucket<T, Z, PositionType, UidType>;
-  using FreshBucket_ = FreshBucket<Bucket_>;
+  using FreshORAMNode_ = FreshORAMNode<Bucket_>;
 
-  using TreeNode_ = std::conditional_t<check_freshness, FreshBucket_, Bucket_>;
+  using TreeNode_ =
+      std::conditional_t<check_freshness, FreshORAMNode_, Bucket_>;
   using Stash = Bucket<T, stashSize, PositionType, UidType>;
   using HeapTree_ = HeapTree<TreeNode_, PositionType>;
   int maxCacheLevel = 0;

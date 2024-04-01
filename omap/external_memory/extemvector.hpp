@@ -207,6 +207,24 @@ struct Vector {
     bool eof() { return end <= it; }
     void flush() {}
   };
+
+  struct BatchAccessor {
+    typename Server::BatchAccessor serverAccessor;
+
+    BatchAccessor(Vector& vec) : serverAccessor(vec.server, 64) {}
+
+    uint32_t Prefetch(const uint64_t idx) {
+      return serverAccessor.Prefetch(idx / item_per_page);
+    }
+
+    void FlushRead() { serverAccessor.FlushRead(); }
+
+    T& At(uint32_t prefetchReceipt, uint64_t idx) {
+      return serverAccessor.Access(prefetchReceipt).pages[idx % item_per_page];
+    }
+
+    void FlushWrite() { serverAccessor.FlushWrite(); }
+  };
 };
 
 template <class InputIterator, class OutputIterator>

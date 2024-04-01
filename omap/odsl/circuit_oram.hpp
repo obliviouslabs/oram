@@ -35,9 +35,11 @@ struct ORAM {
   using Block_ = Block<T, PositionType, UidType>;
   using Bucket_ = Bucket<T, Z, PositionType, UidType>;
 
-  using FreshBucket_ = FreshBucket<Bucket_>;
+  using FreshORAMNode_ = FreshORAMNode<Bucket_>;
+  using NonFreshORAMNode_ = NonFreshORAMNode<Bucket_>;
 
-  using TreeNode_ = std::conditional_t<check_freshness, FreshBucket_, Bucket_>;
+  using TreeNode_ =
+      std::conditional_t<check_freshness, FreshORAMNode_, NonFreshORAMNode_>;
 
   using HeapTree_ = HeapTree<TreeNode_, PositionType, page_size,
                              divRoundUp(evict_freq, evict_group)>;
@@ -214,6 +216,69 @@ struct ORAM {
     }
   }
 
+  INLINE void assertNodeFreshness(const TreeNode_& node,
+
+                                  uint64_t expectedNonce) {
+    static_assert(check_freshness);
+    if (node.leftNonce + node.rightNonce != expectedNonce) {
+      throw std::runtime_error("ORAM freshness check failed");
+    }
+  }
+
+  /**
+   * @brief Get the nonce of the child node on the path.
+   *
+   * @param node The parent node
+   * @param level The level of the parent node
+   * @param pos The position of the path
+   * @return uint64_t The nonce of the child node
+   */
+  INLINE uint64_t getChildNonce(const TreeNode_& node, int level,
+                                PositionType pos) const {
+    static_assert(check_freshness);
+    if ((pos >> level) & 1) {
+      return node.rightNonce;
+    } else {
+      return node.leftNonce;
+    }
+  }
+
+  /**
+   * @brief Increment the nonce for the child node on the path.
+   *
+   * @param node The parent node
+   * @param level The level of the parent node
+   * @param pos The position of the path
+   * @return uint64_t The nonce of the child node
+   */
+  INLINE void incrementNonce(TreeNode_& node, int level, PositionType pos) {
+    static_assert(check_freshness);
+    if ((pos >> level) & 1) {
+      ++node.rightNonce;
+    } else {
+      ++node.leftNonce;
+    }
+  }
+
+  /**
+   * @brief Increment the nonce for the child node on the path and return the
+   * original child nonce.
+   *
+   * @param node The parent node
+   * @param level The level of the parent node
+   * @param pos The position of the path
+   * @return uint64_t The original nonce of the child node
+   */
+  INLINE uint64_t incrementNonceAndGetChildNonce(TreeNode_& node, int level,
+                                                 PositionType pos) {
+    static_assert(check_freshness);
+    if ((pos >> level) & 1) {
+      return node.rightNonce++;
+    } else {
+      return node.leftNonce++;
+    }
+  }
+
   /**
    * @brief Write a new block to the top of the tree, evict the currently
    * buffered path, and write back. If the write fails, perform some more
@@ -260,28 +325,19 @@ struct ORAM {
    */
   int readPathAndGetNodeIdxArr(PositionType pos, PositionType nodeIdxArr[64]) {
     int pathDepth = tree.GetNodeIdxArr(nodeIdxArr, pos);
+    uint64_t expectedNonce;
     if constexpr (check_freshness) {
-      uint64_t expectedNonce = rootNonce;
-      for (int i = 0; i < pathDepth; ++i) {
-        const TreeNode_& node = tree.GetNodeByIdx(nodeIdxArr[i]);
-
-        if (node.leftNonce + node.rightNonce != expectedNonce) {
-          throw std::runtime_error("ORAM freshness check failed");
-        }
-        if ((pos >> i) & 1) {
-          expectedNonce = node.rightNonce;
-        } else {
-          expectedNonce = node.leftNonce;
-        }
-        memcpy(&path[stashSize + i * Z], node.bucket.blocks,
-               Z * sizeof(Block_));
-      }
-    } else {
-      for (int i = 0; i < pathDepth; ++i) {
-        const TreeNode_& node = tree.GetNodeByIdx(nodeIdxArr[i]);
-        memcpy(&path[stashSize + i * Z], node.blocks, Z * sizeof(Block_));
-      }
+      expectedNonce = rootNonce;
     }
+    for (int i = 0; i < pathDepth; ++i) {
+      const TreeNode_& node = tree.GetNodeByIdx(nodeIdxArr[i]);
+      if constexpr (check_freshness) {
+        assertNodeFreshness(node, expectedNonce);
+        expectedNonce = getChildNonce(node, i, pos);
+      }
+      memcpy(&path[stashSize + i * Z], node.bucket.blocks, Z * sizeof(Block_));
+    }
+
     return pathDepth;
   }
 
@@ -294,22 +350,49 @@ struct ORAM {
                      const PositionType nodeIdxArr[64]) {
     if constexpr (check_freshness) {
       ++rootNonce;
-      for (int i = 0; i < pathDepth; ++i) {
-        TreeNode_& node = tree.GetNodeByIdx(nodeIdxArr[i]);
+    }
+    for (int i = 0; i < pathDepth; ++i) {
+      TreeNode_& node = tree.GetNodeByIdx(nodeIdxArr[i]);
+      if constexpr (check_freshness) {
+        incrementNonce(node, i, pos);
+      }
+      memcpy(node.bucket.blocks, &path[stashSize + i * Z], Z * sizeof(Block_));
+    }
+  }
 
-        if ((pos >> i) & 1) {
-          ++node.rightNonce;
-        } else {
-          ++node.leftNonce;
-        }
-        memcpy(node.bucket.blocks, &path[stashSize + i * Z],
-               Z * sizeof(Block_));
+  void readPathFromAccessor(typename HeapTree_::BatchAccessor& treeAccessor,
+                            PositionType pos, int pathDepth,
+                            PositionType* nodeIdxArr,
+                            uint32_t pathPrefetchReceipt) {
+    uint64_t expectedNonce;
+    if constexpr (check_freshness) {
+      expectedNonce = rootNonce;
+    }
+    for (int i = 0; i < pathDepth; ++i) {
+      const TreeNode_& node =
+          treeAccessor.GetPrefetchedNode(nodeIdxArr[i], i, pathPrefetchReceipt);
+      if constexpr (check_freshness) {
+        assertNodeFreshness(node, expectedNonce);
+        expectedNonce = getChildNonce(node, i, pos);
       }
-    } else {
-      for (int i = 0; i < pathDepth; ++i) {
-        TreeNode_& node = tree.GetNodeByIdx(nodeIdxArr[i]);
-        memcpy(node.blocks, &path[stashSize + i * Z], Z * sizeof(Block_));
+      memcpy(&path[stashSize + i * Z], node.bucket.blocks, Z * sizeof(Block_));
+    }
+  }
+
+  void writePathToAccessor(typename HeapTree_::BatchAccessor& treeAccessor,
+                           PositionType pos, int pathDepth,
+                           PositionType* nodeIdxArr,
+                           uint32_t pathPrefetchReceipt) {
+    if constexpr (check_freshness) {
+      ++rootNonce;
+    }
+    for (int i = 0; i < pathDepth; ++i) {
+      TreeNode_& node =
+          treeAccessor.GetPrefetchedNode(nodeIdxArr[i], i, pathPrefetchReceipt);
+      if constexpr (check_freshness) {
+        incrementNonce(node, i, pos);
       }
+      memcpy(node.bucket.blocks, &path[stashSize + i * Z], Z * sizeof(Block_));
     }
   }
 
@@ -704,33 +787,69 @@ struct ORAM {
     // mask duplicate positions
     deDuplicatePoses(batchSize, pos, uid);
 
+// read and remove
+#ifdef DISK_IO
+    if (!tree.IsFullyCached()) {
+      // if data is swapped to disk, minimize the number of ocalls by
+      // prefetching and grouping all the writebacks together
+      // freshness should only be checked when some data is out of the EPC
+      typename HeapTree_::BatchAccessor treeAccessor(tree);
+      const uint32_t maxPrefetchBatchSize = 16;
+      PositionType nodeIdxArrs[maxPrefetchBatchSize][64];
+      int pathDepths[maxPrefetchBatchSize];
+      uint32_t prefetchReceipts[maxPrefetchBatchSize] = {0};
+      for (uint64_t i = 0; i < batchSize;) {
+        uint32_t prefetchBatchSize =
+            (uint32_t)std::min((uint64_t)maxPrefetchBatchSize, batchSize - i);
+        for (uint32_t j = 0; j < prefetchBatchSize; ++j) {
+          pathDepths[j] = treeAccessor.GetNodeIdxArrAndPrefetch(
+              &nodeIdxArrs[j][0], pos[i + j], prefetchReceipts[j]);
+        }
+        treeAccessor.FlushRead();
+
+        for (uint32_t j = 0; j < prefetchBatchSize; ++j, ++i) {
+          ReadElementAndRemoveFromPath(path.begin(), path.begin() + stashSize,
+                                       uid[i], out[i]);
+          uint64_t expectedNonce;
+          if constexpr (check_freshness) {
+            expectedNonce = rootNonce++;
+          }
+          for (int k = 0; k < pathDepths[j]; ++k) {
+            TreeNode_& node = treeAccessor.GetPrefetchedNode(
+                nodeIdxArrs[j][k], k, prefetchReceipts[j]);
+            if constexpr (check_freshness) {
+              assertNodeFreshness(node, expectedNonce);
+              expectedNonce = incrementNonceAndGetChildNonce(node, k, pos[i]);
+            }
+            ReadElementAndRemoveFromPath(
+                node.bucket.blocks, node.bucket.blocks + Z, uid[i], out[i]);
+          }
+        }
+        treeAccessor.FlushWrite();
+      }
+      duplicateVal(batchSize, out, uid);
+      return;
+    }
+#endif
     PositionType nodeIdxArr[64];
     // read and remove
     for (uint64_t i = 0; i < batchSize; ++i) {
       int pathDepth = tree.GetNodeIdxArr(&nodeIdxArr[0], pos[i]);
       ReadElementAndRemoveFromPath(path.begin(), path.begin() + stashSize,
                                    uid[i], out[i]);
+
+      uint64_t expectedNonce;
       if constexpr (check_freshness) {
-        uint64_t expectedNonce = rootNonce++;
-        for (int j = 0; j < pathDepth; ++j) {
-          TreeNode_& node = tree.GetNodeByIdx(nodeIdxArr[j]);
-          if (node.leftNonce + node.rightNonce != expectedNonce) {
-            throw std::runtime_error("ORAM freshness check failed");
-          }
-          if ((pos[i] >> j) & 1) {
-            expectedNonce = node.rightNonce++;
-          } else {
-            expectedNonce = node.leftNonce++;
-          }
-          ReadElementAndRemoveFromPath(node.bucket.blocks,
-                                       node.bucket.blocks + Z, uid[i], out[i]);
+        expectedNonce = rootNonce++;
+      }
+      for (int j = 0; j < pathDepth; ++j) {
+        TreeNode_& node = tree.GetNodeByIdx(nodeIdxArr[j]);
+        if constexpr (check_freshness) {
+          assertNodeFreshness(node, expectedNonce);
+          expectedNonce = incrementNonceAndGetChildNonce(node, j, pos[i]);
         }
-      } else {
-        for (int j = 0; j < pathDepth; ++j) {
-          TreeNode_& node = tree.GetNodeByIdx(nodeIdxArr[j]);
-          ReadElementAndRemoveFromPath(node.blocks, node.blocks + Z, uid[i],
-                                       out[i]);
-        }
+        ReadElementAndRemoveFromPath(node.bucket.blocks, node.bucket.blocks + Z,
+                                     uid[i], out[i]);
       }
     }
 
@@ -752,7 +871,69 @@ struct ORAM {
   void BatchWriteBack(uint64_t batchSize, const UidType* uid,
                       const PositionType* newPos, const T* in,
                       const std::vector<bool>& writeBackFlags) {
-    // only copy stash once
+#ifdef DISK_IO
+    // if data is swapped to disk, minimize the number of ocalls by
+    // prefetching and grouping all the writebacks together
+    if (!tree.IsFullyCached()) {
+      // freshness should only be checked when some data is out of the EPC
+      typename HeapTree_::BatchAccessor treeAccessor(tree);
+      constexpr uint32_t maxPrefetchBatchSize = 8;
+      constexpr int numPathPerAccess = 1 + divRoundUp(evict_freq, evict_group);
+      constexpr uint32_t maxPathCount = maxPrefetchBatchSize * numPathPerAccess;
+      PositionType nodeIdxArrs[maxPathCount][64];
+      int pathDepths[maxPathCount];
+      uint32_t prefetchReceipts[maxPathCount] = {0};
+      for (uint64_t i = 0; i < batchSize;) {
+        uint64_t prefetchEvictCounter = evictCounter;
+        uint32_t prefetchBatchSize =
+            (uint32_t)std::min((uint64_t)maxPrefetchBatchSize, batchSize - i);
+
+        for (uint32_t pathOffset = 0;
+             pathOffset < prefetchBatchSize * numPathPerAccess; ++pathOffset) {
+          PositionType p = prefetchEvictCounter++ % size();
+          pathDepths[pathOffset] = treeAccessor.GetNodeIdxArrAndPrefetch(
+              nodeIdxArrs[pathOffset], p, prefetchReceipts[pathOffset]);
+        }
+        treeAccessor.FlushRead();
+        for (uint32_t j = 0, pathOffset = 0; j < prefetchBatchSize; ++j, ++i) {
+          Block_ toWrite = {in[i], newPos[i], DUMMY<UidType>()};
+          bool writeBack = writeBackFlags[i];
+          if (i > 0) {
+            // don't write back duplicate blocks
+            writeBack &= (uid[i] != uid[i - 1]);
+          }
+          obliMove(writeBack, toWrite.uid, uid[i]);
+          bool success = false;
+          for (int k = 0; k < numPathPerAccess; ++k, ++pathOffset) {
+            int pathDepth = pathDepths[pathOffset];
+            PositionType p = evictCounter++ % size();
+            readPathFromAccessor(treeAccessor, p, pathDepth,
+                                 nodeIdxArrs[pathOffset],
+                                 prefetchReceipts[pathOffset]);
+            if (k == 0) {
+              success = WriteNewBlockToPath(
+                  path.begin(), path.begin() + stashSize + Z, toWrite);
+              evictPath(p, pathDepth);
+            } else {
+              for (int h = 0; h < evict_group; ++h) {
+                evictPath(p, pathDepth);
+              }
+            }
+
+            writePathToAccessor(treeAccessor, p, pathDepth,
+                                nodeIdxArrs[pathOffset],
+                                prefetchReceipts[pathOffset]);
+          }
+          if (!success) {
+            PERFCTR_INCREMENT(CIRCUITORAM_OVERFLOW);
+            --i;  // retry the current element
+          }
+        }
+        treeAccessor.FlushWrite();
+      }
+      return;
+    }
+#endif
     PositionType nodeIdxArr[64];
     for (uint64_t i = 0; i < batchSize; ++i) {
       PositionType p = evictCounter++ % size();

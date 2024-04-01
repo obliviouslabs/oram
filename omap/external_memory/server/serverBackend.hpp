@@ -39,20 +39,20 @@ struct ServerBackend : EM::LargeBlockAllocator {
 struct MemServerBackend : ServerBackend {
   uint8_t* data;
 #ifndef ENCLAVE_MODE
-  void ocall_InitServer(uint8_t** data_ptr, uint64_t pageSize,
+  void ocall_InitServer(uint8_t** data_ptr, uint64_t pageBytes,
                         uint64_t numPage) {
-    *data_ptr = new uint8_t[pageSize * numPage];
+    *data_ptr = new uint8_t[pageBytes * numPage];
   }
 
   void ocall_DeleteServer() { delete[] (data); }
 #endif
 
 #ifndef DISK_IO
-  void ocall_Read(uint64_t offset, uint64_t sz, uint8_t* tmp) {
-    std::memcpy(tmp, &data[offset], sz);
+  void ocall_Read(uint64_t offset, uint64_t sz, uint8_t* buffer) {
+    std::memcpy(buffer, &data[offset], sz);
   }
-  void ocall_Write(uint64_t offset, uint64_t sz, const uint8_t* tmp) {
-    std::memcpy(&data[offset], tmp, sz);
+  void ocall_Write(uint64_t offset, uint64_t sz, const uint8_t* buffer) {
+    std::memcpy(&data[offset], buffer, sz);
   }
 #endif
 
@@ -71,134 +71,36 @@ struct MemServerBackend : ServerBackend {
   }
 
 #ifndef DISK_IO
-  void ocall_Read_Batch(uint64_t* offsets, uint64_t* sizes, uint8_t* tmp,
-                        uint64_t chunkNum, uint64_t totalSize) {
-    uint8_t* pos = tmp;
-    for (uint64_t i = 0; i < chunkNum; ++i) {
+  void ocall_Read_Batch(uint64_t batchSize, uint64_t pageBytes,
+                        uint64_t totalBytes, uint64_t* offsets,
+                        uint8_t* buffer) {
+    uint8_t* pos = buffer;
+    for (uint64_t i = 0; i < batchSize; ++i) {
       uint64_t offset = *(offsets + i);
-      uint64_t size = *(sizes + i);
-      ocall_Read(offset, size, pos);
-      pos += size;
+      ocall_Read(offset, pageBytes, pos);
+      pos += pageBytes;
     }
   }
-  void ocall_Write_Batch(uint64_t* offsets, uint64_t* sizes, uint8_t* tmp,
-                         uint64_t chunkNum, uint64_t totalSize) {
-    uint8_t* pos = tmp;
-    for (uint64_t i = 0; i < chunkNum; ++i) {
+  void ocall_Write_Batch(uint64_t batchSize, uint64_t pageBytes,
+                         uint64_t totalBytes, uint64_t* offsets,
+                         uint8_t* buffer) {
+    uint8_t* pos = buffer;
+    for (uint64_t i = 0; i < batchSize; ++i) {
       uint64_t offset = *(offsets + i);
-      uint64_t size = *(sizes + i);
-      ocall_Write(offset, size, pos);
-      pos += size;
+      ocall_Write(offset, pageBytes, pos);
+      pos += pageBytes;
     }
-  }
-
-#else
-  const static uint64_t maxChunkNum = 16;
-  struct Chunks {
-    uint8_t tmp[4096 * maxChunkNum];
-    uint8_t* addrs[maxChunkNum];
-    uint64_t offsets[maxChunkNum];
-    uint64_t sizes[maxChunkNum];
-    PageSlotState* states[maxChunkNum];
-    uint64_t chunkNum = 0;
-    uint64_t tmpOffset = 0;
-  };
-
-  Chunks readChunks, writeChunks;
-  void ReadLazy(uint64_t offset, uint64_t sz, uint8_t* to,
-                PageSlotState& state) {
-    Assert(state == PENDING_PAGE);
-    Assert(sz <= 4096);
-    uint64_t& chunkNum = readChunks.chunkNum;
-    uint64_t& tmpOffset = readChunks.tmpOffset;
-    if (tmpOffset + sz > sizeof(readChunks.tmp) || chunkNum + 1 > maxChunkNum) {
-      FlushRead();
-      Assert(chunkNum == 0);
-      Assert(tmpOffset == 0);
-    }
-
-    readChunks.states[chunkNum] = &state;
-    readChunks.addrs[chunkNum] = to;
-    readChunks.offsets[chunkNum] = offset;
-    readChunks.sizes[chunkNum] = sz;
-    ++chunkNum;
-    tmpOffset += sz;
-  }
-
-  void FlushRead() {
-    uint64_t& chunkNum = readChunks.chunkNum;
-    uint64_t& tmpOffset = readChunks.tmpOffset;
-    uint8_t* tmp = readChunks.tmp;
-    uint64_t* offsets = readChunks.offsets;
-    uint64_t* sizes = readChunks.sizes;
-    uint8_t** addrs = readChunks.addrs;
-    if (chunkNum == 0) {
-      Assert(tmpOffset == 0);
-      return;
-    }
-    uint64_t totalSize = 0;
-    for (size_t i = 0; i < chunkNum; ++i) {
-      totalSize += sizes[i];
-    }
-
-    ocall_Read_Batch(offsets, sizes, tmp, chunkNum, totalSize);
-
-    uint8_t* pos = tmp;
-    for (uint64_t i = 0; i < chunkNum; ++i) {
-      std::memcpy(addrs[i], pos, sizes[i]);
-
-      pos += sizes[i];
-      *readChunks.states[i] = DONE_PAGE;
-    }
-    chunkNum = 0;
-    tmpOffset = 0;
-  }
-
-  void WriteLazy(uint64_t offset, uint64_t sz, const uint8_t* from,
-                 PageSlotState& state) {
-    Assert(state == PENDING_PAGE);
-    Assert(sz <= 4096);
-    uint64_t& chunkNum = writeChunks.chunkNum;
-    uint64_t& tmpOffset = writeChunks.tmpOffset;
-    if (tmpOffset + sz > sizeof(writeChunks.tmp) ||
-        chunkNum + 1 > maxChunkNum) {
-      FlushWrite();
-      Assert(chunkNum == 0);
-      Assert(tmpOffset == 0);
-    }
-
-    writeChunks.states[chunkNum] = &state;
-    writeChunks.offsets[chunkNum] = offset;
-    writeChunks.sizes[chunkNum] = sz;
-    std::memcpy(writeChunks.tmp + tmpOffset, from, sz);
-
-    ++chunkNum;
-    tmpOffset += sz;
-  }
-
-  void FlushWrite() {
-    uint64_t& chunkNum = writeChunks.chunkNum;
-    uint64_t& tmpOffset = writeChunks.tmpOffset;
-    uint8_t* tmp = writeChunks.tmp;
-    uint64_t* offsets = writeChunks.offsets;
-    uint64_t* sizes = writeChunks.sizes;
-    if (chunkNum == 0) {
-      Assert(tmpOffset == 0);
-      return;
-    }
-    uint64_t totalSize = 0;
-    for (size_t i = 0; i < chunkNum; ++i) {
-      totalSize += sizes[i];
-    }
-    ocall_Write_Batch(offsets, sizes, tmp, chunkNum, totalSize);
-
-    for (uint64_t i = 0; i < chunkNum; ++i) {
-      *writeChunks.states[i] = DONE_PAGE;
-    }
-    chunkNum = 0;
-    tmpOffset = 0;
   }
 #endif
+  void ReadBatch(uint64_t batchSize, uint64_t pageBytes, uint64_t* offsets,
+                 uint8_t* out) {
+    ocall_Read_Batch(batchSize, pageBytes, pageBytes * batchSize, offsets, out);
+  }
+
+  void WriteBatch(uint64_t batchSize, uint64_t pageBytes, uint64_t* offsets,
+                  uint8_t* in) {
+    ocall_Write_Batch(batchSize, pageBytes, pageBytes * batchSize, offsets, in);
+  }
 };
 extern MemServerBackend* g_DefaultBackend;
 }  // namespace Backend
