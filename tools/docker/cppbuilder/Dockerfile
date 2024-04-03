@@ -14,19 +14,14 @@ RUN apt update -y && apt upgrade -y \
         python3 python3-pip lcov gcovr cppcheck \
 && apt install -y clang clang-13 libc++-13-dev libc++abi-13-dev clang-format clang-format-13 \
         libx86-dev libclang-common-13-dev libclang-common-14-dev \
-&& apt install -y libgtest-dev libboost-dev libssl-dev \
+&& apt install -y libgtest-dev libboost-dev \
 && apt install -y doxygen \
 && apt install -y python3-matplotlib python3-numpy bc \
-&& apt install -y libssl-dev libcurl4-openssl-dev protobuf-compiler libprotobuf-dev \
-        debhelper cmake reprepro unzip pkgconf libboost-dev libboost-system-dev libboost-thread-dev \
+&& apt install -y libcurl4-openssl-dev protobuf-compiler libprotobuf-dev \
+        debhelper reprepro pkgconf libboost-system-dev libboost-thread-dev \
         protobuf-c-compiler libprotobuf-c-dev lsb-release libsystemd0 \
-build-essential lld make git wget unzip cmake ninja-build gdb \
-        ocaml ocamlbuild automake autoconf libtool wget python-is-python3 libssl-dev git cmake perl \
-        python3 python3-pip lcov gcovr cppcheck \
-clang clang-13 libc++-13-dev libc++abi-13-dev clang-format clang-format-13 \
-libx86-dev libclang-common-13-dev libclang-common-14-dev libgtest-dev libboost-dev libssl-dev  doxygen  python3-matplotlib python3-numpy  libssl-dev libcurl4-openssl-dev protobuf-compiler libprotobuf-dev \
-debhelper cmake reprepro unzip pkgconf libboost-dev libboost-system-dev libboost-thread-dev \
-protobuf-c-compiler libprotobuf-c-dev lsb-release libsystemd0 
+        libbearssl-dev cargo libstdc++-11-dev
+
 
 RUN pip install cppcheck-codequality
 RUN pip install requests
@@ -42,9 +37,9 @@ RUN unzip 'scc-3.0.0-x86_64-unknown-linux.zip' -d /
 RUN chmod +x /scc
 
 RUN mkdir /dockerfiles
-RUN cd /dockerfiles && wget https://download.01.org/intel-sgx/latest/linux-latest/distro/ubuntu22.04-server/sgx_linux_x64_sdk_2.19.100.3.bin \
+RUN cd /dockerfiles && wget https://download.01.org/intel-sgx/latest/linux-latest/distro/ubuntu22.04-server/sgx_linux_x64_sdk_2.23.100.2.bin \
 && chmod +x ./* \
-&& echo yes | ./sgx_linux_x64_sdk_2.19.100.3.bin
+&& echo yes | ./sgx_linux_x64_sdk_2.23.100.2.bin
 RUN echo "source /dockerfiles/sgxsdk/environment" > /startsgxenv.sh
 RUN chmod +x /startsgxenv.sh
 
@@ -55,9 +50,6 @@ RUN chmod +x /startsgxenv.sh
 
 SHELL ["/bin/bash", "-c"] 
 RUN ln -s /usr/lib/libsgx_urts.so /usr/lib/libsgx_urts.so.2
-
-RUN apt update -y && apt upgrade -y && apt install -y libbearssl-dev
-RUN apt update -y && apt upgrade -y && apt install -y cargo libstdc++-11-dev
 
 WORKDIR /builder/
 CMD ["bash"]
