@@ -1,5 +1,5 @@
 #pragma once
-#include <cinttypes>
+#include <stdint.h>
 
 void ResetBackend(uint64_t size);
 void DeleteBackend();

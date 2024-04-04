@@ -1,5 +1,5 @@
 #pragma once
-#include <cinttypes>
+#include <stdint.h>
 
 typedef void* omap_t;
 typedef void* initializer_t;
