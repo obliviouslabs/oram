@@ -8,7 +8,7 @@
  * interface file instead.
  * ----------------------------------------------------------------------------- */
 
-// source: odsl.i
+// source: /home/tyg/omap/oram/applications/goexample/odsl/odsl.i
 
 package odsl
 
@@ -28,50 +28,50 @@ typedef struct { char *p; intgo n; } _gostring_;
 typedef struct { void* array; intgo len; intgo cap; } _goslice_;
 
 
-extern void _wrap_Swig_free_odsl_ace9adbab396254b(uintptr_t arg1);
-extern uintptr_t _wrap_Swig_malloc_odsl_ace9adbab396254b(swig_intgo arg1);
-extern void _wrap_ResetBackend_odsl_ace9adbab396254b(uintptr_t arg1);
-extern void _wrap_DeleteBackend_odsl_ace9adbab396254b(void);
-extern void _wrap_OMapBindingSingleton_omap_set_odsl_ace9adbab396254b(uintptr_t arg1, uintptr_t arg2);
-extern uintptr_t _wrap_OMapBindingSingleton_omap_get_odsl_ace9adbab396254b(uintptr_t arg1);
-extern void _wrap_OMapBindingSingleton_initializer_set_odsl_ace9adbab396254b(uintptr_t arg1, uintptr_t arg2);
-extern uintptr_t _wrap_OMapBindingSingleton_initializer_get_odsl_ace9adbab396254b(uintptr_t arg1);
-extern uintptr_t _wrap_new_OMapBindingSingleton_odsl_ace9adbab396254b(void);
-extern void _wrap_OMapBindingSingleton_InitEmpty_odsl_ace9adbab396254b(uintptr_t arg1, uintptr_t arg2);
-extern void _wrap_OMapBindingSingleton_InitEmptyExternal_odsl_ace9adbab396254b(uintptr_t arg1, uintptr_t arg2, uintptr_t arg3);
-extern _Bool _wrap_OMapBindingSingleton_Insert_odsl_ace9adbab396254b(uintptr_t arg1, uintptr_t arg2, uintptr_t arg3);
-extern _Bool _wrap_OMapBindingSingleton_OInsert_odsl_ace9adbab396254b(uintptr_t arg1, uintptr_t arg2, uintptr_t arg3);
-extern _Bool _wrap_OMapBindingSingleton_Find_odsl_ace9adbab396254b(uintptr_t arg1, uintptr_t arg2, uintptr_t arg3);
-extern _Bool _wrap_OMapBindingSingleton_Erase_odsl_ace9adbab396254b(uintptr_t arg1, uintptr_t arg2);
-extern _Bool _wrap_OMapBindingSingleton_OErase_odsl_ace9adbab396254b(uintptr_t arg1, uintptr_t arg2);
-extern void _wrap_OMapBindingSingleton_StartInit_odsl_ace9adbab396254b(uintptr_t arg1, uintptr_t arg2);
-extern void _wrap_OMapBindingSingleton_StartInitExternal_odsl_ace9adbab396254b(uintptr_t arg1, uintptr_t arg2, uintptr_t arg3);
-extern void _wrap_OMapBindingSingleton_FinishInit_odsl_ace9adbab396254b(uintptr_t arg1);
-extern void _wrap_delete_OMapBindingSingleton_odsl_ace9adbab396254b(uintptr_t arg1);
-extern void _wrap_ParOMapBindingSingleton_omap_set_odsl_ace9adbab396254b(uintptr_t arg1, uintptr_t arg2);
-extern uintptr_t _wrap_ParOMapBindingSingleton_omap_get_odsl_ace9adbab396254b(uintptr_t arg1);
-extern void _wrap_ParOMapBindingSingleton_initializer_set_odsl_ace9adbab396254b(uintptr_t arg1, uintptr_t arg2);
-extern uintptr_t _wrap_ParOMapBindingSingleton_initializer_get_odsl_ace9adbab396254b(uintptr_t arg1);
-extern uintptr_t _wrap_new_ParOMapBindingSingleton_odsl_ace9adbab396254b(void);
-extern void _wrap_ParOMapBindingSingleton_InitEmpty_odsl_ace9adbab396254b(uintptr_t arg1, uintptr_t arg2, uintptr_t arg3);
-extern void _wrap_ParOMapBindingSingleton_InitEmptyExternal_odsl_ace9adbab396254b(uintptr_t arg1, uintptr_t arg2, uintptr_t arg3, uintptr_t arg4);
-extern void _wrap_ParOMapBindingSingleton_InsertBatch_odsl_ace9adbab396254b(uintptr_t arg1, uintptr_t arg2, uintptr_t arg3, uintptr_t arg4, swig_voidp arg5);
-extern void _wrap_ParOMapBindingSingleton_FindBatch_odsl_ace9adbab396254b(uintptr_t arg1, uintptr_t arg2, uintptr_t arg3, uintptr_t arg4, swig_voidp arg5);
-extern void _wrap_ParOMapBindingSingleton_FindBatchDeferMaintain_odsl_ace9adbab396254b(uintptr_t arg1, uintptr_t arg2, uintptr_t arg3, uintptr_t arg4, swig_voidp arg5);
-extern void _wrap_ParOMapBindingSingleton_FindBatchMaintain_odsl_ace9adbab396254b(uintptr_t arg1);
-extern void _wrap_ParOMapBindingSingleton_EraseBatch_odsl_ace9adbab396254b(uintptr_t arg1, uintptr_t arg2, uintptr_t arg3, swig_voidp arg4);
-extern void _wrap_ParOMapBindingSingleton_StartInit_odsl_ace9adbab396254b(uintptr_t arg1, uintptr_t arg2, uintptr_t arg3, uintptr_t arg4);
-extern void _wrap_ParOMapBindingSingleton_StartInitExternal_odsl_ace9adbab396254b(uintptr_t arg1, uintptr_t arg2, uintptr_t arg3, uintptr_t arg4, uintptr_t arg5);
-extern void _wrap_ParOMapBindingSingleton_FinishInit_odsl_ace9adbab396254b(uintptr_t arg1);
-extern void _wrap_delete_ParOMapBindingSingleton_odsl_ace9adbab396254b(uintptr_t arg1);
-extern void _wrap_ORAMBindingSingleton_oram_set_odsl_ace9adbab396254b(uintptr_t arg1, uintptr_t arg2);
-extern uintptr_t _wrap_ORAMBindingSingleton_oram_get_odsl_ace9adbab396254b(uintptr_t arg1);
-extern uintptr_t _wrap_new_ORAMBindingSingleton_odsl_ace9adbab396254b(void);
-extern void _wrap_ORAMBindingSingleton_InitORAM_odsl_ace9adbab396254b(uintptr_t arg1, uintptr_t arg2);
-extern void _wrap_ORAMBindingSingleton_InitORAMExternal_odsl_ace9adbab396254b(uintptr_t arg1, uintptr_t arg2, uintptr_t arg3);
-extern void _wrap_ORAMBindingSingleton_Write_odsl_ace9adbab396254b(uintptr_t arg1, uintptr_t arg2, uintptr_t arg3);
-extern uintptr_t _wrap_ORAMBindingSingleton_Read_odsl_ace9adbab396254b(uintptr_t arg1, uintptr_t arg2);
-extern void _wrap_delete_ORAMBindingSingleton_odsl_ace9adbab396254b(uintptr_t arg1);
+extern void _wrap_Swig_free_odsl_9d488ab5be5b664a(uintptr_t arg1);
+extern uintptr_t _wrap_Swig_malloc_odsl_9d488ab5be5b664a(swig_intgo arg1);
+extern void _wrap_ResetBackend_odsl_9d488ab5be5b664a(uintptr_t arg1);
+extern void _wrap_DeleteBackend_odsl_9d488ab5be5b664a(void);
+extern void _wrap_OMapBindingSingleton_omap_set_odsl_9d488ab5be5b664a(uintptr_t arg1, uintptr_t arg2);
+extern uintptr_t _wrap_OMapBindingSingleton_omap_get_odsl_9d488ab5be5b664a(uintptr_t arg1);
+extern void _wrap_OMapBindingSingleton_initializer_set_odsl_9d488ab5be5b664a(uintptr_t arg1, uintptr_t arg2);
+extern uintptr_t _wrap_OMapBindingSingleton_initializer_get_odsl_9d488ab5be5b664a(uintptr_t arg1);
+extern uintptr_t _wrap_new_OMapBindingSingleton_odsl_9d488ab5be5b664a(void);
+extern void _wrap_OMapBindingSingleton_InitEmpty_odsl_9d488ab5be5b664a(uintptr_t arg1, uintptr_t arg2);
+extern void _wrap_OMapBindingSingleton_InitEmptyExternal_odsl_9d488ab5be5b664a(uintptr_t arg1, uintptr_t arg2, uintptr_t arg3);
+extern _Bool _wrap_OMapBindingSingleton_Insert_odsl_9d488ab5be5b664a(uintptr_t arg1, uintptr_t arg2, uintptr_t arg3);
+extern _Bool _wrap_OMapBindingSingleton_OInsert_odsl_9d488ab5be5b664a(uintptr_t arg1, uintptr_t arg2, uintptr_t arg3);
+extern _Bool _wrap_OMapBindingSingleton_Find_odsl_9d488ab5be5b664a(uintptr_t arg1, uintptr_t arg2, uintptr_t arg3);
+extern _Bool _wrap_OMapBindingSingleton_Erase_odsl_9d488ab5be5b664a(uintptr_t arg1, uintptr_t arg2);
+extern _Bool _wrap_OMapBindingSingleton_OErase_odsl_9d488ab5be5b664a(uintptr_t arg1, uintptr_t arg2);
+extern void _wrap_OMapBindingSingleton_StartInit_odsl_9d488ab5be5b664a(uintptr_t arg1, uintptr_t arg2);
+extern void _wrap_OMapBindingSingleton_StartInitExternal_odsl_9d488ab5be5b664a(uintptr_t arg1, uintptr_t arg2, uintptr_t arg3);
+extern void _wrap_OMapBindingSingleton_FinishInit_odsl_9d488ab5be5b664a(uintptr_t arg1);
+extern void _wrap_delete_OMapBindingSingleton_odsl_9d488ab5be5b664a(uintptr_t arg1);
+extern void _wrap_ParOMapBindingSingleton_omap_set_odsl_9d488ab5be5b664a(uintptr_t arg1, uintptr_t arg2);
+extern uintptr_t _wrap_ParOMapBindingSingleton_omap_get_odsl_9d488ab5be5b664a(uintptr_t arg1);
+extern void _wrap_ParOMapBindingSingleton_initializer_set_odsl_9d488ab5be5b664a(uintptr_t arg1, uintptr_t arg2);
+extern uintptr_t _wrap_ParOMapBindingSingleton_initializer_get_odsl_9d488ab5be5b664a(uintptr_t arg1);
+extern uintptr_t _wrap_new_ParOMapBindingSingleton_odsl_9d488ab5be5b664a(void);
+extern void _wrap_ParOMapBindingSingleton_InitEmpty_odsl_9d488ab5be5b664a(uintptr_t arg1, uintptr_t arg2, uintptr_t arg3);
+extern void _wrap_ParOMapBindingSingleton_InitEmptyExternal_odsl_9d488ab5be5b664a(uintptr_t arg1, uintptr_t arg2, uintptr_t arg3, uintptr_t arg4);
+extern void _wrap_ParOMapBindingSingleton_InsertBatch_odsl_9d488ab5be5b664a(uintptr_t arg1, uintptr_t arg2, uintptr_t arg3, uintptr_t arg4, swig_voidp arg5);
+extern void _wrap_ParOMapBindingSingleton_FindBatch_odsl_9d488ab5be5b664a(uintptr_t arg1, uintptr_t arg2, uintptr_t arg3, uintptr_t arg4, swig_voidp arg5);
+extern void _wrap_ParOMapBindingSingleton_FindBatchDeferMaintain_odsl_9d488ab5be5b664a(uintptr_t arg1, uintptr_t arg2, uintptr_t arg3, uintptr_t arg4, swig_voidp arg5);
+extern void _wrap_ParOMapBindingSingleton_FindBatchMaintain_odsl_9d488ab5be5b664a(uintptr_t arg1);
+extern void _wrap_ParOMapBindingSingleton_EraseBatch_odsl_9d488ab5be5b664a(uintptr_t arg1, uintptr_t arg2, uintptr_t arg3, swig_voidp arg4);
+extern void _wrap_ParOMapBindingSingleton_StartInit_odsl_9d488ab5be5b664a(uintptr_t arg1, uintptr_t arg2, uintptr_t arg3, uintptr_t arg4);
+extern void _wrap_ParOMapBindingSingleton_StartInitExternal_odsl_9d488ab5be5b664a(uintptr_t arg1, uintptr_t arg2, uintptr_t arg3, uintptr_t arg4, uintptr_t arg5);
+extern void _wrap_ParOMapBindingSingleton_FinishInit_odsl_9d488ab5be5b664a(uintptr_t arg1);
+extern void _wrap_delete_ParOMapBindingSingleton_odsl_9d488ab5be5b664a(uintptr_t arg1);
+extern void _wrap_ORAMBindingSingleton_oram_set_odsl_9d488ab5be5b664a(uintptr_t arg1, uintptr_t arg2);
+extern uintptr_t _wrap_ORAMBindingSingleton_oram_get_odsl_9d488ab5be5b664a(uintptr_t arg1);
+extern uintptr_t _wrap_new_ORAMBindingSingleton_odsl_9d488ab5be5b664a(void);
+extern void _wrap_ORAMBindingSingleton_InitORAM_odsl_9d488ab5be5b664a(uintptr_t arg1, uintptr_t arg2);
+extern void _wrap_ORAMBindingSingleton_InitORAMExternal_odsl_9d488ab5be5b664a(uintptr_t arg1, uintptr_t arg2, uintptr_t arg3);
+extern void _wrap_ORAMBindingSingleton_Write_odsl_9d488ab5be5b664a(uintptr_t arg1, uintptr_t arg2, uintptr_t arg3);
+extern uintptr_t _wrap_ORAMBindingSingleton_Read_odsl_9d488ab5be5b664a(uintptr_t arg1, uintptr_t arg2);
+extern void _wrap_delete_ORAMBindingSingleton_odsl_9d488ab5be5b664a(uintptr_t arg1);
 #undef intgo
 */
 import "C"
@@ -97,23 +97,23 @@ type _ sync.Mutex
 
 func Swig_free(arg1 uintptr) {
 	_swig_i_0 := arg1
-	C._wrap_Swig_free_odsl_ace9adbab396254b(C.uintptr_t(_swig_i_0))
+	C._wrap_Swig_free_odsl_9d488ab5be5b664a(C.uintptr_t(_swig_i_0))
 }
 
 func Swig_malloc(arg1 int) (_swig_ret uintptr) {
 	var swig_r uintptr
 	_swig_i_0 := arg1
-	swig_r = (uintptr)(C._wrap_Swig_malloc_odsl_ace9adbab396254b(C.swig_intgo(_swig_i_0)))
+	swig_r = (uintptr)(C._wrap_Swig_malloc_odsl_9d488ab5be5b664a(C.swig_intgo(_swig_i_0)))
 	return swig_r
 }
 
 func ResetBackend(arg1 Uint64_t) {
 	_swig_i_0 := arg1.Swigcptr()
-	C._wrap_ResetBackend_odsl_ace9adbab396254b(C.uintptr_t(_swig_i_0))
+	C._wrap_ResetBackend_odsl_9d488ab5be5b664a(C.uintptr_t(_swig_i_0))
 }
 
 func DeleteBackend() {
-	C._wrap_DeleteBackend_odsl_ace9adbab396254b()
+	C._wrap_DeleteBackend_odsl_9d488ab5be5b664a()
 }
 
 type SwigcptrOMapBindingSingleton uintptr
@@ -128,46 +128,46 @@ func (p SwigcptrOMapBindingSingleton) SwigIsOMapBindingSingleton() {
 func (arg1 SwigcptrOMapBindingSingleton) SetOmap(arg2 uintptr) {
 	_swig_i_0 := arg1
 	_swig_i_1 := arg2
-	C._wrap_OMapBindingSingleton_omap_set_odsl_ace9adbab396254b(C.uintptr_t(_swig_i_0), C.uintptr_t(_swig_i_1))
+	C._wrap_OMapBindingSingleton_omap_set_odsl_9d488ab5be5b664a(C.uintptr_t(_swig_i_0), C.uintptr_t(_swig_i_1))
 }
 
 func (arg1 SwigcptrOMapBindingSingleton) GetOmap() (_swig_ret uintptr) {
 	var swig_r uintptr
 	_swig_i_0 := arg1
-	swig_r = (uintptr)(C._wrap_OMapBindingSingleton_omap_get_odsl_ace9adbab396254b(C.uintptr_t(_swig_i_0)))
+	swig_r = (uintptr)(C._wrap_OMapBindingSingleton_omap_get_odsl_9d488ab5be5b664a(C.uintptr_t(_swig_i_0)))
 	return swig_r
 }
 
 func (arg1 SwigcptrOMapBindingSingleton) SetInitializer(arg2 uintptr) {
 	_swig_i_0 := arg1
 	_swig_i_1 := arg2
-	C._wrap_OMapBindingSingleton_initializer_set_odsl_ace9adbab396254b(C.uintptr_t(_swig_i_0), C.uintptr_t(_swig_i_1))
+	C._wrap_OMapBindingSingleton_initializer_set_odsl_9d488ab5be5b664a(C.uintptr_t(_swig_i_0), C.uintptr_t(_swig_i_1))
 }
 
 func (arg1 SwigcptrOMapBindingSingleton) GetInitializer() (_swig_ret uintptr) {
 	var swig_r uintptr
 	_swig_i_0 := arg1
-	swig_r = (uintptr)(C._wrap_OMapBindingSingleton_initializer_get_odsl_ace9adbab396254b(C.uintptr_t(_swig_i_0)))
+	swig_r = (uintptr)(C._wrap_OMapBindingSingleton_initializer_get_odsl_9d488ab5be5b664a(C.uintptr_t(_swig_i_0)))
 	return swig_r
 }
 
 func NewOMapBindingSingleton() (_swig_ret OMapBindingSingleton) {
 	var swig_r OMapBindingSingleton
-	swig_r = (OMapBindingSingleton)(SwigcptrOMapBindingSingleton(C._wrap_new_OMapBindingSingleton_odsl_ace9adbab396254b()))
+	swig_r = (OMapBindingSingleton)(SwigcptrOMapBindingSingleton(C._wrap_new_OMapBindingSingleton_odsl_9d488ab5be5b664a()))
 	return swig_r
 }
 
 func (arg1 SwigcptrOMapBindingSingleton) InitEmpty(arg2 Uint32_t) {
 	_swig_i_0 := arg1
 	_swig_i_1 := arg2.Swigcptr()
-	C._wrap_OMapBindingSingleton_InitEmpty_odsl_ace9adbab396254b(C.uintptr_t(_swig_i_0), C.uintptr_t(_swig_i_1))
+	C._wrap_OMapBindingSingleton_InitEmpty_odsl_9d488ab5be5b664a(C.uintptr_t(_swig_i_0), C.uintptr_t(_swig_i_1))
 }
 
 func (arg1 SwigcptrOMapBindingSingleton) InitEmptyExternal(arg2 Uint32_t, arg3 Uint64_t) {
 	_swig_i_0 := arg1
 	_swig_i_1 := arg2.Swigcptr()
 	_swig_i_2 := arg3.Swigcptr()
-	C._wrap_OMapBindingSingleton_InitEmptyExternal_odsl_ace9adbab396254b(C.uintptr_t(_swig_i_0), C.uintptr_t(_swig_i_1), C.uintptr_t(_swig_i_2))
+	C._wrap_OMapBindingSingleton_InitEmptyExternal_odsl_9d488ab5be5b664a(C.uintptr_t(_swig_i_0), C.uintptr_t(_swig_i_1), C.uintptr_t(_swig_i_2))
 }
 
 func (arg1 SwigcptrOMapBindingSingleton) Insert(arg2 Uint64_t, arg3 Uint64_t) (_swig_ret bool) {
@@ -175,7 +175,7 @@ func (arg1 SwigcptrOMapBindingSingleton) Insert(arg2 Uint64_t, arg3 Uint64_t) (_
 	_swig_i_0 := arg1
 	_swig_i_1 := arg2.Swigcptr()
 	_swig_i_2 := arg3.Swigcptr()
-	swig_r = (bool)(C._wrap_OMapBindingSingleton_Insert_odsl_ace9adbab396254b(C.uintptr_t(_swig_i_0), C.uintptr_t(_swig_i_1), C.uintptr_t(_swig_i_2)))
+	swig_r = (bool)(C._wrap_OMapBindingSingleton_Insert_odsl_9d488ab5be5b664a(C.uintptr_t(_swig_i_0), C.uintptr_t(_swig_i_1), C.uintptr_t(_swig_i_2)))
 	return swig_r
 }
 
@@ -184,7 +184,7 @@ func (arg1 SwigcptrOMapBindingSingleton) OInsert(arg2 Uint64_t, arg3 Uint64_t) (
 	_swig_i_0 := arg1
 	_swig_i_1 := arg2.Swigcptr()
 	_swig_i_2 := arg3.Swigcptr()
-	swig_r = (bool)(C._wrap_OMapBindingSingleton_OInsert_odsl_ace9adbab396254b(C.uintptr_t(_swig_i_0), C.uintptr_t(_swig_i_1), C.uintptr_t(_swig_i_2)))
+	swig_r = (bool)(C._wrap_OMapBindingSingleton_OInsert_odsl_9d488ab5be5b664a(C.uintptr_t(_swig_i_0), C.uintptr_t(_swig_i_1), C.uintptr_t(_swig_i_2)))
 	return swig_r
 }
 
@@ -193,7 +193,7 @@ func (arg1 SwigcptrOMapBindingSingleton) Find(arg2 Uint64_t, arg3 Uint64_t) (_sw
 	_swig_i_0 := arg1
 	_swig_i_1 := arg2.Swigcptr()
 	_swig_i_2 := arg3.Swigcptr()
-	swig_r = (bool)(C._wrap_OMapBindingSingleton_Find_odsl_ace9adbab396254b(C.uintptr_t(_swig_i_0), C.uintptr_t(_swig_i_1), C.uintptr_t(_swig_i_2)))
+	swig_r = (bool)(C._wrap_OMapBindingSingleton_Find_odsl_9d488ab5be5b664a(C.uintptr_t(_swig_i_0), C.uintptr_t(_swig_i_1), C.uintptr_t(_swig_i_2)))
 	return swig_r
 }
 
@@ -201,7 +201,7 @@ func (arg1 SwigcptrOMapBindingSingleton) Erase(arg2 Uint64_t) (_swig_ret bool) {
 	var swig_r bool
 	_swig_i_0 := arg1
 	_swig_i_1 := arg2.Swigcptr()
-	swig_r = (bool)(C._wrap_OMapBindingSingleton_Erase_odsl_ace9adbab396254b(C.uintptr_t(_swig_i_0), C.uintptr_t(_swig_i_1)))
+	swig_r = (bool)(C._wrap_OMapBindingSingleton_Erase_odsl_9d488ab5be5b664a(C.uintptr_t(_swig_i_0), C.uintptr_t(_swig_i_1)))
 	return swig_r
 }
 
@@ -209,31 +209,31 @@ func (arg1 SwigcptrOMapBindingSingleton) OErase(arg2 Uint64_t) (_swig_ret bool) 
 	var swig_r bool
 	_swig_i_0 := arg1
 	_swig_i_1 := arg2.Swigcptr()
-	swig_r = (bool)(C._wrap_OMapBindingSingleton_OErase_odsl_ace9adbab396254b(C.uintptr_t(_swig_i_0), C.uintptr_t(_swig_i_1)))
+	swig_r = (bool)(C._wrap_OMapBindingSingleton_OErase_odsl_9d488ab5be5b664a(C.uintptr_t(_swig_i_0), C.uintptr_t(_swig_i_1)))
 	return swig_r
 }
 
 func (arg1 SwigcptrOMapBindingSingleton) StartInit(arg2 Uint32_t) {
 	_swig_i_0 := arg1
 	_swig_i_1 := arg2.Swigcptr()
-	C._wrap_OMapBindingSingleton_StartInit_odsl_ace9adbab396254b(C.uintptr_t(_swig_i_0), C.uintptr_t(_swig_i_1))
+	C._wrap_OMapBindingSingleton_StartInit_odsl_9d488ab5be5b664a(C.uintptr_t(_swig_i_0), C.uintptr_t(_swig_i_1))
 }
 
 func (arg1 SwigcptrOMapBindingSingleton) StartInitExternal(arg2 Uint32_t, arg3 Uint64_t) {
 	_swig_i_0 := arg1
 	_swig_i_1 := arg2.Swigcptr()
 	_swig_i_2 := arg3.Swigcptr()
-	C._wrap_OMapBindingSingleton_StartInitExternal_odsl_ace9adbab396254b(C.uintptr_t(_swig_i_0), C.uintptr_t(_swig_i_1), C.uintptr_t(_swig_i_2))
+	C._wrap_OMapBindingSingleton_StartInitExternal_odsl_9d488ab5be5b664a(C.uintptr_t(_swig_i_0), C.uintptr_t(_swig_i_1), C.uintptr_t(_swig_i_2))
 }
 
 func (arg1 SwigcptrOMapBindingSingleton) FinishInit() {
 	_swig_i_0 := arg1
-	C._wrap_OMapBindingSingleton_FinishInit_odsl_ace9adbab396254b(C.uintptr_t(_swig_i_0))
+	C._wrap_OMapBindingSingleton_FinishInit_odsl_9d488ab5be5b664a(C.uintptr_t(_swig_i_0))
 }
 
 func DeleteOMapBindingSingleton(arg1 OMapBindingSingleton) {
 	_swig_i_0 := arg1.Swigcptr()
-	C._wrap_delete_OMapBindingSingleton_odsl_ace9adbab396254b(C.uintptr_t(_swig_i_0))
+	C._wrap_delete_OMapBindingSingleton_odsl_9d488ab5be5b664a(C.uintptr_t(_swig_i_0))
 }
 
 type OMapBindingSingleton interface {
@@ -267,32 +267,32 @@ func (p SwigcptrParOMapBindingSingleton) SwigIsParOMapBindingSingleton() {
 func (arg1 SwigcptrParOMapBindingSingleton) SetOmap(arg2 uintptr) {
 	_swig_i_0 := arg1
 	_swig_i_1 := arg2
-	C._wrap_ParOMapBindingSingleton_omap_set_odsl_ace9adbab396254b(C.uintptr_t(_swig_i_0), C.uintptr_t(_swig_i_1))
+	C._wrap_ParOMapBindingSingleton_omap_set_odsl_9d488ab5be5b664a(C.uintptr_t(_swig_i_0), C.uintptr_t(_swig_i_1))
 }
 
 func (arg1 SwigcptrParOMapBindingSingleton) GetOmap() (_swig_ret uintptr) {
 	var swig_r uintptr
 	_swig_i_0 := arg1
-	swig_r = (uintptr)(C._wrap_ParOMapBindingSingleton_omap_get_odsl_ace9adbab396254b(C.uintptr_t(_swig_i_0)))
+	swig_r = (uintptr)(C._wrap_ParOMapBindingSingleton_omap_get_odsl_9d488ab5be5b664a(C.uintptr_t(_swig_i_0)))
 	return swig_r
 }
 
 func (arg1 SwigcptrParOMapBindingSingleton) SetInitializer(arg2 uintptr) {
 	_swig_i_0 := arg1
 	_swig_i_1 := arg2
-	C._wrap_ParOMapBindingSingleton_initializer_set_odsl_ace9adbab396254b(C.uintptr_t(_swig_i_0), C.uintptr_t(_swig_i_1))
+	C._wrap_ParOMapBindingSingleton_initializer_set_odsl_9d488ab5be5b664a(C.uintptr_t(_swig_i_0), C.uintptr_t(_swig_i_1))
 }
 
 func (arg1 SwigcptrParOMapBindingSingleton) GetInitializer() (_swig_ret uintptr) {
 	var swig_r uintptr
 	_swig_i_0 := arg1
-	swig_r = (uintptr)(C._wrap_ParOMapBindingSingleton_initializer_get_odsl_ace9adbab396254b(C.uintptr_t(_swig_i_0)))
+	swig_r = (uintptr)(C._wrap_ParOMapBindingSingleton_initializer_get_odsl_9d488ab5be5b664a(C.uintptr_t(_swig_i_0)))
 	return swig_r
 }
 
 func NewParOMapBindingSingleton() (_swig_ret ParOMapBindingSingleton) {
 	var swig_r ParOMapBindingSingleton
-	swig_r = (ParOMapBindingSingleton)(SwigcptrParOMapBindingSingleton(C._wrap_new_ParOMapBindingSingleton_odsl_ace9adbab396254b()))
+	swig_r = (ParOMapBindingSingleton)(SwigcptrParOMapBindingSingleton(C._wrap_new_ParOMapBindingSingleton_odsl_9d488ab5be5b664a()))
 	return swig_r
 }
 
@@ -300,7 +300,7 @@ func (arg1 SwigcptrParOMapBindingSingleton) InitEmpty(arg2 Uint32_t, arg3 Uint32
 	_swig_i_0 := arg1
 	_swig_i_1 := arg2.Swigcptr()
 	_swig_i_2 := arg3.Swigcptr()
-	C._wrap_ParOMapBindingSingleton_InitEmpty_odsl_ace9adbab396254b(C.uintptr_t(_swig_i_0), C.uintptr_t(_swig_i_1), C.uintptr_t(_swig_i_2))
+	C._wrap_ParOMapBindingSingleton_InitEmpty_odsl_9d488ab5be5b664a(C.uintptr_t(_swig_i_0), C.uintptr_t(_swig_i_1), C.uintptr_t(_swig_i_2))
 }
 
 func (arg1 SwigcptrParOMapBindingSingleton) InitEmptyExternal(arg2 Uint32_t, arg3 Uint32_t, arg4 Uint64_t) {
@@ -308,7 +308,7 @@ func (arg1 SwigcptrParOMapBindingSingleton) InitEmptyExternal(arg2 Uint32_t, arg
 	_swig_i_1 := arg2.Swigcptr()
 	_swig_i_2 := arg3.Swigcptr()
 	_swig_i_3 := arg4.Swigcptr()
-	C._wrap_ParOMapBindingSingleton_InitEmptyExternal_odsl_ace9adbab396254b(C.uintptr_t(_swig_i_0), C.uintptr_t(_swig_i_1), C.uintptr_t(_swig_i_2), C.uintptr_t(_swig_i_3))
+	C._wrap_ParOMapBindingSingleton_InitEmptyExternal_odsl_9d488ab5be5b664a(C.uintptr_t(_swig_i_0), C.uintptr_t(_swig_i_1), C.uintptr_t(_swig_i_2), C.uintptr_t(_swig_i_3))
 }
 
 func (arg1 SwigcptrParOMapBindingSingleton) InsertBatch(arg2 Uint32_t, arg3 Uint64_t, arg4 Uint64_t, arg5 *bool) {
@@ -317,7 +317,7 @@ func (arg1 SwigcptrParOMapBindingSingleton) InsertBatch(arg2 Uint32_t, arg3 Uint
 	_swig_i_2 := arg3.Swigcptr()
 	_swig_i_3 := arg4.Swigcptr()
 	_swig_i_4 := arg5
-	C._wrap_ParOMapBindingSingleton_InsertBatch_odsl_ace9adbab396254b(C.uintptr_t(_swig_i_0), C.uintptr_t(_swig_i_1), C.uintptr_t(_swig_i_2), C.uintptr_t(_swig_i_3), C.swig_voidp(_swig_i_4))
+	C._wrap_ParOMapBindingSingleton_InsertBatch_odsl_9d488ab5be5b664a(C.uintptr_t(_swig_i_0), C.uintptr_t(_swig_i_1), C.uintptr_t(_swig_i_2), C.uintptr_t(_swig_i_3), C.swig_voidp(_swig_i_4))
 }
 
 func (arg1 SwigcptrParOMapBindingSingleton) FindBatch(arg2 Uint32_t, arg3 Uint64_t, arg4 Uint64_t, arg5 *bool) {
@@ -326,7 +326,7 @@ func (arg1 SwigcptrParOMapBindingSingleton) FindBatch(arg2 Uint32_t, arg3 Uint64
 	_swig_i_2 := arg3.Swigcptr()
 	_swig_i_3 := arg4.Swigcptr()
 	_swig_i_4 := arg5
-	C._wrap_ParOMapBindingSingleton_FindBatch_odsl_ace9adbab396254b(C.uintptr_t(_swig_i_0), C.uintptr_t(_swig_i_1), C.uintptr_t(_swig_i_2), C.uintptr_t(_swig_i_3), C.swig_voidp(_swig_i_4))
+	C._wrap_ParOMapBindingSingleton_FindBatch_odsl_9d488ab5be5b664a(C.uintptr_t(_swig_i_0), C.uintptr_t(_swig_i_1), C.uintptr_t(_swig_i_2), C.uintptr_t(_swig_i_3), C.swig_voidp(_swig_i_4))
 }
 
 func (arg1 SwigcptrParOMapBindingSingleton) FindBatchDeferMaintain(arg2 Uint32_t, arg3 Uint64_t, arg4 Uint64_t, arg5 *bool) {
@@ -335,12 +335,12 @@ func (arg1 SwigcptrParOMapBindingSingleton) FindBatchDeferMaintain(arg2 Uint32_t
 	_swig_i_2 := arg3.Swigcptr()
 	_swig_i_3 := arg4.Swigcptr()
 	_swig_i_4 := arg5
-	C._wrap_ParOMapBindingSingleton_FindBatchDeferMaintain_odsl_ace9adbab396254b(C.uintptr_t(_swig_i_0), C.uintptr_t(_swig_i_1), C.uintptr_t(_swig_i_2), C.uintptr_t(_swig_i_3), C.swig_voidp(_swig_i_4))
+	C._wrap_ParOMapBindingSingleton_FindBatchDeferMaintain_odsl_9d488ab5be5b664a(C.uintptr_t(_swig_i_0), C.uintptr_t(_swig_i_1), C.uintptr_t(_swig_i_2), C.uintptr_t(_swig_i_3), C.swig_voidp(_swig_i_4))
 }
 
 func (arg1 SwigcptrParOMapBindingSingleton) FindBatchMaintain() {
 	_swig_i_0 := arg1
-	C._wrap_ParOMapBindingSingleton_FindBatchMaintain_odsl_ace9adbab396254b(C.uintptr_t(_swig_i_0))
+	C._wrap_ParOMapBindingSingleton_FindBatchMaintain_odsl_9d488ab5be5b664a(C.uintptr_t(_swig_i_0))
 }
 
 func (arg1 SwigcptrParOMapBindingSingleton) EraseBatch(arg2 Uint32_t, arg3 Uint64_t, arg4 *bool) {
@@ -348,7 +348,7 @@ func (arg1 SwigcptrParOMapBindingSingleton) EraseBatch(arg2 Uint32_t, arg3 Uint6
 	_swig_i_1 := arg2.Swigcptr()
 	_swig_i_2 := arg3.Swigcptr()
 	_swig_i_3 := arg4
-	C._wrap_ParOMapBindingSingleton_EraseBatch_odsl_ace9adbab396254b(C.uintptr_t(_swig_i_0), C.uintptr_t(_swig_i_1), C.uintptr_t(_swig_i_2), C.swig_voidp(_swig_i_3))
+	C._wrap_ParOMapBindingSingleton_EraseBatch_odsl_9d488ab5be5b664a(C.uintptr_t(_swig_i_0), C.uintptr_t(_swig_i_1), C.uintptr_t(_swig_i_2), C.swig_voidp(_swig_i_3))
 }
 
 func (arg1 SwigcptrParOMapBindingSingleton) StartInit(arg2 Uint32_t, arg3 Uint32_t, arg4 Uint32_t) {
@@ -356,7 +356,7 @@ func (arg1 SwigcptrParOMapBindingSingleton) StartInit(arg2 Uint32_t, arg3 Uint32
 	_swig_i_1 := arg2.Swigcptr()
 	_swig_i_2 := arg3.Swigcptr()
 	_swig_i_3 := arg4.Swigcptr()
-	C._wrap_ParOMapBindingSingleton_StartInit_odsl_ace9adbab396254b(C.uintptr_t(_swig_i_0), C.uintptr_t(_swig_i_1), C.uintptr_t(_swig_i_2), C.uintptr_t(_swig_i_3))
+	C._wrap_ParOMapBindingSingleton_StartInit_odsl_9d488ab5be5b664a(C.uintptr_t(_swig_i_0), C.uintptr_t(_swig_i_1), C.uintptr_t(_swig_i_2), C.uintptr_t(_swig_i_3))
 }
 
 func (arg1 SwigcptrParOMapBindingSingleton) StartInitExternal(arg2 Uint32_t, arg3 Uint32_t, arg4 Uint32_t, arg5 Uint64_t) {
@@ -365,17 +365,17 @@ func (arg1 SwigcptrParOMapBindingSingleton) StartInitExternal(arg2 Uint32_t, arg
 	_swig_i_2 := arg3.Swigcptr()
 	_swig_i_3 := arg4.Swigcptr()
 	_swig_i_4 := arg5.Swigcptr()
-	C._wrap_ParOMapBindingSingleton_StartInitExternal_odsl_ace9adbab396254b(C.uintptr_t(_swig_i_0), C.uintptr_t(_swig_i_1), C.uintptr_t(_swig_i_2), C.uintptr_t(_swig_i_3), C.uintptr_t(_swig_i_4))
+	C._wrap_ParOMapBindingSingleton_StartInitExternal_odsl_9d488ab5be5b664a(C.uintptr_t(_swig_i_0), C.uintptr_t(_swig_i_1), C.uintptr_t(_swig_i_2), C.uintptr_t(_swig_i_3), C.uintptr_t(_swig_i_4))
 }
 
 func (arg1 SwigcptrParOMapBindingSingleton) FinishInit() {
 	_swig_i_0 := arg1
-	C._wrap_ParOMapBindingSingleton_FinishInit_odsl_ace9adbab396254b(C.uintptr_t(_swig_i_0))
+	C._wrap_ParOMapBindingSingleton_FinishInit_odsl_9d488ab5be5b664a(C.uintptr_t(_swig_i_0))
 }
 
 func DeleteParOMapBindingSingleton(arg1 ParOMapBindingSingleton) {
 	_swig_i_0 := arg1.Swigcptr()
-	C._wrap_delete_ParOMapBindingSingleton_odsl_ace9adbab396254b(C.uintptr_t(_swig_i_0))
+	C._wrap_delete_ParOMapBindingSingleton_odsl_9d488ab5be5b664a(C.uintptr_t(_swig_i_0))
 }
 
 type ParOMapBindingSingleton interface {
@@ -409,53 +409,53 @@ func (p SwigcptrORAMBindingSingleton) SwigIsORAMBindingSingleton() {
 func (arg1 SwigcptrORAMBindingSingleton) SetOram(arg2 uintptr) {
 	_swig_i_0 := arg1
 	_swig_i_1 := arg2
-	C._wrap_ORAMBindingSingleton_oram_set_odsl_ace9adbab396254b(C.uintptr_t(_swig_i_0), C.uintptr_t(_swig_i_1))
+	C._wrap_ORAMBindingSingleton_oram_set_odsl_9d488ab5be5b664a(C.uintptr_t(_swig_i_0), C.uintptr_t(_swig_i_1))
 }
 
 func (arg1 SwigcptrORAMBindingSingleton) GetOram() (_swig_ret uintptr) {
 	var swig_r uintptr
 	_swig_i_0 := arg1
-	swig_r = (uintptr)(C._wrap_ORAMBindingSingleton_oram_get_odsl_ace9adbab396254b(C.uintptr_t(_swig_i_0)))
+	swig_r = (uintptr)(C._wrap_ORAMBindingSingleton_oram_get_odsl_9d488ab5be5b664a(C.uintptr_t(_swig_i_0)))
 	return swig_r
 }
 
 func NewORAMBindingSingleton() (_swig_ret ORAMBindingSingleton) {
 	var swig_r ORAMBindingSingleton
-	swig_r = (ORAMBindingSingleton)(SwigcptrORAMBindingSingleton(C._wrap_new_ORAMBindingSingleton_odsl_ace9adbab396254b()))
+	swig_r = (ORAMBindingSingleton)(SwigcptrORAMBindingSingleton(C._wrap_new_ORAMBindingSingleton_odsl_9d488ab5be5b664a()))
 	return swig_r
 }
 
 func (arg1 SwigcptrORAMBindingSingleton) InitORAM(arg2 Uint32_t) {
 	_swig_i_0 := arg1
 	_swig_i_1 := arg2.Swigcptr()
-	C._wrap_ORAMBindingSingleton_InitORAM_odsl_ace9adbab396254b(C.uintptr_t(_swig_i_0), C.uintptr_t(_swig_i_1))
+	C._wrap_ORAMBindingSingleton_InitORAM_odsl_9d488ab5be5b664a(C.uintptr_t(_swig_i_0), C.uintptr_t(_swig_i_1))
 }
 
 func (arg1 SwigcptrORAMBindingSingleton) InitORAMExternal(arg2 Uint32_t, arg3 Uint64_t) {
 	_swig_i_0 := arg1
 	_swig_i_1 := arg2.Swigcptr()
 	_swig_i_2 := arg3.Swigcptr()
-	C._wrap_ORAMBindingSingleton_InitORAMExternal_odsl_ace9adbab396254b(C.uintptr_t(_swig_i_0), C.uintptr_t(_swig_i_1), C.uintptr_t(_swig_i_2))
+	C._wrap_ORAMBindingSingleton_InitORAMExternal_odsl_9d488ab5be5b664a(C.uintptr_t(_swig_i_0), C.uintptr_t(_swig_i_1), C.uintptr_t(_swig_i_2))
 }
 
 func (arg1 SwigcptrORAMBindingSingleton) Write(arg2 Uint32_t, arg3 Uint64_t) {
 	_swig_i_0 := arg1
 	_swig_i_1 := arg2.Swigcptr()
 	_swig_i_2 := arg3.Swigcptr()
-	C._wrap_ORAMBindingSingleton_Write_odsl_ace9adbab396254b(C.uintptr_t(_swig_i_0), C.uintptr_t(_swig_i_1), C.uintptr_t(_swig_i_2))
+	C._wrap_ORAMBindingSingleton_Write_odsl_9d488ab5be5b664a(C.uintptr_t(_swig_i_0), C.uintptr_t(_swig_i_1), C.uintptr_t(_swig_i_2))
 }
 
 func (arg1 SwigcptrORAMBindingSingleton) Read(arg2 Uint32_t) (_swig_ret Uint64_t) {
 	var swig_r Uint64_t
 	_swig_i_0 := arg1
 	_swig_i_1 := arg2.Swigcptr()
-	swig_r = (Uint64_t)(SwigcptrUint64_t(C._wrap_ORAMBindingSingleton_Read_odsl_ace9adbab396254b(C.uintptr_t(_swig_i_0), C.uintptr_t(_swig_i_1))))
+	swig_r = (Uint64_t)(SwigcptrUint64_t(C._wrap_ORAMBindingSingleton_Read_odsl_9d488ab5be5b664a(C.uintptr_t(_swig_i_0), C.uintptr_t(_swig_i_1))))
 	return swig_r
 }
 
 func DeleteORAMBindingSingleton(arg1 ORAMBindingSingleton) {
 	_swig_i_0 := arg1.Swigcptr()
-	C._wrap_delete_ORAMBindingSingleton_odsl_ace9adbab396254b(C.uintptr_t(_swig_i_0))
+	C._wrap_delete_ORAMBindingSingleton_odsl_9d488ab5be5b664a(C.uintptr_t(_swig_i_0))
 }
 
 type ORAMBindingSingleton interface {

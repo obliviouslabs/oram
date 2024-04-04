@@ -17,25 +17,47 @@ set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -O3 -DNDEBUG ")
 set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -O0 -g -ggdb -fno-inline -no-pie")
 set(CMAKE_CXX_FLAGS "${CMAKE_C_FLAGS} -march=native -mtune=native")
 
-# Add SWIG module
-swig_add_library(mylib LANGUAGE go SOURCES odsl.i)
+
 
 set(CPP_PARENT_PATH "../../../omap")
 
 
-set(SOURCES ${CPP_PARENT_PATH}/common/encutils.cpp ${CPP_PARENT_PATH}/common/tracing/tracer.cpp ${CPP_PARENT_PATH}/external_memory/server/serverBackend.cpp ${CPP_PARENT_PATH}/interface/interface.cpp)
+set(SOURCES odsl.i ${CPP_PARENT_PATH}/common/encutils.cpp ${CPP_PARENT_PATH}/common/tracing/tracer.cpp ${CPP_PARENT_PATH}/external_memory/server/serverBackend.cpp ${CPP_PARENT_PATH}/interface/interface.cpp)
 
+# Add SWIG module
+swig_add_library(mylib TYPE SHARED LANGUAGE go SOURCES ${SOURCES})
 
 # Add additional C++ sources if needed
-add_library(common STATIC ${SOURCES})
+# add_library(common STATIC ${SOURCES})
+# Set output name
+set_target_properties(mylib PROPERTIES OUTPUT_NAME "mylibrary")
 
-target_include_directories(common PUBLIC ${BEARSSL_INCLUDE_DIRS} ${BEARSSL_INCLUDE_DIRS}/bearssl)
+# Set output directory
+set_target_properties(mylib PROPERTIES LIBRARY_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/go)
+
+target_include_directories(mylib PUBLIC ${BEARSSL_INCLUDE_DIRS} ${BEARSSL_INCLUDE_DIRS}/bearssl)
 
 # Link SWIG module and additional sources
-target_link_libraries(mylib INTERFACE common dl ${BEARSSL_LIBRARY})
+target_link_libraries(mylib INTERFACE dl ${BEARSSL_LIBRARY})
 
-# Link against static libraries
-# target_link_libraries(mylib PRIVATE mylib1 mylib2 mylib3)
+# Set install targets
+# install(TARGETS mylib
+#     RUNTIME DESTINATION bin
+#     LIBRARY DESTINATION lib
+#     ARCHIVE DESTINATION lib
+# )
+
+# # Set Go installation targets
+# install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/go/${GO_LIBRARY_NAME}.go
+#     DESTINATION src
+# )
+
+# # Set install Go targets
+# install(TARGETS mylib
+#     RUNTIME DESTINATION src
+#     LIBRARY DESTINATION src
+#     ARCHIVE DESTINATION src
+# )
 
 # Generate Ninja build files
 set_property(TARGET mylib PROPERTY SWIG_GENERATED TRUE)
