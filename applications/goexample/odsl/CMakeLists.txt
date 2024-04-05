@@ -27,8 +27,6 @@ set(SOURCES odsl.i ${CPP_PARENT_PATH}/common/encutils.cpp ${CPP_PARENT_PATH}/com
 # Add SWIG module
 swig_add_library(mylib TYPE SHARED LANGUAGE go SOURCES ${SOURCES})
 
-# Add additional C++ sources if needed
-# add_library(common STATIC ${SOURCES})
 # Set output name
 set_target_properties(mylib PROPERTIES OUTPUT_NAME "libodsl")
 
@@ -39,25 +37,6 @@ target_include_directories(mylib PUBLIC ${BEARSSL_INCLUDE_DIRS} ${BEARSSL_INCLUD
 
 # Link SWIG module and additional sources
 target_link_libraries(mylib INTERFACE dl ${BEARSSL_LIBRARY})
-
-# Set install targets
-# install(TARGETS mylib
-#     RUNTIME DESTINATION bin
-#     LIBRARY DESTINATION lib
-#     ARCHIVE DESTINATION lib
-# )
-
-# # Set Go installation targets
-# install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/go/${GO_LIBRARY_NAME}.go
-#     DESTINATION src
-# )
-
-# # Set install Go targets
-# install(TARGETS mylib
-#     RUNTIME DESTINATION src
-#     LIBRARY DESTINATION src
-#     ARCHIVE DESTINATION src
-# )
 
 # Generate Ninja build files
 set_property(TARGET mylib PROPERTY SWIG_GENERATED TRUE)
