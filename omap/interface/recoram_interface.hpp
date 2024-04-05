@@ -1,5 +1,5 @@
 #pragma once
-#include <cinttypes>
+#include <stdint.h>
 
 typedef void* oram_t;
 typedef uint64_t T;

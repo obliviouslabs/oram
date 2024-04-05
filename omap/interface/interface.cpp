@@ -230,3 +230,5 @@ void DeleteBackend() {
     delete EM::Backend::g_DefaultBackend;
   }
 }
+
+void HelloWorld(uint32_t num) { printf("Hello, world %u!\n", num); }

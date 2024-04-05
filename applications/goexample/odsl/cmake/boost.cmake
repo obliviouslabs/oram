@@ -1,0 +1,17 @@
+find_library(BOOST_STACKTRACE_BACKTRACE_LIBRARY NAMES boost_stacktrace_backtrace)
+
+include (GNUInstallDirs)
+
+macro(linkstacktrace arg0)
+  if (UNIX)
+    message(STATUS "Using Boost::stacktrace/addr2line")
+    target_compile_definitions(${arg0} PRIVATE BOOST_STACKTRACE_USE_ADDR2LINE)
+    target_link_libraries(${arg0} PRIVATE dl)
+  elseif (MINGW AND BOOST_STACKTRACE_BACKTRACE_LIBRARY)
+    message(STATUS "Using Boost::stacktrace/backtrace")
+    target_compile_definitions(${arg0} PRIVATE BOOST_STACKTRACE_USE_BACKTRACE)
+    target_link_libraries(${arg0} PRIVATE boost_stacktrace_backtrace backtrace)
+  else ()
+    message(STATUS "Using Boost::stacktrace/basic")
+  endif ()
+endmacro()

@@ -1,5 +1,5 @@
 #pragma once
-#include <cinttypes>
+#include <stdint.h>
 
 typedef void* par_omap_t;
 typedef void* initializer_t;
@@ -129,6 +129,4 @@ struct ParOMapBindingSingleton {
    *
    */
   void FinishInit();
-
-  ~ParOMapBindingSingleton();
 };
