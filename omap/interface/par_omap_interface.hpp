@@ -129,6 +129,4 @@ struct ParOMapBindingSingleton {
    *
    */
   void FinishInit();
-
-  ~ParOMapBindingSingleton();
 };

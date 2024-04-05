@@ -30,7 +30,7 @@ swig_add_library(mylib TYPE SHARED LANGUAGE go SOURCES ${SOURCES})
 # Add additional C++ sources if needed
 # add_library(common STATIC ${SOURCES})
 # Set output name
-set_target_properties(mylib PROPERTIES OUTPUT_NAME "mylibrary")
+set_target_properties(mylib PROPERTIES OUTPUT_NAME "libodsl")
 
 # Set output directory
 set_target_properties(mylib PROPERTIES LIBRARY_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/go)

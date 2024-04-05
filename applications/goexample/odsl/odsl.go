@@ -10,12 +10,12 @@
 
 // source: /home/tyg/omap/oram/applications/goexample/odsl/odsl.i
 
-package odsl
+package main
 
 /*
 #define intgo swig_intgo
 typedef void *swig_voidp;
-
+#cgo LDFLAGS: -lodsl -lbearssl -lstdc++
 #include <stdint.h>
 
 
@@ -76,22 +76,19 @@ extern void _wrap_delete_ORAMBindingSingleton_odsl_9d488ab5be5b664a(uintptr_t ar
 */
 import "C"
 
-import "unsafe"
-import _ "runtime/cgo"
-import "sync"
-
+import (
+	_ "runtime/cgo"
+	"sync"
+	"unsafe"
+)
 
 type _ unsafe.Pointer
-
-
 
 var Swig_escape_always_false bool
 var Swig_escape_val interface{}
 
-
 type _swig_fnptr *byte
 type _swig_memberptr *byte
-
 
 type _ sync.Mutex
 
@@ -469,20 +466,25 @@ type ORAMBindingSingleton interface {
 	Read(arg2 Uint32_t) (_swig_ret Uint64_t)
 }
 
-
 type SwigcptrUint64_t uintptr
 type Uint64_t interface {
-	Swigcptr() uintptr;
+	Swigcptr() uintptr
 }
+
 func (p SwigcptrUint64_t) Swigcptr() uintptr {
 	return uintptr(p)
 }
 
 type SwigcptrUint32_t uintptr
 type Uint32_t interface {
-	Swigcptr() uintptr;
+	Swigcptr() uintptr
 }
+
 func (p SwigcptrUint32_t) Swigcptr() uintptr {
 	return uintptr(p)
 }
 
+func main() {
+	var oram ORAMBindingSingleton
+	oram.InitORAM(SwigcptrUint32_t(1000))
+}
