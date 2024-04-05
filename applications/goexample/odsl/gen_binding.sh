@@ -4,4 +4,6 @@ export CXX=/usr/bin/g++
 cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
 ninja -C build
 cp build/odsl.go odsl.go
-sudo cp go/libodsl.so /usr/local/lib/
+LD_PATH=/usr/local/lib/
+export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$LD_PATH
+cp go/libodsl.so $LD_PATH
