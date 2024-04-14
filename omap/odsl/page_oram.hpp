@@ -80,83 +80,10 @@ struct PageORAM {
   template <class Func>
     requires UpdateFunction<Func, T>
   void Access(UidType address, const Func& accessor) {
-    bool foundInStash = false;
-    bool foundInPage = false;
     PageIdxType pageIdx = posMap[address];
-    PageIdxType newPageIdx = UniformRandom(numPages - 1);
-
-    T* dataPtr = nullptr;
-    UidType* prevUidPtr = &pageLists[pageIdx];
-    UidType currIdx = *prevUidPtr;
-    while (currIdx != listEnd) {
-      if (stash[currIdx].uid == address) {
-        dataPtr = &stash[currIdx].data;
-        // remove the node from the page linked list
-        *prevUidPtr = stash[currIdx].nextNodeIdx;
-        // add the node to the head of the new page linked list
-        addSlotToPageList(newPageIdx, currIdx);
-        foundInStash = true;
-        break;
-      }
-      prevUidPtr = &stash[currIdx].nextNodeIdx;
-      currIdx = *prevUidPtr;
-    }
-
     Page_ page;
     frontend.Read(pageIdx, page);
-    for (UidType i = 0; i < item_per_page; i++) {
-      if (page.uids[i] == address) {
-        dataPtr = &page.data[i];
-        page.uids[i] = DUMMY<UidType>();
-        foundInPage = true;
-        break;
-      }
-    }
-    if (!foundInStash) {
-      UidType freeSlot = getFreeSlot();
-      stash[freeSlot].uid = address;
-      const T* src = foundInPage ? dataPtr : &defaultVal;
-
-      memcpy(&stash[freeSlot].data, src, sizeof(T));
-
-      dataPtr = &stash[freeSlot].data;
-      addSlotToPageList(newPageIdx, freeSlot);
-    }
-
-    accessor(*dataPtr);
-
-    // Write back and maintainence
-
-    posMap[address] = newPageIdx;
-
-    uint32_t freeSlotIndices[item_per_page];
-    uint32_t numFreeSlots = 0;
-    for (UidType i = 0; i < item_per_page; i++) {
-      if (page.uids[i] == DUMMY<UidType>()) {
-        freeSlotIndices[numFreeSlots++] = i;
-      }
-    }
-    // evict the data of the current page
-    UidType prev = listEnd;
-    UidType curr = pageLists[pageIdx];
-    for (UidType i = 0; i < numFreeSlots; i++) {
-      if (curr == listEnd) {
-        break;
-      }
-
-      uint32_t freeSlotIdx = freeSlotIndices[i];
-      page.uids[freeSlotIdx] = stash[curr].uid;
-      memcpy(&page.data[freeSlotIdx], &stash[curr].data, sizeof(T));
-
-      prev = curr;
-      curr = stash[curr].nextNodeIdx;
-    }
-    if (prev != listEnd) {
-      // add the evicted slots to the free list
-      stash[prev].nextNodeIdx = freeListHead;
-      freeListHead = pageLists[pageIdx];
-    }
-    pageLists[pageIdx] = curr;
+    access(address, accessor, pageIdx, page);
     frontend.Write(pageIdx, page);
   }
 
@@ -238,6 +165,86 @@ struct PageORAM {
   }
 
  private:
+
+  template <class Func>
+  requires UpdateFunction<Func, T>
+  void access(UidType address, const Func& accessor, PageIdxType pageIdx, Page_& page) {
+    bool foundInStash = false;
+    bool foundInPage = false;
+    PageIdxType newPageIdx = UniformRandom(numPages - 1);
+
+    T* dataPtr = nullptr;
+    UidType* prevUidPtr = &pageLists[pageIdx];
+    UidType currIdx = *prevUidPtr;
+    while (currIdx != listEnd) {
+      if (stash[currIdx].uid == address) {
+        dataPtr = &stash[currIdx].data;
+        // remove the node from the page linked list
+        *prevUidPtr = stash[currIdx].nextNodeIdx;
+        // add the node to the head of the new page linked list
+        addSlotToPageList(newPageIdx, currIdx);
+        foundInStash = true;
+        // break;
+      }
+      prevUidPtr = &stash[currIdx].nextNodeIdx;
+      currIdx = *prevUidPtr;
+    }
+
+    for (UidType i = 0; i < item_per_page; i++) {
+      if (page.uids[i] == address) {
+        dataPtr = &page.data[i];
+        page.uids[i] = DUMMY<UidType>();
+        foundInPage = true;
+        // break;
+      }
+    }
+    if (!foundInStash) {
+      UidType freeSlot = getFreeSlot();
+      stash[freeSlot].uid = address;
+      const T* src = foundInPage ? dataPtr : &defaultVal;
+
+      memcpy(&stash[freeSlot].data, src, sizeof(T));
+
+      dataPtr = &stash[freeSlot].data;
+      addSlotToPageList(newPageIdx, freeSlot);
+    }
+
+    accessor(*dataPtr);
+
+    // Write back and maintainence
+
+    posMap[address] = newPageIdx;
+
+    uint32_t freeSlotIndices[item_per_page];
+    uint32_t numFreeSlots = 0;
+    for (UidType i = 0; i < item_per_page; i++) {
+      if (page.uids[i] == DUMMY<UidType>()) {
+        freeSlotIndices[numFreeSlots++] = i;
+      }
+    }
+    // evict the data of the current page
+    UidType prev = listEnd;
+    UidType curr = pageLists[pageIdx];
+    for (UidType i = 0; i < numFreeSlots; i++) {
+      if (curr == listEnd) {
+        break;
+      }
+
+      uint32_t freeSlotIdx = freeSlotIndices[i];
+      page.uids[freeSlotIdx] = stash[curr].uid;
+      memcpy(&page.data[freeSlotIdx], &stash[curr].data, sizeof(T));
+
+      prev = curr;
+      curr = stash[curr].nextNodeIdx;
+    }
+    if (prev != listEnd) {
+      // add the evicted slots to the free list
+      stash[prev].nextNodeIdx = freeListHead;
+      freeListHead = pageLists[pageIdx];
+    }
+    pageLists[pageIdx] = curr;
+  }
+
   template <class OverflowWriter>
   void partitionHelper(PageIdxType beginPageIdx, PageIdxType endPageIdx,
                        uint64_t cacheBytes, OverflowWriter& overflowWriter) {
