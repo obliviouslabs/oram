@@ -85,6 +85,23 @@ struct NonCachedServerFrontendInstance {
   NonCachedServerFrontendInstance(BackendType& _backend, uint64_t initialSize,
                                   const T& _defaultVal)
       : backend(_backend) {
+    SetSize(initialSize, _defaultVal);
+  }
+
+  NonCachedServerFrontendInstance(BackendType& _backend, uint64_t initialSize)
+      : NonCachedServerFrontendInstance(_backend) {
+    SetSize(initialSize);
+  }
+
+  NonCachedServerFrontendInstance(BackendType& _backend)
+      : backend(_backend), slot({-1UL, 0UL}) {
+    if constexpr (AUTH) {
+      nounce.index = 0;
+      nounce.counter = 0;
+    }
+  }
+
+  void SetSize(uint64_t initialSize, const T& _defaultVal) {
     if (initialSize == 0) {
       slot.base = -1;
       return;
@@ -110,8 +127,7 @@ struct NonCachedServerFrontendInstance {
     }
   }
 
-  NonCachedServerFrontendInstance(BackendType& _backend, uint64_t initialSize)
-      : NonCachedServerFrontendInstance(_backend, initialSize, T()) {}
+  void SetSize(uint64_t initialSize) { SetSize(initialSize, T()); }
 
   ~NonCachedServerFrontendInstance() {
     if (slot.base == (EM::LargeBlockAllocator::Size_t)-1) {

@@ -57,7 +57,6 @@ struct Vector {
     }
 
     const_reference operator*() const {
-      printf("const\n");
       Assert(m_ptr < vec_ptr->N);
       const size_t realIdx = m_ptr;
       const size_t pageIdx = realIdx / item_per_page;

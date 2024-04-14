@@ -4,6 +4,7 @@
 
 #include "algorithm/element.hpp"
 #include "odsl/adaptive_oram.hpp"
+#include "odsl/page_oram.hpp"
 #include "odsl/recursive_oram.hpp"
 #include "testutils.hpp"
 
@@ -756,4 +757,79 @@ TEST(RecursiveORAM, testBatchAccessDeferLarge) {
       }
     }
   }
+}
+
+TEST(PageORAM, testReadAfterWrite) {
+  uint64_t size = 12345;
+  ODSL::PageORAM<int64_t> oram(size);
+  oram.InitDefault(31);
+  oram.Write(0, 1235);
+  int64_t val;
+  oram.Read(0, val);
+  ASSERT_EQ(val, 1235);
+  oram.Read(1, val);
+  ASSERT_EQ(val, 31);
+  for (uint64_t i = 0; i < size; i++) {
+    oram.Write(i, i * 3);
+  }
+  for (uint64_t i = 0; i < size; i++) {
+    oram.Read(i, val);
+    ASSERT_EQ(val, i * 3);
+  }
+}
+
+TEST(PageORAM, testReadAfterInit) {
+  uint64_t size = 123456;
+  StdVector<int64_t> ref(size);
+  ODSL::PageORAM<int64_t> oram(size);
+  for (uint64_t i = 0; i < size; i++) {
+    ref[i] = UniformRandom();
+  }
+  StdVector<int64_t>::Reader reader(ref.begin(), ref.end());
+  oram.InitFromReader(reader, 1UL << 20);
+  for (int round = 0; round < 1e5; ++round) {
+    uint64_t addr = UniformRandom(size - 1);
+    int64_t val;
+    oram.Read(addr, val);
+    ASSERT_EQ(val, ref[addr]);
+  }
+}
+
+TEST(PageORAM, testMixed) {
+  uint64_t size = 53235;
+  using Vec = StdVector<TestElement>;
+  Vec ref(size);
+  ODSL::PageORAM<TestElement> oram(size);
+  for (uint64_t i = 0; i < size; i++) {
+    ref[i].key = UniformRandom();
+  }
+  Vec::Reader reader(ref.begin(), ref.end());
+  oram.InitFromReader(reader, 1UL << 17);
+  for (int round = 0; round < 1e6; ++round) {
+    int op = UniformRandom(2);
+    uint64_t addr = UniformRandom(size - 1);
+    switch (op) {
+      case 0: {
+        TestElement val;
+        oram.Read(addr, val);
+        ASSERT_EQ(val.key, ref[addr].key);
+      } break;
+      case 1: {
+        TestElement val;
+        val.key = UniformRandom();
+        oram.Write(addr, val);
+        ref[addr].key = val.key;
+      } break;
+      case 2: {
+        auto incFunc = [](TestElement& x) {
+          ++x.key;
+          return true;
+        };
+        oram.Access(addr, incFunc);
+        ++ref[addr].key;
+      } break;
+    }
+  }
+  oram.PrintMemoryUsage();
+  // std::cout << oram.
 }
