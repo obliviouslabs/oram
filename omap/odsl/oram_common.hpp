@@ -90,13 +90,16 @@ int CommonSuffixLength(PositionType a, PositionType b) {
  * @param end The end iterator of the path
  * @param uid The uid of the element to be read
  * @param out The output of the element
+ * @return true if the element is read successfully, false otherwise
  */
 template <class Iterator, typename UidType, typename T>
-void ReadElementAndRemoveFromPath(Iterator begin, Iterator end,
+bool ReadElementAndRemoveFromPath(Iterator begin, Iterator end,
                                   const UidType& uid, T& out) {
+  bool findFlag = false;
   for (auto it = begin; it != end; ++it) {
-    it->ReadAndRemove(uid, out);
+    findFlag |= it->ReadAndRemove(uid, out);
   }
+  return findFlag;
 }
 
 /**

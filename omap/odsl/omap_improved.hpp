@@ -1,0 +1,1535 @@
+#pragma once
+#include "recursive_oram.hpp"
+
+/// @brief This file implements a cuckoo hash map built on top of the
+/// recursive ORAM. Specifically, it contains two hash tables implemented with
+/// recursive oram. Each key is hashed to two positions, one for each table, and
+/// at each position of a table is a bucket with two slots, the element can be
+/// stored in any of these four slots. In addition, there is a stash for
+/// elements that cannot be stored in the tables.
+
+namespace ODSL {
+
+/**
+ * @brief An cuckoo hash map built on top of either recursive ORAM or a standard
+ * vector. It contains two hash tables, and a stash for elements that cannot be
+ * stored in the tables.
+ *
+ * @tparam K the key type
+ * @tparam V the value type
+ * @tparam isOblivious whether the hash map is built on an ORAM
+ * @tparam PositionType the type of the position
+ * @tparam parallel_init whether to initialize the two hash tables in parallel
+ */
+template <typename K, typename PositionType = uint64_t,
+          const bool isOblivious = true, const bool parallel_init = true>
+struct OPosMap {
+  using V = PositionType;   // value type is the position
+  using H = uint32_t;       // additional hash bits to distinguish elements
+  using HExtra = uint64_t;  // extra hash bits stored in the main map to check
+                            // for the existence of an element
+  static constexpr uint64_t uid_length =
+      std::max(sizeof(PositionType) * 2 + sizeof(H), 16UL);
+  // assume that the oram size < 2^48
+  using UidType = Bytes<uid_length>;  // type of the unique identifier
+
+  /**
+   * @brief Used to hash the key to two positions
+   *
+   */
+  struct OPosMapIndexer {
+    static constexpr int saltLength = 16;  // 128 bits salt
+    uint8_t salts[saltLength];             // salt for secure hash
+    PositionType _size;  // number of buckets in each hash table
+
+    OPosMapIndexer() {}
+
+    explicit OPosMapIndexer(PositionType size) { SetSize(size); }
+
+    /**
+     * @brief Initialize the indexer
+     *
+     * @param size number of buckets in each hash table
+     */
+    void SetSize(PositionType size) {
+      _size = size;
+      read_rand(salts, saltLength);
+    }
+
+    struct HashIndices {
+      uint64_t h0;
+      uint64_t h1;
+      H keyHash;
+      HExtra extraHash;
+    };
+
+    /**
+     * @brief Get both hash indices
+     *
+     * @param key the key to hash
+     * @param pos0 the first hash index
+     * @param pos1 the second hash index
+     */
+    void getHashIndices(const K& key, PositionType& pos0, PositionType& pos1,
+                        H& keyHash, UidType& uid, HExtra& extraHash) const {
+      HashIndices hashIndices;
+      secure_hash_with_salt(key, salts, (uint8_t*)&hashIndices,
+                            sizeof(hashIndices));
+      pos0 = (PositionType)(hashIndices.h0 % _size);
+      pos1 = (PositionType)(hashIndices.h1 % _size);
+      keyHash = hashIndices.keyHash;
+      extraHash = hashIndices.extraHash;
+      // generate a unique identifier that includes the key hash and the
+      // positions, and with additional bits to distinguish elements
+      std::memset(uid.data, 0, sizeof(UidType));
+      int sizeMaxLen = GetLogBaseTwo(_size - 1) / 8 + 1;
+      std::memcpy(uid.data + sizeof(UidType) - sizeMaxLen, &pos0, sizeMaxLen);
+      std::memcpy(uid.data + sizeof(UidType) - 2 * sizeMaxLen, &pos1,
+                  sizeMaxLen);
+      std::memcpy(uid.data, &keyHash, sizeof(H));
+    }
+
+    // /**
+    //  * @brief Get hash index 0
+    //  *
+    //  * @param key the key to hash
+    //  * @return PositionType the first hash index
+    //  */
+    // PositionType getHashIdx0(const K& key) const {
+    //   PositionType pos0, pos1;
+    //   H keyHash;
+    //   getHashIndices(key, pos0, pos1, keyHash);
+    //   return pos0;
+    // }
+
+    // /**
+    //  * @brief Get hash index 1
+    //  *
+    //  * @param key the key to hash
+    //  * @return PositionType the second hash index
+    //  */
+    // PositionType getHashIdx1(const K& key) const {
+    //   PositionType pos0, pos1;
+    //   H keyHash;
+    //   getHashIndices(key, pos0, pos1, keyHash);
+    //   return pos1;
+    // }
+  };
+
+  /**
+   * @brief A single entry (slot) in the hash map. It contains a key and a
+   * value, and two flags.
+   *
+   * @tparam K the key type
+   * @tparam V the value type
+   */
+  struct OPosMapEntry {
+    // // whether the entry is valid. An invalid entry is an empty slot.
+    // bool valid = false;
+    // // whether the entry is a dummy. A dummy entry is used when the hash map
+    // is
+    // // not built on an ORAM, but we still want to hide whether an insert is
+    // real
+    // // or dummy. In this case, we set valid flag to true, but the dummy flag
+    // to
+    // // true.
+    // bool dummy = false;
+    H keyHash = 0;
+    PositionType otherIdx;  // the index in the other table
+    V value;
+    bool valid() const { return keyHash & 0x1; }
+    bool dummy() const { return keyHash & 0x2; }
+    void setValid(bool real) { keyHash |= real; }
+    void setInvalid(bool real) { keyHash &= ~((H)real); }
+    void setDummy(bool real) { keyHash |= (H)(real << 1); }
+    void setNotDummy(bool real) { keyHash &= ~((H)real << 1); }
+#ifndef ENCLAVE_MODE
+    // cout
+    friend std::ostream& operator<<(std::ostream& os,
+                                    const OPosMapEntry& entry) {
+      os << "(" << entry.valid() << ", " << entry.keyHash << ", "
+         << entry.otherIdx << ", " << entry.value << ")";
+      return os;
+    }
+#endif
+  };
+
+  /**
+   * @brief A stash storing elements that cannot be stored in the hash tables.
+   * Helps deamortize the cost of oblivious insertion.
+   *
+   * @tparam K the key type
+   * @tparam V the value type
+   * @tparam stash_size the default stash size for oblivious insertion
+   */
+  template <const uint64_t stash_size = 16>
+  struct LRUStash {
+    struct StashEntry {
+      OPosMapEntry entry;
+      PositionType idx0;
+      uint64_t timestamp;
+    };
+    using StashVec = std::vector<StashEntry>;
+    StashVec stash;     // the stash data
+    uint64_t currTime;  // the current timestamp
+    // as long as one oblivious insert occur, we cannot reveal the state of the
+    // stash
+    bool oInserted = false;  // whether an oblivious insert has occurred
+
+    LRUStash() : currTime(0) {}
+
+    explicit LRUStash(size_t capacity) : currTime(0) { SetSize(capacity); }
+
+    /**
+     * @brief Set the stash size for oblivious insertion
+     *
+     * @param capacity the stash size
+     */
+    void SetSize(size_t capacity) { stash.resize(capacity); }
+
+    /**
+     * @brief Obliviously insert an entry to the stash and record the timestamp.
+     * If entry.valid is false, the insertion is dummy. If the stash overflows,
+     * the method will enlarge the stash, which is not oblivious.
+     *
+     * @tparam highPriority whether the entry should be populated first
+     * @param entry the entry to insert
+     */
+    template <const bool highPriority = false>
+    void OInsert(const OPosMapEntry& entry, PositionType idx0) {
+      oInserted = true;
+      if (stash.size() < stash_size) {
+        stash.resize(stash_size);
+      }
+      bool inserted = !entry.valid();
+      uint64_t time = highPriority ? 0 : currTime;
+      for (size_t i = 0; i < stash.size(); ++i) {
+        bool isEmpty = !stash[i].entry.valid();
+        bool insertFlag = isEmpty & (!inserted);
+        obliMove(insertFlag, stash[i], {entry, idx0, time});
+
+        inserted |= insertFlag;
+      }
+      bool overflowFlag = (!inserted) & entry.valid();
+      if (overflowFlag) {
+        PERFCTR_INCREMENT(OHMAP_DEAMORT_OVERFLOW);
+        stash.push_back({entry, idx0, time});
+      }
+      // reset the timestamps if the current time overflows
+      if (currTime == UINT64_MAX) {
+        for (size_t i = 0; i < stash.size(); ++i) {
+          stash[i].timestamp = 0;
+        }
+      }
+      ++currTime;
+    }
+
+    /**
+     * @brief Insert an entry to the stash and record the timestamp.
+     * If previously an oblivious insert has occurred, the method will insert
+     * obliviously. Otherwise, it will directly push the entry to the stash.
+     *
+     * @param entry the entry to insert
+     */
+    void Insert(const OPosMapEntry& entry, PositionType idx0) {
+      if (oInserted || (stash.size() >= stash_size)) {
+        OInsert(entry);
+        return;
+      }
+      stash.push_back({entry, idx0, currTime});
+    }
+
+    /**
+     * @brief Read the oldest entry in the stash and remove it. If the stash is
+     * empty, entry.valid will be set to false.
+     *
+     * @param entry the oldest entry
+     */
+    void OPopOldest(OPosMapEntry& entry, PositionType& idx0) {
+      StashEntry oldestEntry;
+      uint64_t oldestTime = currTime;
+      size_t oldestIdx = stash.size();
+      for (size_t i = 0; i < stash.size(); ++i) {
+        bool isOldest =
+            (stash[i].timestamp <= oldestTime) & stash[i].entry.valid();
+        obliMove(isOldest, oldestEntry, stash[i]);
+        obliMove(isOldest, oldestIdx, i);
+      }
+      for (size_t i = 0; i < stash.size(); ++i) {
+        stash[i].entry.setInvalid(i == oldestIdx);
+      }
+      entry = oldestEntry.entry;
+      idx0 = oldestEntry.idx0;
+      entry.setInvalid(oldestIdx == stash.size());
+    }
+
+    using Iter = StashVec::iterator;
+
+    /**
+     * @brief Non-obliviously erase an entry from the stash
+     *
+     * @param it the iterator to the entry to erase
+     */
+    void Erase(Iter it) {
+      if (oInserted) {
+        throw std::runtime_error("Cannot erase after oblivious insertion.");
+      }
+      stash.erase(it);
+    }
+
+    /**
+     * @brief Returns the beginning iterator of the internal stash data
+     *
+     */
+    Iter begin() { return stash.begin(); }
+
+    /**
+     * @brief Returns the end iterator of the internal stash data
+     *
+     */
+    Iter end() { return stash.end(); }
+
+    /**
+     * @brief Returns the size of the stash
+     *
+     */
+    size_t size() const { return stash.size(); }
+
+    /**
+     * @brief Bracket operator to access the stash
+     *
+     * @param idx the index to access
+     * @return OPosMapEntry& the entry at the index
+     */
+    StashEntry& operator[](size_t idx) { return stash[idx]; }
+
+    /**
+     * @brief Const bracket operator to access the stash
+     *
+     * @param idx the index to access
+     * @return const OPosMapEntry& the entry at the index
+     */
+    const StashEntry& operator[](size_t idx) const { return stash[idx]; }
+  };
+
+  /**
+   * @brief A bucket can contain multiple entries that are fully associative.
+   * This can significantly increase the load factor of the hash map.
+   *
+   * @tparam K the key type
+   * @tparam V the value type
+   * @tparam bucketSize the number of slots in the bucket
+   */
+  template <const short bucketSize>
+  struct OPosMapBucket {
+    OPosMapEntry entries[bucketSize];
+#ifndef ENCLAVE_MODE
+    // cout
+    friend std::ostream& operator<<(std::ostream& os,
+                                    const OPosMapBucket& bucket) {
+      os << "[";
+      for (int i = 0; i < bucketSize; ++i) {
+        os << bucket.entries[i];
+        if (i != bucketSize - 1) {
+          os << ", ";
+        }
+      }
+      os << "]";
+      return os;
+    }
+#endif
+  };
+
+ private:
+  // the ratio between the capacity and the total number of slots in
+  // the hash tables
+  static constexpr double loadFactor = 0.8;
+  // number of slots in each bucket
+  static constexpr short bucketSize = 4;
+  // maximum number of elements in the stash
+  static constexpr int stash_max_size = 10;
+  // the capcity of the hash map
+  PositionType _size = 0;
+  // the number of elements in the hash map
+  PositionType load;
+  // the size of each hash table
+  PositionType tableSize;
+  using BucketType = OPosMapBucket<bucketSize>;
+  // for oblivious hash map, we use recursive ORAM
+  using ObliviousTableType = RecursiveORAM<BucketType, PositionType>;
+  // for non-oblivious hash map, we cache the front of the vector, for the
+  // remaining data store it encrypted and authenticated in external memory,
+  // check freshness when swapped in.
+  using NonObliviousTableType = EM::CacheFrontVector::Vector<
+      BucketType, sizeof(BucketType),
+      EM::CacheFrontVector::EncryptType::ENCRYPT_AND_AUTH_FRESH, 1024>;
+  using TableType = std::conditional_t<isOblivious, ObliviousTableType,
+                                       NonObliviousTableType>;
+  TableType table0, table1;
+  OPosMapIndexer indexer;
+  using StashType = LRUStash<16>;
+  StashType stash;
+  bool inited = false;
+
+  /**
+   * @brief Helper function that accesses the hash table.
+   *
+   * @param addr the address to access
+   * @param table the table to access
+   * @param updateFunc the function to call on the accessed bucket
+   */
+  static void updateHelper(PositionType addr, TableType& table,
+                           const auto& updateFunc) {
+    if constexpr (isOblivious) {
+      table.Access(addr, updateFunc);
+    } else {
+      updateFunc(table[addr]);
+    }
+  }
+
+  /**
+   * @brief Helper function that reads the hash table.
+   *
+   * @param addr the address to read
+   * @param table the table to read
+   * @param outputBucket the output bucket
+   */
+  static void readHelper(PositionType addr, TableType& table,
+                         BucketType& outputBucket) {
+    if constexpr (isOblivious) {
+      table.Read(addr, outputBucket);
+    } else {
+      outputBucket = table[addr];
+    }
+  }
+
+  /**
+   * @brief A helper function that replaces an entry in a bucket if it
+   * exists. The function is not oblivious.
+   *
+   * @tparam hideDummy whether to hide the dummy flag of the inserted entry
+   * and the existing entries in the bucket.
+   * @param bucket the bucket to perform replace
+   * @param entryToInsert the entry to insert
+   * @return true if the entry is replaced, false otherwise
+   *
+   */
+  template <const bool hideDummy = false>
+  static bool replaceIfExist(BucketType& bucket,
+                             const OPosMapEntry& entryToInsert) {
+    for (short i = 0; i < bucketSize; ++i) {
+      OPosMapEntry& entry = bucket.entries[i];
+      // also checks valid and dummy when comparing keyHash
+      if (entry.keyHash == entryToInsert.keyHash &&
+          entry.otherIdx == entryToInsert.otherIdx) {
+        entry = entryToInsert;
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /**
+   * @brief A helper function that replaces an entry in the stash if it exists.
+   * The function is not oblivious.
+   *
+   * @tparam hideDummy whether to hide the dummy flag of the inserted entry and
+   * the existing entries in the stash.
+   * @param bucket the bucket to perform replace
+   * @param entryToInsert the entry to insert
+   * @return true if the entry is replaced, false otherwise
+   *
+   */
+  template <const bool hideDummy = false>
+  static bool replaceIfExist(StashType& stash,
+                             const OPosMapEntry& entryToInsert) {
+    for (size_t i = 0; i < stash.size(); ++i) {
+      OPosMapEntry& entry = stash[i].entry;
+      // also checks valid and dummy when comparing keyHash
+      if (entry.keyHash == entryToInsert.keyHash &&
+          entry.otherIdx == entryToInsert.otherIdx) {
+        entry = entryToInsert;
+        return true;
+      }
+    }
+  }
+
+  /**
+   * @brief A helper function that inserts an entry to a bucket if a slot is
+   * empty. The function is not oblivious.
+   *
+   * @param bucket the bucket to perform insert
+   * @param entryToInsert the entry to insert
+   * @return true if the entry is inserted, false otherwise
+   */
+  static bool insertIfEmpty(BucketType& bucket,
+                            const OPosMapEntry& entryToInsert) {
+    for (int i = 0; i < bucketSize; ++i) {
+      auto& entry = bucket.entries[i];
+      if (!entry.valid()) {
+        entry = entryToInsert;
+        return true;
+      }
+    }
+    return false;
+  }
+
+  // /**
+  //  * @brief Helper function that searches the stash for a key. Depending on
+  //  * whether the hash map is oblivious, the function may reveal the number of
+  //  * comparisons.
+  //  *
+  //  * @param key the key to search
+  //  * @param value the value to return
+  //  * @param stash the stash to search
+  //  * @return true if the key is found, false otherwise
+  //  */
+  // static bool searchStash(const H& hash, V& value, const StashType& stash) {
+  //   if constexpr (isOblivious) {
+  //     bool found = false;
+  //     for (size_t i = 0; i < stash.size(); ++i) {
+  //       const auto& entry = stash[i]; // TODO fix
+  //       bool match = entry.valid() & (entry.hash == hash);
+  //       obliMove(match, value, entry.value);
+  //       found |= match;
+  //     }
+  //     return found;
+  //   } else {
+  //     for (size_t i = 0; i < stash.size(); ++i) {
+  //       const auto& entry = stash[i];
+  //       if (entry.valid && entry.hash == hash) {
+  //         value = entry.value;
+  //         return true;
+  //       }
+  //     }
+  //     return false;
+  //   }
+  // }
+
+  /**
+   * @brief A helper function that replaces an entry in a bucket if it exists,
+   * and change the input entry to the old entry. The function is oblivious.
+   *
+   * @param bucket the bucket to perform replace
+   * @param entryToInsert the entry to insert
+   * @return true if the entry is replaced, false otherwise
+   */
+  static bool replaceIfExistOblivious(BucketType& bucket,
+                                      OPosMapEntry& entryToInsert) {
+    bool updated = !entryToInsert.valid();
+    for (short i = 0; i < bucketSize; ++i) {
+      OPosMapEntry& entry = bucket.entries[i];
+      bool matchFlag = (entry.otherIdx == entryToInsert.otherIdx) &
+                       (entry.keyHash == entryToInsert.keyHash) & (!updated);
+      obliSwap(matchFlag, entry, entryToInsert);
+      updated |= matchFlag;
+    }
+    return updated;
+  }
+
+  /**
+   * @brief A helper function that replaces an entry in the stash if it exists,
+   * and change the input entry to the old entry. The function is oblivious.
+   *
+   * @param stash the stash to perform replace
+   * @param entryToInsert the entry to insert
+   * @return true if the entry is replaced, false otherwise
+   */
+  static bool replaceIfExistOblivious(StashType& stash,
+                                      OPosMapEntry& entryToInsert) {
+    bool updated = !entryToInsert.valid();
+    for (size_t i = 0; i < stash.size(); ++i) {
+      auto& entry = stash[i].entry;
+      bool matchFlag = (entry.otherIdx == entryToInsert.otherIdx) &
+                       (entry.keyHash == entryToInsert.keyHash) & (!updated);
+      obliSwap(matchFlag, entry, entryToInsert);
+      updated |= matchFlag;
+    }
+    return updated;
+  }
+
+  /**
+   * @brief A helper function that inserts an entry to a bucket if a slot is
+   * empty. The function is oblivious.
+   *
+   * @param bucket the bucket to perform insert
+   * @param entryToInsert the entry to insert
+   * @return true if the entry is inserted, false otherwise
+   */
+  static bool insertIfEmptyOblivious(BucketType& bucket,
+                                     const OPosMapEntry& entryToInsert) {
+    bool updated = !entryToInsert.valid();
+    for (int i = 0; i < bucketSize; ++i) {
+      auto& entry = bucket.entries[i];
+      bool isEmpty = !entry.valid();
+      bool insertFlag = isEmpty & (!updated);
+      obliMove(insertFlag, entry, entryToInsert);
+      updated |= insertFlag;
+    }
+    return updated;
+  }
+
+  // /**
+  //  * @brief Helper function that searches a bucket for a key. Depending on
+  //  * whether the hash map is oblivious, the function may reveal the number of
+  //  * comparisons
+  //  *
+  //  * @param key the key to search
+  //  * @param value the value to return
+  //  * @param bucket the bucket to search
+  //  * @return true if the key is found, false otherwise
+  //  */
+  // static bool searchBucket(const H& hash, V& value, const BucketType& bucket)
+  // {
+  //   if constexpr (isOblivious) {
+  //     bool found = false;
+  //     for (int i = 0; i < bucketSize; ++i) {
+  //       const auto& entry = bucket.entries[i];
+  //       bool match = entry.valid() & (entry.hash == hash);
+  //       obliMove(match, value, entry.value);
+  //       found |= match;
+  //     }
+  //     return found;
+  //   } else {
+  //     for (int i = 0; i < bucketSize; ++i) {
+  //       const auto& entry = bucket.entries[i];
+  //       if (entry.valid() && entry.hash == hash) {
+  //         value = entry.value;
+  //         return true;
+  //       }
+  //     }
+  //     return false;
+  //   }
+  // }
+
+  /**
+   * @brief Find the values of a batch of keys obliviously in one table, and
+   * defer the writeback procedure of the recursive ORAM. Requires the hash map
+   * to be oblivious. The input may contain duplicate keys and may be arranged
+   * in any order.
+   *
+   * @tparam KeyIter the type of the key iterator
+   * @tparam ValResIter the type of the value result iterator
+   * @param tableNum the table to search, 0 or 1
+   * @param keyBegin the begin iterator of the keys
+   * @param keyEnd the end iterator of the keys
+   * @param valResBegin the begin iterator of the value results
+   * @param hashIndices the indices of the keys in the hash table
+   */
+  template <class KeyIter, class ValResIter>
+  void findTableBatchDeferWriteBack(int tableNum, const KeyIter keyBegin,
+                                    const KeyIter keyEnd,
+                                    ValResIter valResBegin,
+                                    std::vector<PositionType>& hashIndices) {
+    static_assert(isOblivious);
+
+    Assert(tableNum == 0 || tableNum == 1);
+
+    size_t keySize = std::distance(keyBegin, keyEnd);
+    Assert(hashIndices.size() == keySize);
+    std::vector<PositionType> recoveryVec(keySize);
+    for (PositionType i = 0; i < keySize; ++i) {
+      recoveryVec[i] = i;
+    }
+    Algorithm::BitonicSortSepPayload(hashIndices.begin(), hashIndices.end(),
+                                     recoveryVec.begin());
+    std::vector<BucketType> buckets(keySize);
+
+    if (tableNum == 0) {
+      table0.BatchReadDeferWriteBack(hashIndices, buckets);
+    } else {
+      table1.BatchReadDeferWriteBack(hashIndices, buckets);
+    }
+
+    Algorithm::BitonicSortSepPayload(recoveryVec.begin(), recoveryVec.end(),
+                                     buckets.begin());
+    for (size_t i = 0; i < keySize; ++i) {
+      (valResBegin + i)->found =
+          searchBucket(*(keyBegin + i), (valResBegin + i)->value, buckets[i]);
+    }
+  }
+
+  /**
+   * @brief Try to insert entry into either table0 or table1 obliviously without
+   * swapping existing elements. If the element already exists either in table
+   * 0, table 1, or the stash, replace the existing element. If there's no
+   * available slot, swap entryToInsert with a random element from the bucket in
+   * table 0. If the insertion is successful, entryToInsert.valid will be set to
+   * false, and dummy operations will be performed to ensure oblivousness.
+   *
+   * @param entryToInsert the entry to insert, and will be modified to the entry
+   * swapped out if no slot is available.
+   *
+   * @return true if the key already exists, false otherwise
+   */
+  bool insertEntryOblivious(OPosMapEntry& entryToInsert, PositionType& idx0) {
+    // obliMove(!entryToInsert.valid, idx0, UniformRandom(tableSize - 1));
+    // obliMove(!entryToInsert.valid, idx1, UniformRandom(tableSize - 1));
+    bool exist = false;
+    auto table0UpdateFunc = [&](BucketType& bucket0) {
+      bool replaceSucceed = replaceIfExistOblivious(bucket0, entryToInsert);
+      exist |= replaceSucceed;
+      entryToInsert.setInvalid(replaceSucceed);
+      obliSwap(entryToInsert.valid(), entryToInsert.otherIdx, idx0);
+      auto table1UpdateFunc = [&](BucketType& bucket1) {
+        bool replaceSucceed = replaceIfExistOblivious(bucket1, entryToInsert);
+        exist |= replaceSucceed;
+        entryToInsert.setInvalid(replaceSucceed);
+        obliSwap(entryToInsert.valid(), entryToInsert.otherIdx, idx0);
+        replaceSucceed = replaceIfExistOblivious(stash, entryToInsert);
+        exist |= replaceSucceed;
+        entryToInsert.setInvalid(replaceSucceed);
+
+        bool insertSucceed = insertIfEmptyOblivious(bucket0, entryToInsert);
+        entryToInsert.setInvalid(insertSucceed);
+        obliSwap(entryToInsert.valid(), entryToInsert.otherIdx, idx0);
+        insertSucceed = insertIfEmptyOblivious(bucket1, entryToInsert);
+        entryToInsert.setInvalid(insertSucceed);
+        int offset = (int)(UniformRandom32() % bucketSize);
+        obliSwap(entryToInsert.valid(), bucket1.entries[offset], entryToInsert);
+        obliSwap(entryToInsert.valid(), entryToInsert.otherIdx, idx0);
+      };
+      updateHelper(idx0, table1, table1UpdateFunc);
+    };
+    updateHelper(idx0, table0, table0UpdateFunc);
+
+    load += !exist;
+    return exist;
+  }
+
+  /**
+   * @brief Try to insert entry into table 1 obliviously, if table 1 is
+   * occupied, swap a random element out of the bucket in table 1 and try to
+   * insert this element into table 0. If table 0 is also occupied, swap a
+   * random element out of the bucket in table 0 and save it in entryToInsert.
+   * If either of the insertion succeeds, entryToInsert.valid will become false,
+   * and dummy operations will be performed to ensure oblivoiusness. The method
+   * may retry multiple times.
+   *
+   * @param entryToInsert the entry to insert, and will be modified to the entry
+   * swapped out if no slot is available.
+   * @param maxRetry the maximum number of retries, default to 1
+   */
+  void insertEntryObliviousRetry(OPosMapEntry& entryToInsert,
+                                 PositionType& idx0, int maxRetry = 1) {
+    auto swapUpdateFunc = [&](BucketType& bucket) {
+      int offset = (int)(UniformRandom32() % bucketSize);
+      bool insertSucceed = insertIfEmptyOblivious(bucket, entryToInsert);
+      entryToInsert.setInvalid(insertSucceed);
+      obliSwap(entryToInsert.valid(), entryToInsert, bucket.entries[offset]);
+      obliSwap(entryToInsert.valid(), entryToInsert.otherIdx, idx0);
+    };
+    for (int r = 0; r < maxRetry; ++r) {
+      updateHelper(idx0, table0, swapUpdateFunc);
+      updateHelper(idx0, table1, swapUpdateFunc);  // modifies entryToInsert
+    }
+  }
+
+ public:
+  // result data structure for a query in a batch
+  struct ValResult {
+    V value;
+    bool found;
+  };
+
+  OPosMap() {}
+
+  /**
+   * @brief Construct a new OPosMap object
+   *
+   * @param size capacity of the hash map
+   */
+  explicit OPosMap(PositionType size) { SetSize(size); }
+
+  /**
+   * @brief Construct a new OPosMap object
+   *
+   * @param size capacity of the hash map
+   * @param cacheBytes the size of available cache in bytes
+   */
+  OPosMap(PositionType size, uint64_t cacheBytes) { SetSize(size, cacheBytes); }
+
+  /**
+   * @brief Allocate resources for the hash map.
+   *
+   * @param size the capacity of the hash map
+   */
+  void SetSize(PositionType size) { SetSize(size, MAX_CACHE_SIZE); }
+
+  /**
+   * @brief Allocate resources for the hash map.
+   *
+   * @param size
+   * @param size the capacity of the hash map
+   * @param cacheBytes the size of available cache in bytes
+   */
+  void SetSize(PositionType size, uint64_t cacheBytes) {
+    _size = size;
+    load = 0;
+    tableSize =
+        (PositionType)((double)size / (2 * loadFactor * bucketSize) + 1);
+    indexer.SetSize(tableSize);
+    if constexpr (isOblivious) {
+      // equally divide the cache between the two tables
+      table0.SetSize(tableSize, cacheBytes / 2);
+      table1.SetSize(tableSize, cacheBytes / 2);
+      stash.SetSize(16);
+    } else {
+      // first give table0 all the cache, and give table1 the rest
+      // because table0 is more likely to be accessed
+      uint64_t minCacheBytes = TableType::GetMinMemoryUsage();
+      if (cacheBytes < 2 * minCacheBytes) {
+        cacheBytes = 2 * minCacheBytes;
+      }
+      table0.SetSizeByCacheBytes(tableSize, cacheBytes - minCacheBytes);
+      if (cacheBytes - minCacheBytes < table0.GetMemoryUsage()) {
+        throw std::runtime_error("Cache size too small");
+      }
+      uint64_t remainingCacheBytes = cacheBytes - table0.GetMemoryUsage();
+      table1.SetSize(tableSize, remainingCacheBytes);
+    }
+  }
+
+  /**
+   * @brief Get the memory usage of this hash map
+   *
+   * @return uint64_t the heap memory usage in bytes
+   */
+  uint64_t GetMemoryUsage() const {
+    return table0.GetMemoryUsage() + table1.GetMemoryUsage() +
+           stash.size() * sizeof(OPosMapEntry);
+  }
+
+  PositionType size() const { return _size; }
+
+  PositionType GetLoad() const { return load; }
+
+  PositionType GetTableSize() const { return tableSize; }
+
+  const OPosMapIndexer& GetIndexer() const { return indexer; }
+
+  const TableType& GetTable0() const { return table0; }
+
+  const TableType& GetTable1() const { return table1; }
+
+  const StashType& GetStash() const { return stash; }
+
+  //   using NonObliviousHashMap = OPosMap<K, V, false, PositionType>;
+
+  //   /**
+  //    * @brief Initialize the oblivious hash map from another non-oblivious
+  //    hash
+  //    * map
+  //    *
+  //    * @param other the non-oblivious hash map
+  //    */
+  //   void InitFromNonOblivious(NonObliviousHashMap& other) {
+  //     static_assert(isOblivious,
+  //                   "Only oblivious hash map can call this function");
+  //     if (_size != other.size()) {
+  //       throw std::runtime_error("OPosMap InitFromNonOblivious failed");
+  //     }
+  //     if (_size == 0) {
+  //       throw std::runtime_error(
+  //           "OPosMap size not set. Call SetSize before initialization.");
+  //     }
+  //     PositionType load0 = 0;
+  //     PositionType load1 = 0;
+  //     indexer = other.GetIndexer();
+  //     // change dummies to invalid
+  //     EM::VirtualVector::VirtualReader<BucketType> reader0(
+  //         other.GetTableSize(), [&](PositionType i) {
+  //           BucketType bucket = other.GetTable0()[i];
+  //           for (int j = 0; j < bucketSize; ++j) {
+  //             bucket.entries[j].valid &= !bucket.entries[j].dummy;
+  //             load0 += bucket.entries[j].valid;
+  //             bucket.entries[j].dummy = false;
+  //           }
+  //           return bucket;
+  //         });
+  //     EM::VirtualVector::VirtualReader<BucketType> reader1(
+  //         other.GetTableSize(), [&](PositionType i) {
+  //           BucketType bucket = other.GetTable1()[i];
+  //           for (int j = 0; j < bucketSize; ++j) {
+  //             bucket.entries[j].valid &= !bucket.entries[j].dummy;
+  //             load1 += bucket.entries[j].valid;
+  //             bucket.entries[j].dummy = false;
+  //           }
+  //           return bucket;
+  //         });
+  //     if constexpr (parallel_init) {
+  // #pragma omp task
+  //       { table0.InitFromReader(reader0); }
+
+  //       { table1.InitFromReader(reader1); }
+  // #pragma omp taskwait
+  //     } else {
+  //       table0.InitFromReader(reader0);
+  //       table1.InitFromReader(reader1);
+  //     }
+  //     load = load0 + load1;
+  //     for (const auto& entry : other.GetStash().stash) {
+  //       if (entry.valid) {
+  //         // valid is public but dummy is not
+  //         // since we deleted all dummies, it's likely that we don't need to
+  //         put
+  //         // these entries in the stash
+  //         OInsert(entry.key, entry.value, entry.dummy);
+  //       }
+  //     }
+  //   }
+
+  //   /**
+  //    * @brief Initialize the hash map from a reader of key value pairs. If
+  //    all the
+  //    * keys are distinct, the operation is oblivious. Otherwise, it reveals
+  //    * information about the data it reads, but does not affect the future
+  //    * queries.
+  //    *
+  //    * @tparam Reader the type of the reader
+  //    * @param reader A reader that reads std::pair<K, V>
+  //    * @param additionalCacheBytes the size of additional available cache in
+  //    * bytes
+  //    */
+  //   template <typename Reader>
+  //     requires Readable<Reader, std::pair<K, V>>
+  //   void InitFromReader(Reader& reader, uint64_t additionalCacheBytes = 0) {
+  //     if (inited) {
+  //       throw std::runtime_error("OPosMap initialized twice.");
+  //     }
+  //     inited = true;
+  //     if (_size == 0) {
+  //       throw std::runtime_error(
+  //           "OPosMap size not set. Call SetSize before initialization.");
+  //     }
+  //     if constexpr (!isOblivious) {
+  //       while (!reader.eof()) {
+  //         const std::pair<K, V>& entry = reader.read();
+  //         Insert(entry.first, entry.second);
+  //       }
+  //     } else {
+  //       additionalCacheBytes = std::max(
+  //           additionalCacheBytes, NonObliviousTableType::GetMinMemoryUsage()
+  //           * 2);
+  //       NonObliviousHashMap nonObliviousHashMap(_size, additionalCacheBytes);
+  //       nonObliviousHashMap.InitFromReader(reader);
+  //       InitFromNonOblivious(nonObliviousHashMap);
+  //     }
+  //   }
+
+  //   /**
+  //    * @brief An object that stores the curret state of initialization.
+  //    Faciliates
+  //    * initialization in a streaming fashion.
+  //    *
+  //    */
+  //   struct InitContext {
+  //    private:
+  //     NonObliviousHashMap* nonObliviousHashMap;
+  //     OPosMap& oHashMap;  // the parent map
+
+  //    public:
+  //     /**
+  //      * @brief Construct a new InitContext object
+  //      *
+  //      * @param omap The parent map
+  //      * @param additionalCacheBytes the size of additional available cache
+  //      for
+  //      * initialization
+  //      */
+  //     explicit InitContext(OPosMap& map, uint64_t additionalCacheBytes = 0)
+  //         : oHashMap(map),
+  //           nonObliviousHashMap(
+  //               new NonObliviousHashMap(map.size(), additionalCacheBytes)) {
+  //       if (map.inited) {
+  //         throw std::runtime_error("OPosMap initialized twice.");
+  //       }
+  //       map.inited = true;
+  //       if (map.size() == 0) {
+  //         throw std::runtime_error(
+  //             "OPosMap size not set. Call SetSize before initialization.");
+  //       }
+  //     }
+
+  //     /**
+  //      * @brief Move constructor
+  //      * @param other the other InitContext
+  //      *
+  //      */
+  //     InitContext(const InitContext&& other)
+  //         : oHashMap(other.oHashMap),
+  //           nonObliviousHashMap(other.nonObliviousHashMap) {}
+
+  //     InitContext(const InitContext& other) = delete;
+
+  //     /**
+  //      * @brief Insert a new key value pair for initialization. The method
+  //      will
+  //      * reveal whether the key has been inserted before. But if all the keys
+  //      are
+  //      * distinct, the operation is oblivious. The method will throw an
+  //      exception
+  //      * if too many keys are inserted.
+  //      *
+  //      * @param key
+  //      * @param value
+  //      */
+  //     void Insert(const K& key, const V& value) {
+  //       nonObliviousHashMap->Insert(key, value);
+  //     }
+
+  //     void Insert(const std::pair<K, V>& entry) {
+  //       nonObliviousHashMap->Insert(entry.first, entry.second);
+  //     }
+
+  //     template <class Iterator>
+  //     void InsertBatch(Iterator begin, Iterator end) {
+  //       for (auto it = begin; it != end; ++it) {
+  //         nonObliviousHashMap->Insert(it->first, it->second);
+  //       }
+  //     }
+
+  //     /**
+  //      * @brief Finalize the initialization. The method will copy the data
+  //      from
+  //      * the non-oblivious hash map to the oblivious hash map.
+  //      *
+  //      */
+  //     void Finalize() {
+  //       oHashMap.InitFromNonOblivious(*nonObliviousHashMap);
+  //       delete nonObliviousHashMap;
+  //     }
+  //   };
+
+  //   /**
+  //    * @brief Obtain a new context to initialize this map. The initialization
+  //    data
+  //    * can be either private or public (the initialization and subsequent
+  //    accesses
+  //    * are oblivious).
+  //    * Example:
+  //    *  auto* initContext = oMap.NewInitContext(1UL << 28);
+  //       for (auto it = kvMap.begin(); it != kvMap.end(); ++it;) {
+  //         initContext->Insert(it->first, it->second);
+  //       }
+  //       initContext->Finalize();
+  //       delete initContext;
+  //    *
+  //    * @param additionalCacheBytes
+  //    * @return InitContext
+  //    */
+  //   InitContext* NewInitContext(uint64_t additionalCacheBytes = 0) {
+  //     static_assert(isOblivious,
+  //                   "Only oblivious hash map can call this function");
+  //     return new InitContext(*this, additionalCacheBytes);
+  //   }
+
+  /**
+   * @brief Initialize an empty hash map
+   *
+   */
+  void Init() {
+    if (inited) {
+      throw std::runtime_error("OPosMap initialized twice.");
+    }
+    inited = true;
+    if (_size == 0) {
+      throw std::runtime_error(
+          "OPosMap size not set. Call SetSize before initialization.");
+    }
+    if constexpr (isOblivious) {
+      if constexpr (parallel_init) {
+#pragma omp task
+        { table0.InitDefault(BucketType()); }
+
+        { table1.InitDefault(BucketType()); }
+#pragma omp taskwait
+      } else {
+        table0.InitDefault(BucketType());
+        table1.InitDefault(BucketType());
+      }
+    }
+  }
+
+  /**
+   * @brief Non-oblivious insert, but may hide whether the insertion is dummy.
+   *
+   * @tparam hideDummy whether to hide the dummy flag of the inserted entry
+   * @param key the key to insert
+   * @param value the value to insert
+   * @param isDummy whether the insertion is dummy
+   * @return true if the key already exists, false otherwise
+   */
+  template <bool hideDummy = false>
+  bool Insert(const K& key, const V& value, bool isDummy = false) {
+    // static_assert(!(isOblivious && hideDummy),
+    //               "hideDummy is only useful for non oblivious");
+    // if constexpr (!hideDummy) {
+    //   if (isDummy) {
+    //     return false;
+    //   }
+    // }
+    // PositionType idx0, idx1;
+    // H keyHash;
+    // K keyToHash = key;
+    // if constexpr (hideDummy) {
+    //   // generate a random key for dummy entry
+    //   K randKey;
+    //   read_rand((uint8_t*)&randKey, sizeof(K));
+    //   obliMove(isDummy, keyToHash, randKey);
+    // }
+    // indexer.getHashIndices(keyToHash, idx0, idx1, keyHash);
+
+    // OPosMapEntry entryToInsert = {true, isDummy, keyHash, idx1, value};
+
+    // bool inserted = false;
+    // bool exist = false;
+
+    // auto table0UpdateFunc = [&](BucketType& bucket0) {
+    //   if (replaceIfExist<hideDummy>(bucket0, entryToInsert)) {
+    //     inserted = true;
+    //     exist = true;
+    //     // found in table 0
+    //     return;
+    //   }
+    //   idx1 = indexer.getHashIdx1(entryToInsert.key);
+    //   auto table1UpdateFunc = [&](BucketType& bucket1) {
+    //     if (replaceIfExist<hideDummy>(bucket1, entryToInsert)) {
+    //       inserted = true;
+    //       exist = true;
+    //       // found in table 1
+    //       return;
+    //     }
+    //     if (replaceIfExist<hideDummy>(stash, entryToInsert)) {
+    //       exist = true;
+    //       inserted = true;
+    //       // found in stash
+    //     }
+    //     if (insertIfEmpty(bucket0, entryToInsert)) {
+    //       inserted = true;
+    //       // successfully inserted into table 0
+    //       return;
+    //     }
+    //     if (insertIfEmpty(bucket1, entryToInsert)) {
+    //       // successfully inserted into table 1
+    //       inserted = true;
+    //       return;
+    //     }
+    //     // replace existing entry
+    //     std::swap(entryToInsert, bucket0.entries[0]);
+    //   };
+    //   updateHelper(idx1, table1, table1UpdateFunc);
+    // };
+    // updateHelper(idx0, table0, table0UpdateFunc);
+
+    // load += !exist;
+    // if (inserted) {
+    //   return exist;
+    // }
+    // // the offset of the entry we intend to swap
+    // int offset;
+    // auto swapUpdateFunc = [&](BucketType& bucket) {
+    //   if (insertIfEmpty(bucket, entryToInsert)) {
+    //     inserted = true;
+    //     return;
+    //   }
+    //   std::swap(entryToInsert, bucket.entries[offset]);
+    // };
+    // for (int r = 0; r < 15; ++r) {
+    //   offset = UniformRandom32() % bucketSize;
+    //   idx1 = indexer.getHashIdx1(entryToInsert.key);
+    //   updateHelper(idx1, table1, swapUpdateFunc);
+    //   if (inserted) {
+    //     return false;
+    //   }
+    //   idx0 = indexer.getHashIdx0(entryToInsert.key);
+    //   offset = UniformRandom32() % bucketSize;
+    //   updateHelper(idx0, table0, swapUpdateFunc);
+    //   if (inserted) {
+    //     return false;
+    //   }
+    // }
+    // stash.Insert(entryToInsert);
+    // return false;
+    return OInsert(key, value, isDummy);
+  }
+
+  /**
+   * @brief Insert obliviously. Hide the number of replacement and whether the
+   * insertion is dummy
+   *
+   * @param key the key to insert
+   * @param value the value to insert
+   * @param isDummy whether the insertion is dummy
+   * @return true if the key already exists, false otherwise
+   */
+  bool OInsert(const K& key, V& value, UidType& uid, HExtra& extraHash,
+               bool isDummy = false) {
+    PositionType idx0, idx1;
+    H keyHash;
+    K keyToHash = key;
+    // generate a random key for dummy entry
+    K randKey;
+    read_rand((uint8_t*)&randKey, sizeof(K));
+    obliMove(isDummy, keyToHash, randKey);
+    indexer.getHashIndices(keyToHash, idx0, idx1, keyHash, uid, extraHash);
+    // std::cout << "idx0: " << idx0 << " idx1: " << idx1
+    //           << " key hash: " << (uint64_t)keyHash << std::endl;
+    OPosMapEntry entryToInsert = {keyHash, idx1, value};
+    entryToInsert.setValid(!isDummy);
+    bool exist = insertEntryOblivious(entryToInsert, idx0);
+    obliMove(exist, value, entryToInsert.value);
+    // the element just swapped out is more likely to get inserted to somewhere
+    // else
+    stash.template OInsert<true>(entryToInsert, idx0);
+
+    for (int i = 0; i < 2; ++i) {
+      // use FIFO order so that we won't get stuck by loops in the random graph
+      // of cuckoo hashing
+      stash.OPopOldest(entryToInsert, idx0);
+      insertEntryObliviousRetry(entryToInsert, idx0, 1);
+      stash.OInsert(entryToInsert, idx0);
+    }
+
+    return exist;
+  }
+
+  /**
+   * @brief Update the value of a key if it exists and return the old value.
+   *
+   * @param key the key to search
+   * @param value the input new value and value to return
+   * @param isDummy whether the search is dummy
+   * @return true if the key is found, false otherwise
+   */
+  bool Update(const K& key, V& value, UidType& uid, HExtra& extraHash,
+              bool isDummy = false) {
+    PositionType idx0, idx1;
+    H keyHash;
+    K keyToHash = key;
+    bool found = false;
+    // generate a random key for dummy entry
+    K randKey;
+    read_rand((uint8_t*)&randKey, sizeof(K));
+    obliMove(isDummy, keyToHash, randKey);
+    indexer.getHashIndices(keyToHash, idx0, idx1, keyHash, uid, extraHash);
+    OPosMapEntry entryToFind = {keyHash, idx1, value};
+    entryToFind.setValid(!isDummy);
+    // std::cout << "idx0: " << idx0 << " idx1: " << idx1
+    //           << " key hash: " << (uint64_t)keyHash << std::endl;
+    // BucketType bucket;
+    // readHelper(idx0, table0, bucket);
+    auto bucketAccessor = [&](BucketType& bucket) {
+      for (int i = 0; i < bucketSize; ++i) {
+        auto& entry = bucket.entries[i];
+        bool matchFlag =
+            (entry.keyHash == entryToFind.keyHash) & (entry.otherIdx == idx1);
+        found |= matchFlag;
+        obliSwap(matchFlag, entry.value, value);
+      }
+    };
+    table0.Access(idx0, bucketAccessor);
+    std::swap(idx0, idx1);
+    table1.Access(idx0, bucketAccessor);
+    std::swap(idx0, idx1);
+    for (size_t i = 0; i < stash.size(); ++i) {
+      auto& stashEntry = stash[i];
+      auto& entry = stashEntry.entry;
+      bool match = (entry.keyHash == entryToFind.keyHash) &
+                   (entry.otherIdx == idx1) & stashEntry.idx0 == idx0;
+      obliSwap(match, value, entry.value);
+      found |= match;
+    }
+
+    return found & (!isDummy);
+  }
+
+  //   /**
+  //    * @brief Find the values of a batch of keys obliviously in the two
+  //    tables in
+  //    * parallel. Defer the recursive ORAM writeback procedure. The input may
+  //    have
+  //    * duplicate keys and may be arranged in any order.
+  //    *
+  //    * @tparam KeyIter
+  //    * @tparam ValResIter
+  //    * @param keyBegin
+  //    * @param keyEnd
+  //    * @param valResBegin
+  //    */
+  //   template <class KeyIter, class ValResIter>
+  //   void FindBatchDeferWriteBack(const KeyIter keyBegin, const KeyIter
+  //   keyEnd,
+  //                                ValResIter valResBegin) {
+  //     size_t keySize = std::distance(keyBegin, keyEnd);
+  //     std::vector<std::vector<ValResult>> valResTables(
+  //         2, std::vector<ValResult>(keySize));
+  //     std::vector<std::vector<PositionType>> hashIndices(
+  //         2, std::vector<PositionType>(keySize));
+
+  //     for (size_t i = 0; i < keySize; ++i) {
+  //       indexer.getHashIndices(*(keyBegin + i), hashIndices[0][i],
+  //                              hashIndices[1][i]);
+  //     }
+
+  // #pragma omp parallel for num_threads(2) schedule(static, 1)
+  //     for (int i = 0; i < 2; ++i) {
+  //       findTableBatchDeferWriteBack(i, keyBegin, keyEnd,
+  //       valResTables[i].begin(),
+  //                                    hashIndices[i]);
+  //     }
+
+  //     for (size_t i = 0; i < keySize; ++i) {
+  //       mergeValRes(valResTables[0][i], valResTables[1][i], *(valResBegin +
+  //       i)); (valResBegin + i)->found |=
+  //           searchStash(*(keyBegin + i), (valResBegin + i)->value, stash);
+  //     }
+  //   }
+
+  //   /**
+  //    * @brief Perform writeback of the recursive ORAM.
+  //    *
+  //    * @param tableNum the table number to write back, 0 or 1
+  //    */
+  //   void WriteBackTable(int tableNum) {
+  //     static_assert(isOblivious);
+  //     Assert(tableNum == 0 || tableNum == 1);
+  //     if (tableNum == 0) {
+  //       table0.WriteBack();
+  //     } else {
+  //       table1.WriteBack();
+  //     }
+  //   }
+
+  //   /**
+  //    * @brief Erase a key from the hash map. The function is not oblivious.
+  //    *
+  //    * @param key the key to erase
+  //    * @param isDummy whether the erase is dummy operation
+  //    * @return true if the key is found, false otherwise
+  //    */
+  //   bool Erase(const H& hash, bool isDummy = false) {
+  //     if (isDummy) {
+  //       return false;
+  //     }
+  //     bool erased = false;
+  //     auto updateFunc = [&](BucketType& bucket) {
+  //       for (int i = 0; i < bucketSize; ++i) {
+  //         auto& entry = bucket.entries[i];
+  //         if (entry.valid && entry.hash == hash) {
+  //           entry.valid = false;
+  //           erased = true;
+  //           return;
+  //         }
+  //       }
+  //     };
+  //     PositionType idx0 = indexer.getHashIdx0(key);
+  //     updateHelper(idx0, table0, updateFunc);
+  //     if (erased) {
+  //       --load;
+  //       return true;
+  //     }
+  //     PositionType idx1 = indexer.getHashIdx1(key);
+  //     updateHelper(idx1, table1, updateFunc);
+  //     if (erased) {
+  //       --load;
+  //       return true;
+  //     }
+  //     for (auto it = stash.begin(); it != stash.end(); ++it) {
+  //       if (it->key == key && it->valid) {
+  //         --load;
+  //         stash.Erase(it);
+  //         return true;
+  //       }
+  //     }
+  //     return false;
+  //   }
+
+  //   /**
+  //    * @brief Erase a key from the hash map. The function is oblivious.
+  //    *
+  //    * @param key the key to erase
+  //    * @param isDummy whether the erase is dummy operation
+  //    * @return true if the key is found, false otherwise
+  //    */
+  //   bool OErase(const H& hash, bool isDummy = false) {
+  //     if (isDummy) {
+  //       return false;
+  //     }
+  //     bool erased = false;
+  //     auto updateFunc = [&](BucketType& bucket) {
+  //       for (int i = 0; i < bucketSize; ++i) {
+  //         auto& entry = bucket.entries[i];
+  //         bool matchFlag = entry.valid & (entry.hash == hash);
+  //         entry.valid &= (!matchFlag) | erased;
+  //         erased |= matchFlag;
+  //       }
+  //     };
+  //     PositionType idx0, idx1;
+  //     indexer.getHashIndices(key, idx0, idx1);
+  //     updateHelper(idx0, table0, updateFunc);
+  //     updateHelper(idx1, table1, updateFunc);
+  //     for (auto& entry : stash) {
+  //       bool matchFlag = entry.valid & (entry.hash == hash);
+  //       entry.valid &= (!matchFlag) | erased;
+  //       erased |= matchFlag;
+  //     }
+  //     load -= erased;
+  //     return erased;
+  //   }
+
+  //  private:
+  // /**
+  //  * @brief Helper function that merges the value results of two tables.
+  //  *
+  //  * @param valRes0 the value result of table 0
+  //  * @param valRes1 the value result of table 1
+  //  * @param valRes the merged value result
+  //  */
+  // static void mergeValRes(const ValResult& valRes0, const ValResult& valRes1,
+  //                         ValResult& valRes) {
+  //   valRes.found = valRes0.found | valRes1.found;
+  //   valRes.value = valRes0.value;
+  //   obliMove(valRes1.found, valRes.value, valRes1.value);
+  // }
+
+};  // class OPosMap
+
+template <typename K, typename V, typename PositionType = uint64_t>
+struct OMap {
+  using PosMapType = OPosMap<K, PositionType, true>;
+  PosMapType keyPosMap;
+  using UidType = typename PosMapType::UidType;
+  using HExtra = typename PosMapType::HExtra;
+  struct ORAMEntry {
+    HExtra hash;
+    V value;
+#ifndef ENCLAVE_MODE
+    friend std::ostream& operator<<(std::ostream& os, const ORAMEntry& pair) {
+      os << "(key hash: " << pair.hash << " value: " << pair.value << ")";
+      return os;
+    }
+#endif
+  };
+
+  struct StashEntry {
+    bool valid = false;
+    ORAMEntry entry;
+  };
+
+  std::vector<StashEntry> stash;
+  // additional stash to put elements with duplicate
+  // info in position map but has different keys
+
+  // type of the unique identifier
+  uint8_t salt[16];
+
+  // TODO: freshness check if swap is needed
+  CircuitORAM::ORAM<ORAMEntry, 2, 20, PositionType, UidType, 4096, false> oram;
+
+  OMap() {}
+  OMap(PositionType size) { SetSize(size); }
+  OMap(PositionType size, uint64_t cacheBytes) { SetSize(size, cacheBytes); }
+
+  void SetSize(PositionType size) {
+    keyPosMap.SetSize(size);
+    oram.SetSize(size);
+    read_rand(salt, 16);
+    stash.resize(4);
+  }
+
+  void SetSize(PositionType size, uint64_t cacheBytes) {
+    double posMapCacheRatio = 0.7;
+    keyPosMap.SetSize(size, (uint64_t)(cacheBytes * posMapCacheRatio));
+    cacheBytes -= keyPosMap.GetMemoryUsage();
+    oram.SetSize(size, cacheBytes);
+    read_rand(salt, 16);
+    stash.resize(4);
+  }
+
+  void Init() { keyPosMap.Init(); }
+
+  bool Insert(const K& key, const V& value) {
+    PositionType newPos = oram.GetRandPos();
+    PositionType pos = newPos;
+    UidType uid;
+    HExtra extraHash;
+    bool exist = keyPosMap.OInsert(key, pos, uid, extraHash, false);
+    // std::cout << "Insert key " << key << " from " << pos << " uid " << uid
+    //           << " new pos" << newPos << std::endl;
+    // todo, use the index in the cuckoo hash table as uid since keyHash may
+    // collide
+    // TODO: if exist but key different, put the element to the stash
+    bool insertToStashFlag = false;
+    oram.Update(pos, uid, newPos, [&](ORAMEntry& prevPair) {
+      bool sameKey = prevPair.hash == extraHash;
+      insertToStashFlag = exist & !sameKey;
+      obliMove(!insertToStashFlag, prevPair, {extraHash, value});
+
+      return true;
+    });
+    // case 1: exist and same key -> don't change stash
+    // case 2: exist and not same key -> put to the stash (if the key exists in
+    // stash, replace, otherwise, insert)
+    // case 3: not exist -> if the key exists in stash, remove it and set exist
+    // flag to true, otherwise don't change the stash
+    // if (insertToStashFlag) {
+    //   printf("Insert to stash\n");
+    // }
+    bool existInStash = false;
+    // first pass, check if key exists in stash
+    for (StashEntry& pair : stash) {
+      bool matchFlag = pair.valid & (pair.entry.hash == extraHash);
+      obliMove(matchFlag, pair.entry.value, value);
+      existInStash |= matchFlag;
+      pair.valid &= insertToStashFlag | !matchFlag;
+    }
+    insertToStashFlag &= !existInStash;
+    exist |= existInStash;
+    // if (insertToStashFlag) {
+    //   printf("Still insert to stash\n");
+    // }
+    // second pass, insert to stash if needed
+    for (StashEntry& pair : stash) {
+      bool insertFlag = !pair.valid & insertToStashFlag;
+      obliMove(insertFlag, pair.entry, {extraHash, value});
+      pair.valid |= insertFlag;
+      insertToStashFlag &= !insertFlag;
+    }
+    return exist;
+  }
+
+  bool Find(const K& key, V& value) {
+    PositionType newPos = oram.GetRandPos();
+    PositionType pos = newPos;
+    UidType uid;
+    HExtra extraHash;
+    bool exist = keyPosMap.Update(key, pos, uid, extraHash, false);
+    ORAMEntry pair;
+    // std::cout << "Find key " << key << " at pos " << pos << " uid " << uid
+    //           << " " << (exist ? "exist" : "not exist") << " and write to "
+    //           << newPos << std::endl
+    //           << std::endl;
+    obliMove(!exist, uid, DUMMY<UidType>());
+    oram.Read(pos, uid, pair, newPos);
+    // std::cout << "Read result: key " << pair.key << " value: " << pair.value
+    // << std::endl;
+    // if (exist && pair.key != key) {
+    //   printf("False positive find\n");
+    //   std::cout << "Read result: key " << pair.key << " value: " <<
+    //   pair.value
+    //             << std::endl;
+    // }
+    exist &= pair.hash == extraHash;
+    value = pair.value;
+
+    for (StashEntry& pair : stash) {
+      bool matchFlag = pair.valid & (pair.entry.hash == extraHash);
+      obliMove(matchFlag, value, pair.entry.value);
+      exist |= matchFlag;
+    }
+    // oram.printState();
+    return exist;
+  }
+};
+}  // namespace ODSL

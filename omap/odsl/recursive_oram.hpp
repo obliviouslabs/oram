@@ -266,7 +266,12 @@ struct RecursiveORAM {
       PositionType nextPos = 0;
       // here we pre-calculate the next position, so that we can update the
       // position map in one go
-      PositionType nextNewPos = UniformRandom(oramSizes[level + 1] - 1);
+      PositionType nextNewPos =
+          level == (int)oramSizes.size() - 2
+              ? leafOram.GetRandPos()
+              : internalOrams[level + 1]
+                    .GetRandPos();  // UniformRandom(oramSizes[level
+                                    // + 1] - 1);
       auto updateFunc = [&](InternalNode& node) -> bool {
         PositionType localNextPos = 0;
         for (short i = 0; i < fan_out; ++i) {
@@ -299,6 +304,8 @@ struct RecursiveORAM {
     };
     // update the actual data
     leafOram.Update(pos, uids.back(), newPos, updateFunc);
+    // LeafNode dummyNode;
+    // accessor(dummyNode.data[0]);
   }
 
  private:
@@ -424,8 +431,13 @@ struct RecursiveORAM {
       PositionType* nextNewPos = writeBackBuffer.GetNewPoses(level + 1);
       InternalNode* node = writeBackBuffer.GetInternalNodes(level);
       UidType* uid = writeBackBuffer.GetUids(level);
-      for (size_t i = 0; i < address.size(); ++i) {
-        nextNewPos[i] = UniformRandom(oramSizes[level + 1] - 1);
+      // for (size_t i = 0; i < address.size(); ++i) {
+      //   nextNewPos[i] = UniformRandom(oramSizes[level + 1] - 1);
+      // }
+      if (level == (int)oramSizes.size() - 2) {
+        leafOram.GetRandNewPoses(nextNewPos, address.size());
+      } else {
+        internalOrams[level + 1].GetRandNewPoses(nextNewPos, address.size());
       }
 
       internalOrams[level].BatchReadAndRemove(address.size(), &pos[0], uid,

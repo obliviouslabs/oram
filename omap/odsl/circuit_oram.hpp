@@ -49,6 +49,7 @@ struct ORAM {
 
   int depth = 0;           // number of levels in the tree
   PositionType _size = 0;  // size of the ORAM (number of leaves in the tree)
+  PositionType capacity = 0;
 
   PositionType evictCounter = 0;  // counter for reverse lexicographic eviction
 
@@ -209,10 +210,10 @@ struct ORAM {
     static constexpr int numGroup = _evict_freq / _evict_group;
     static constexpr int remaining = _evict_freq % _evict_group;
     for (int i = 0; i < numGroup; ++i) {
-      evict<_evict_group>((evictCounter++) % size());
+      evict<_evict_group>((evictCounter++) % _size);
     }
     if constexpr (remaining) {
-      evict<remaining>((evictCounter++) % size());
+      evict<remaining>((evictCounter++) % _size);
     }
   }
 
@@ -310,7 +311,7 @@ struct ORAM {
         throw std::runtime_error("ORAM read failed");
       }
       --retry;
-      pos = (evictCounter++) % size();
+      pos = (evictCounter++) % _size;
       pathDepth = readPathAndGetNodeIdxArr(pos, nodeIdxArr);
     }
   }
@@ -397,27 +398,6 @@ struct ORAM {
   }
 
   /**
-   * @brief Get a random position in the ORAM
-   *
-   * @return PositionType the random position
-   */
-  INLINE PositionType getRandPos() { return UniformRandom(size() - 1); }
-
-  /**
-   * @brief Get a vector of random positions.
-   *
-   * @param batchSize The number of random positions to generate
-   * @return const std::vector<PositionType> The vector of random positions
-   */
-  const std::vector<PositionType> getRandNewPoses(uint64_t batchSize) {
-    std::vector<PositionType> newPos(batchSize);
-    for (int i = 0; i < batchSize; ++i) {
-      newPos[i] = getRandPos();
-    }
-    return newPos;
-  }
-
-  /**
    * @brief Duplicate the positions of blocks with the same uid. Keep the
    * position of the first block with the uid.
    *
@@ -449,7 +429,7 @@ struct ORAM {
   void deDuplicatePoses(uint64_t batchSize, PositionType* pos,
                         const UidType* uid) {
     for (uint64_t i = 1; i < batchSize; ++i) {
-      PositionType randPos = getRandPos();
+      PositionType randPos = GetRandPos();
       obliMove(uid[i] == uid[i - 1], pos[i], randPos);
     }
   }
@@ -503,16 +483,16 @@ struct ORAM {
     if (_size) {
       throw std::runtime_error("Circuit ORAM double initialization");
     }
-
-    _size = size;
+    capacity = size;
+    _size = divRoundUp(size, Z);
     int cacheLevel = GetMaxCacheLevel<T, Z, stashSize, PositionType, UidType,
-                                      check_freshness>(size, cacheBytes);
+                                      check_freshness>(_size, cacheBytes);
     if (cacheLevel < 0) {
       throw std::runtime_error("Circuit ORAM cache size too small");
     }
     TreeNode_ dummyNode = TreeNode_();
-    tree.InitWithDefault(size, dummyNode, cacheLevel);
-    depth = GetLogBaseTwo(size - 1) + 2;
+    tree.InitWithDefault(_size, dummyNode, cacheLevel);
+    depth = GetLogBaseTwo(_size - 1) + 2;
     if (depth > 64) {
       throw std::runtime_error("Circuit ORAM too large");
     }
@@ -528,10 +508,31 @@ struct ORAM {
    */
   static uint64_t GetMemoryUsage(PositionType size,
                                  uint64_t cacheBytes = MAX_CACHE_SIZE) {
+    size_t numPaths = divRoundUp(size, Z);
     return sizeof(Stash) +
            HeapTree_::GetMemoryUsage(
-               size, GetMaxCacheLevel<T, Z, stashSize, PositionType, UidType,
-                                      check_freshness>(size, cacheBytes));
+               numPaths,
+               GetMaxCacheLevel<T, Z, stashSize, PositionType, UidType,
+                                check_freshness>(numPaths, cacheBytes));
+  }
+
+  /**
+   * @brief Get a random position in the ORAM
+   *
+   * @return PositionType the random position
+   */
+  INLINE PositionType GetRandPos() { return UniformRandom(_size - 1); }
+
+  /**
+   * @brief Get the an array of random positions.
+   *
+   * @param newPos The array to store the random positions
+   * @param batchSize The number of random positions to generate
+   */
+  void GetRandNewPoses(PositionType* newPos, uint64_t batchSize) {
+    for (int i = 0; i < batchSize; ++i) {
+      newPos[i] = GetRandPos();
+    }
   }
 
   /**
@@ -568,7 +569,7 @@ struct ORAM {
    *
    * @return PositionType
    */
-  PositionType size() const { return _size; }
+  PositionType size() const { return capacity; }
 
   /**
    * @brief Read a block from the ORAM and assign it to a new position
@@ -584,10 +585,11 @@ struct ORAM {
     PositionType nodeIdxArr[64];
     int pathDepth = readPathAndGetNodeIdxArr(pos, nodeIdxArr);
 
-    ReadElementAndRemoveFromPath(
+    bool findFlag = ReadElementAndRemoveFromPath(
         path.begin(), path.begin() + (pathDepth * Z + stashSize), uid, out);
 
     Block_ newBlock(out, newPos, uid);
+    obliMove(!findFlag, newBlock.uid, DUMMY<UidType>());
     writeBlockWithRetry(newBlock, pos, pathDepth, nodeIdxArr);
     return newPos;
   }
@@ -601,7 +603,7 @@ struct ORAM {
    * @return PositionType The random new position of the block
    */
   PositionType Read(PositionType pos, const UidType& uid, T& out) {
-    PositionType newPos = getRandPos();
+    PositionType newPos = GetRandPos();
     return Read(pos, uid, out, newPos);
   }
 
@@ -616,7 +618,7 @@ struct ORAM {
    */
   template <const int _evict_freq = evict_freq>
   PositionType Write(const UidType& uid, const T& in, PositionType newPos) {
-    PositionType pos = (evictCounter++) % size();
+    PositionType pos = (evictCounter++) % _size;
     PositionType nodeIdxArr[64];
     int pathDepth = readPathAndGetNodeIdxArr(pos, nodeIdxArr);
     Block_ newBlock(in, newPos, uid);
@@ -635,7 +637,7 @@ struct ORAM {
    */
   template <const int _evict_freq = evict_freq>
   PositionType Write(const UidType& uid, const T& in) {
-    PositionType newPos = getRandPos();
+    PositionType newPos = GetRandPos();
     return Write<evict_freq>(uid, in, newPos);
   }
 
@@ -737,7 +739,7 @@ struct ORAM {
   PositionType Update(PositionType pos, const UidType& uid,
                       const Func& updateFunc, T& out,
                       const UidType& updatedUid) {
-    PositionType newPos = getRandPos();
+    PositionType newPos = GetRandPos();
     return Update(pos, uid, newPos, updateFunc, out, updatedUid);
   }
 
@@ -890,7 +892,7 @@ struct ORAM {
 
         for (uint32_t pathOffset = 0;
              pathOffset < prefetchBatchSize * numPathPerAccess; ++pathOffset) {
-          PositionType p = prefetchEvictCounter++ % size();
+          PositionType p = prefetchEvictCounter++ % _size;
           pathDepths[pathOffset] = treeAccessor.GetNodeIdxArrAndPrefetch(
               nodeIdxArrs[pathOffset], p, prefetchReceipts[pathOffset]);
         }
@@ -906,7 +908,7 @@ struct ORAM {
           bool success = false;
           for (int k = 0; k < numPathPerAccess; ++k, ++pathOffset) {
             int pathDepth = pathDepths[pathOffset];
-            PositionType p = evictCounter++ % size();
+            PositionType p = evictCounter++ % _size;
             readPathFromAccessor(treeAccessor, p, pathDepth,
                                  nodeIdxArrs[pathOffset],
                                  prefetchReceipts[pathOffset]);
@@ -936,7 +938,7 @@ struct ORAM {
 #endif
     PositionType nodeIdxArr[64];
     for (uint64_t i = 0; i < batchSize; ++i) {
-      PositionType p = evictCounter++ % size();
+      PositionType p = evictCounter++ % _size;
       int pathDepth = readPathAndGetNodeIdxArr(p, nodeIdxArr);
       Block_ toWrite = {in[i], newPos[i], DUMMY<UidType>()};
       bool writeBack = writeBackFlags[i];
@@ -1016,9 +1018,34 @@ struct ORAM {
   std::vector<PositionType> BatchUpdate(uint64_t batchSize, PositionType* pos,
                                         const UidType* uid,
                                         const Func& updateFunc) {
-    const std::vector<PositionType>& newPoses = getRandNewPoses(batchSize);
+    std::vector<PositionType> newPoses(batchSize);
+    GetRandNewPoses(&newPoses[0], batchSize);
     BatchUpdate(batchSize, pos, uid, &newPoses[0], updateFunc);
     return duplicateNewPoses(batchSize, &newPoses[0], uid);
+  }
+
+  void printState() {
+#ifndef ENCLAVE_MODE
+    std::cout << "ORAM state: " << std::endl;
+    std::cout << "stash: " << std::endl;
+    for (int i = 0; i < stashSize; ++i) {
+      std::cout << path[i] << " ";
+    }
+    std::cout << std::endl;
+    for (int i = 0; i < _size; ++i) {
+      PositionType nodeIdxArr[64];
+      int pathDepth = tree.GetNodeIdxArr(nodeIdxArr, i);
+      std::cout << "\npath " << i << ": ";
+      for (int j = 0; j < pathDepth; ++j) {
+        const TreeNode_& node = tree.GetNodeByIdx(nodeIdxArr[j]);
+        std::cout << "[";
+        for (int k = 0; k < Z; ++k) {
+          std::cout << node.bucket.blocks[k] << " ";
+        }
+        std::cout << "] ";
+      }
+    }
+#endif
   }
 };
 

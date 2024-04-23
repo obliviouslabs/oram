@@ -514,6 +514,37 @@ struct ORAM {
     nextUid += (UidType)real;
     return res;
   }
+
+  /**
+   * @brief Get a random position in the ORAM
+   *
+   * @return PositionType the random position
+   */
+  INLINE PositionType GetRandPos() {
+    if (isLinear) {
+      return 0;
+    } else if (isCached) {
+      return cachedTreeOram->GetRandPos();
+    } else {
+      return treeOram->GetRandPos();
+    }
+  }
+
+  /**
+   * @brief Get the an array of random positions.
+   *
+   * @param newPos The array to store the random positions
+   * @param batchSize The number of random positions to generate
+   */
+  void GetRandNewPoses(PositionType* newPos, uint64_t batchSize) {
+    if (isLinear) {
+      return;
+    } else if (isCached) {
+      cachedTreeOram->GetRandNewPoses(newPos, batchSize);
+    } else {
+      treeOram->GetRandNewPoses(newPos, batchSize);
+    }
+  }
 };
 
 }  // namespace ODSL::AdaptiveORAM

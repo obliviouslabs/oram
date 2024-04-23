@@ -343,17 +343,19 @@ TEST(CircuitORAM, OverflowHandling) {
 }
 
 TEST(CircuitORAM, StashLoad) {
-  GTEST_SKIP();
+  // GTEST_SKIP();
   size_t memSize = 1UL << 16;
   static constexpr int Z = 2;
   static constexpr int stashSize = 50;
   ODSL::CircuitORAM::ORAM<int, Z, stashSize, uint32_t, uint32_t, 4096, false>
       oram(memSize);
   size_t warmupWindowCount = 1e5;
-  size_t windowCount = 1e7;
+  size_t windowCount = 1e6;
   size_t windowSize = 10;
-  std::vector<uint32_t> posMap(memSize);
-  for (int i = 0; i < memSize; ++i) {
+  double overloadFactor = 1.1;
+  size_t elementCount = memSize * overloadFactor;
+  std::vector<uint32_t> posMap(elementCount);
+  for (int i = 0; i < elementCount; ++i) {
     posMap[i] = oram.Write(i, 0);
   }
   std::vector<uint64_t> elementDistribute(60);

@@ -81,11 +81,7 @@ struct TestElement {
 
 template <const size_t size>
 struct Bytes {
- private:
   uint8_t data[size];
-
- public:
-  Bytes() { memset(data, 0, size); }
 
   bool operator==(const Bytes<size>& other) const {
     return obliCheckEqual<size>(data, other.data);
@@ -101,11 +97,20 @@ struct Bytes {
 
   const uint8_t* GetData() const { return data; }
 
+  static consteval inline Bytes DUMMY() {
+    Bytes ret;
+    for (size_t i = 0; i < size; ++i) {
+      ret.data[i] = 0xff;
+    }
+    return ret;
+  }
+
 // out stream
 #ifndef ENCLAVE_MODE
   friend std::ostream& operator<<(std::ostream& o, const Bytes<size>& x) {
     for (size_t i = 0; i < size; ++i) {
-      o << std::hex << std::setw(2) << std::setfill('0') << (int)x.data[i];
+      o << std::hex << std::setw(2) << std::setfill('0') << (int)x.data[i]
+        << std::dec;
     }
     return o;
   }

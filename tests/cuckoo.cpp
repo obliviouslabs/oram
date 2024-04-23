@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 
 #include "odsl/omap.hpp"
+#include "odsl/omap_improved.hpp"
 #include "unordered_map"
 
 using namespace ODSL;
@@ -204,7 +205,7 @@ void testOHashMapFindBatch() {
       for (int i = 0; i < batchSize; ++i) {
         keys[i] = rand() % keySpace;
       }
-      std::vector<uint8_t> findExistFlag;
+      std::vector<uint> findExistFlag;
       map.FindBatchDeferWriteBack(keys.begin(), keys.end(), vals.begin());
 #pragma omp parallel for num_threads(2)
       for (int i = 0; i < 2; ++i) {
@@ -269,9 +270,42 @@ void testReplaceCount() {
   }
 }
 
+void testOMap() {
+  for (int r = 0; r < 1e2; ++r) {
+    int mapSize = 500;
+    int keySpace = 1000;
+    OMap<int, int> map(mapSize);
+    map.Init();
+    std::unordered_map<int, int> std_map;
+    for (int r = 0; r < 2 * keySpace; ++r) {
+      if (std_map.size() < mapSize) {
+        int key = rand() % keySpace;
+        int value = rand();
+
+        map.Insert(key, value);
+
+        std_map[key] = value;
+      }
+
+      int key = rand() % keySpace;
+      int value;
+      bool foundFlag = map.Find(key, value);
+      auto it = std_map.find(key);
+      if (it != std_map.end()) {
+        ASSERT_TRUE(foundFlag);
+        ASSERT_EQ(value, it->second);
+      } else {
+        ASSERT_FALSE(foundFlag);
+      }
+    }
+  }
+}
+
 TEST(Cuckoo, OHashMapNonOblivious) { testOHashMap<false>(); }
 
 TEST(Cuckoo, OHashMapOblivious) { testOHashMap<true>(); }
+
+TEST(Cuckoo, OMapOblivious) { testOMap(); }
 
 TEST(Cuckoo, OHashMapInitFromReaderNonOblivious) {
   testOHashMapInitFromReader<false>();
