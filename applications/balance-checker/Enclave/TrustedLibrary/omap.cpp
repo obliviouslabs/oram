@@ -23,7 +23,7 @@ uint32_t enclave_create_report(const sgx_target_info_t* p_qe3_target,
 
 using namespace ODSL;
 EM::Backend::MemServerBackend* EM::Backend::g_DefaultBackend = nullptr;
-OMap<key_type, val_type> omap;
+OHashMap<key_type, val_type> omap;
 // lock for the global OMAP
 // TODO: use fine grained lock within omap
 sgx_spinlock_t omap_lock = SGX_SPINLOCK_INITIALIZER;
@@ -136,7 +136,7 @@ int ecall_omap_update(uint8_t* key, uint8_t* val, uint32_t keyLength,
   const key_type& k = *reinterpret_cast<key_type*>(key);
   const val_type& v = *reinterpret_cast<val_type*>(val);
   OMapCritical section;
-  bool res = omap.update(k, v);
+  bool res = omap.Update(k, v);
   return (int)res;
 }
 
@@ -182,7 +182,7 @@ void ecall_handle_encrypted_query(uint8_t* encryptedQuery,
   // printf("\n");
   // decrypt query using shared key
   Query query;
-  encQuery->encQuery.Decrypt(query, shared_key_ptr, encQuery->iv);
+  encQuery->encQuery.Decrypt(query, encQuery->iv, shared_key_ptr);
   val_type v;
   Response response;
   EncryptedResponse encResponse;
@@ -197,6 +197,6 @@ void ecall_handle_encrypted_query(uint8_t* encryptedQuery,
   }
 
   sgx_read_rand(encResponse.iv, IV_SIZE);
-  encResponse.encResponse.Encrypt(response, shared_key_ptr, encResponse.iv);
+  encResponse.encResponse.Encrypt(response, encResponse.iv, shared_key_ptr);
   memcpy(encryptedResponse, &encResponse, sizeof(EncryptedResponse));
 }

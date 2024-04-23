@@ -1,5 +1,5 @@
-#include <utility>
 #include <stdexcept>
+#include <utility>
 #ifdef ENCLAVE_MODE_ENCLAVE
 // #include "../Enclave.h"
 #include "Enclave_t.h"
@@ -14,11 +14,6 @@
 
 #include "common/encutils.hpp"
 #define memset_s(s, smax, c, n) memset(s, c, n);
-
-#define SGXSD_AES_GCM_IV_SIZE IV_SIZE
-#define SGXSD_AES_GCM_MAC_SIZE MAC_SIZE
-#define SGXSD_AES_GCM_KEY_SIZE AES_BLOCK_SIZE
-#define SGXSD_CURVE25519_KEY_SIZE AES_BLOCK_SIZE
 
 RandGen default_rand;
 // random AES key:
@@ -115,13 +110,14 @@ uint64_t secure_hash_with_salt(const uint8_t *data, size_t data_size,
 bool sgxsd_aes_gcm_run(bool encrypt, const void *p_src, uint32_t src_len,
                        void *p_dst, const uint8_t p_iv[SGXSD_AES_GCM_IV_SIZE],
                        const void *p_aad, uint32_t aad_len,
-                       uint8_t p_mac[SGXSD_AES_GCM_MAC_SIZE]) {
+                       uint8_t p_mac[SGXSD_AES_GCM_MAC_SIZE],
+                       br_aes_x86ni_ctr_keys *aes_ctx_ptr) {
   if (((p_src == NULL || p_dst == NULL) && src_len != 0) || p_iv == NULL ||
       (p_aad == NULL && aad_len != 0) || p_mac == NULL) {
     return 0;
   }
   br_gcm_context aes_gcm_ctx;
-  br_gcm_init(&aes_gcm_ctx, &aes_ctx.vtable, &br_ghash_pclmul);
+  br_gcm_init(&aes_gcm_ctx, &(aes_ctx_ptr->vtable), &br_ghash_pclmul);
   br_gcm_reset(&aes_gcm_ctx, p_iv, SGXSD_AES_GCM_IV_SIZE);
   if (aad_len != 0) {
     br_gcm_aad_inject(&aes_gcm_ctx, p_aad, aad_len);
@@ -153,41 +149,48 @@ bool sgxsd_aes_gcm_run(bool encrypt, const void *p_src, uint32_t src_len,
 void aes_256_gcm_encrypt(uint64_t plaintextSize, uint8_t *plaintext,
                          uint8_t iv[SGXSD_AES_GCM_IV_SIZE],
                          uint8_t tag[SGXSD_AES_GCM_MAC_SIZE],
-                         uint8_t *ciphertext) {
+                         uint8_t *ciphertext,
+                         br_aes_x86ni_ctr_keys *aes_ctx_ptr) {
   sgxsd_aes_gcm_run(true, plaintext, plaintextSize, ciphertext, iv, nullptr, 0,
-                    tag);
+                    tag, aes_ctx_ptr);
 }
 
 bool aes_256_gcm_decrypt(uint64_t ciphertextSize, uint8_t *ciphertext,
                          const uint8_t iv[SGXSD_AES_GCM_IV_SIZE],
                          uint8_t tag[SGXSD_AES_GCM_MAC_SIZE],
-                         uint8_t *plaintext) {
+                         uint8_t *plaintext,
+                         br_aes_x86ni_ctr_keys *aes_ctx_ptr) {
   return sgxsd_aes_gcm_run(false, ciphertext, ciphertextSize, plaintext, iv,
-                           nullptr, 0, tag);
+                           nullptr, 0, tag, aes_ctx_ptr);
 }
 
 bool sgxsd_aes_ctr_run(bool encrypt, const void *p_src, uint32_t src_len,
-                       void *p_dst, const uint8_t p_iv[SGXSD_AES_GCM_IV_SIZE]) {
+                       void *p_dst, const uint8_t p_iv[SGXSD_AES_GCM_IV_SIZE],
+                       br_aes_x86ni_ctr_keys *aes_ctx_ptr) {
   if (((p_src == NULL || p_dst == NULL) && src_len != 0) || p_iv == NULL) {
     return 0;
   }
   if (src_len != 0) {
     memmove(p_dst, p_src, src_len);
-    br_aes_x86ni_ctr_run(&aes_ctx, p_iv, 0, p_dst, src_len);
+    br_aes_x86ni_ctr_run(aes_ctx_ptr, p_iv, 0, p_dst, src_len);
   }
   return 1;
 }
 
 void aes_256_ctr_encrypt(uint64_t plaintextSize, uint8_t *plaintext,
                          const uint8_t iv[SGXSD_AES_GCM_IV_SIZE],
-                         uint8_t *ciphertext) {
-  sgxsd_aes_ctr_run(true, plaintext, plaintextSize, ciphertext, iv);
+                         uint8_t *ciphertext,
+                         br_aes_x86ni_ctr_keys *aes_ctx_ptr) {
+  sgxsd_aes_ctr_run(true, plaintext, plaintextSize, ciphertext, iv,
+                    aes_ctx_ptr);
 }
 
 bool aes_256_ctr_decrypt(uint64_t ciphertextSize, uint8_t *ciphertext,
                          const uint8_t iv[SGXSD_AES_GCM_IV_SIZE],
-                         uint8_t *plaintext) {
-  return sgxsd_aes_ctr_run(false, ciphertext, ciphertextSize, plaintext, iv);
+                         uint8_t *plaintext,
+                         br_aes_x86ni_ctr_keys *aes_ctx_ptr) {
+  return sgxsd_aes_ctr_run(false, ciphertext, ciphertextSize, plaintext, iv,
+                           aes_ctx_ptr);
 }
 
 #ifndef ENCLAVE_MODE_ENCLAVE

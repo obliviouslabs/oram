@@ -1,10 +1,10 @@
 #pragma once
+#include <bearssl.h>
+
 #include <cassert>
 #include <cstdint>
 #include <random>
-
 #ifdef ENCLAVE_MODE
-#include <bearssl.h>
 
 #include "bearssl_rand.h"
 #include "sgx_tcrypto.h"
@@ -26,18 +26,29 @@
 #ifndef MAC_SIZE
 #define MAC_SIZE 16
 #endif
+#define SGXSD_AES_GCM_IV_SIZE IV_SIZE
+#define SGXSD_AES_GCM_MAC_SIZE MAC_SIZE
+#define SGXSD_AES_GCM_KEY_SIZE AES_BLOCK_SIZE
+#define SGXSD_CURVE25519_KEY_SIZE AES_BLOCK_SIZE
+#define aex_ctx_t br_aes_x86ni_ctr_keys
+
+extern aex_ctx_t aes_ctx;
 
 void aes_256_gcm_encrypt(uint64_t plaintextSize, uint8_t* plaintext,
                          uint8_t iv[IV_SIZE], uint8_t tag[MAC_SIZE],
-                         uint8_t* ciphertext);
+                         uint8_t* ciphertext,
+                         br_aes_x86ni_ctr_keys* aes_ctx_ptr = &aes_ctx);
 bool aes_256_gcm_decrypt(uint64_t ciphertextSize, uint8_t* ciphertext,
                          const uint8_t iv[IV_SIZE], uint8_t tag[MAC_SIZE],
-                         uint8_t* plaintext);
+                         uint8_t* plaintext,
+                         br_aes_x86ni_ctr_keys* aes_ctx_ptr = &aes_ctx);
 
 void aes_256_ctr_encrypt(uint64_t plaintextSize, uint8_t* plaintext,
-                         const uint8_t iv[IV_SIZE], uint8_t* ciphertext);
+                         const uint8_t iv[IV_SIZE], uint8_t* ciphertext,
+                         br_aes_x86ni_ctr_keys* aes_ctx_ptr = &aes_ctx);
 bool aes_256_ctr_decrypt(uint64_t ciphertextSize, uint8_t* ciphertext,
-                         const uint8_t iv[IV_SIZE], uint8_t* plaintext);
+                         const uint8_t iv[IV_SIZE], uint8_t* plaintext,
+                         br_aes_x86ni_ctr_keys* aes_ctx_ptr = &aes_ctx);
 
 template <class result_type_param = uint64_t>
 class RandomDevice : public std::random_device {
@@ -94,7 +105,6 @@ uint64_t secure_hash_with_salt(const T& data, const uint8_t (&salt)[16]) {
 }
 
 #ifndef ENCLAVE_MODE_ENCLAVE
-#include <bearssl.h>
 
 #include <cstdint>
 #include <cstring>

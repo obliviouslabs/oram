@@ -1162,6 +1162,76 @@ struct OHashMap {
    * @param isDummy whether the search is dummy
    * @return true if the key is found, false otherwise
    */
+  bool Update(const K& key, const V& value, bool isDummy = false) {
+    bool found = false;
+    if constexpr (!isOblivious) {
+      if (isDummy) {
+        return false;
+      }
+      PositionType idx0 = indexer.getHashIdx0(key);
+      auto updateFunc = [&](BucketType& bucket) {
+        for (int i = 0; i < bucketSize; ++i) {
+          auto& entry = bucket.entries[i];
+          if (entry.valid && entry.key == key) {
+            entry.value = value;
+            found = true;
+            return;
+          }
+        }
+      };
+      updateHelper(idx0, table0, updateFunc);
+      if (found) {
+        return true;
+      }
+      PositionType idx1 = indexer.getHashIdx1(key);
+      updateHelper(idx1, table1, updateFunc);
+      if (found) {
+        return true;
+      }
+      // found = searchStash(key, value, stash);
+      for (auto it = stash.begin(); it != stash.end(); ++it) {
+        if (it->key == key && it->valid) {
+          it->value = value;
+          return true;
+        }
+      }
+      return false;
+    } else {
+      PositionType idx0, idx1;
+      indexer.getHashIndices(key, idx0, idx1);
+
+      obliMove(isDummy, idx0, UniformRandom(tableSize - 1));
+
+      obliMove(isDummy, idx1, UniformRandom(tableSize - 1));
+
+      auto updateFunc = [&](BucketType& bucket) {
+        for (int i = 0; i < bucketSize; ++i) {
+          auto& entry = bucket.entries[i];
+          bool matchFlag = entry.valid & (entry.key == key);
+          obliMove(matchFlag, entry.value, value);
+          found |= matchFlag;
+        }
+      };
+      updateHelper(idx0, table0, updateFunc);
+      updateHelper(idx1, table1, updateFunc);
+      for (auto it = stash.begin(); it != stash.end(); ++it) {
+        bool matchFlag = (it->key == key) & it->valid;
+        obliMove(matchFlag, it->value, value);
+        found |= matchFlag;
+      }
+      return found & (!isDummy);
+    }
+  }
+
+  /**
+   * @brief Find the value of a key. Depending on whether the hash map is
+   * oblivious, the function may reveal the number of comparisons.
+   *
+   * @param key the key to search
+   * @param value the value to return
+   * @param isDummy whether the search is dummy
+   * @return true if the key is found, false otherwise
+   */
   bool Find(const K& key, V& value, bool isDummy = false) {
     if constexpr (!isOblivious) {
       if (isDummy) {
