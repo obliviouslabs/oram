@@ -1076,6 +1076,7 @@ struct OHashMap {
         if (replaceIfExist<hideDummy>(stash, entryToInsert)) {
           exist = true;
           inserted = true;
+          return;
           // found in stash
         }
         if (insertIfEmpty(bucket0, entryToInsert)) {

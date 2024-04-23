@@ -8,7 +8,7 @@ using namespace ODSL;
 
 template <bool isOblivious>
 void testOHashMap() {
-  for (int r = 0; r < 1e2; ++r) {
+  for (int r = 0; r < 1e3; ++r) {
     int mapSize = 50;
     int keySpace = 100;
     OHashMap<int, int, isOblivious> map(mapSize);
@@ -35,6 +35,23 @@ void testOHashMap() {
         ASSERT_EQ(value, it->second);
       } else {
         ASSERT_FALSE(foundFlag);
+      }
+
+      if (rand() % 2 == 0) {
+        int key = rand() % keySpace;
+        bool foundFlag;
+        if constexpr (isOblivious) {
+          foundFlag = map.OErase(key);
+        } else {
+          foundFlag = map.Erase(key);
+        }
+        auto it = std_map.find(key);
+        if (it != std_map.end()) {
+          ASSERT_TRUE(foundFlag);
+          std_map.erase(it);
+        } else {
+          ASSERT_FALSE(foundFlag);
+        }
       }
     }
   }
