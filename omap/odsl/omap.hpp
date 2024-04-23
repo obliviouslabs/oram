@@ -1155,11 +1155,12 @@ struct OHashMap {
   }
 
   /**
-   * @brief Find the value of a key. Depending on whether the hash map is
-   * oblivious, the function may reveal the number of comparisons.
+   * @brief Update the value of a key. No operation is performed if the key does
+   * not exist. Depending on whether the hash map is oblivious, the function may
+   * reveal the number of comparisons.
    *
-   * @param key the key to search
-   * @param value the value to return
+   * @param key the key to update
+   * @param value the value to update
    * @param isDummy whether the search is dummy
    * @return true if the key is found, false otherwise
    */

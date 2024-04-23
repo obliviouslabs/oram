@@ -53,6 +53,19 @@ void testOHashMap() {
           ASSERT_FALSE(foundFlag);
         }
       }
+
+      if (rand() % 2 == 0) {
+        int key = rand() % keySpace;
+        int value = rand();
+        bool found = map.Update(key, value);
+        auto it = std_map.find(key);
+        if (it != std_map.end()) {
+          ASSERT_TRUE(found);
+          it->second = value;
+        } else {
+          ASSERT_FALSE(found);
+        }
+      }
     }
   }
 }
