@@ -5,7 +5,21 @@ include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 
 #[cfg(test)]
 mod tests {
+
     use super::*;
+    use std::ffi::c_void;
+
+    #[test]
+    fn test_basic() {
+        let testKey: TestKey<u64>;
+        testKey = TestKey {
+            key: 123u64,
+            val: 456u32,
+            _phantom_0: std::marker::PhantomData,
+        };
+        assert_eq!(testKey.key, 123u64);
+        assert_eq!(testKey.val, 456u32);
+    }
 
     #[test]
     fn test_oram() {
@@ -22,19 +36,35 @@ mod tests {
         assert_eq!(rv2, 42);
     }
 
+    fn getConstCVoidPtr<T>(valptr: &T) -> *const c_void {
+        let ptr = valptr as *const _ as *const c_void;
+        ptr
+    }
+
+    fn getMutCVoidPtr<T>(valptr: &mut T) -> *mut c_void {
+        let ptr = valptr as *mut _ as *mut c_void;
+        ptr
+    }
+
     #[test]
     fn test_omap() {
         let sz = 10000u32;
         let mut oraminterface: OMapBindingSingleton = unsafe { OMapBindingSingleton::new() };
         unsafe {
             oraminterface.InitEmpty(sz);
-            oraminterface.Insert(123u64, 456u64);
-            oraminterface.OInsert(789u64, 101112u64);
+            let key1 = 123u64;
+            let key2 = 789u64;
+            let rv1: u64 = 456;
+            let rv2: u64 = 101112;
+            oraminterface.Insert(getConstCVoidPtr(&key1), getConstCVoidPtr(&rv1));
+            oraminterface.OInsert(getConstCVoidPtr(&key2), getConstCVoidPtr(&rv2));
         };
         let mut rv1: u64 = 0;
         let mut rv2: u64 = 0;
-        let flag1 = unsafe { oraminterface.Find(123u64, &mut rv1) };
-        let flag2 = unsafe { oraminterface.Find(789u64, &mut rv2) };
+        let flag1 =
+            unsafe { oraminterface.Find(getConstCVoidPtr(&123u64), getMutCVoidPtr(&mut rv1)) };
+        let flag2 =
+            unsafe { oraminterface.Find(getConstCVoidPtr(&789u64), getMutCVoidPtr(&mut rv2)) };
         assert_eq!(rv1, 456u64);
         assert_eq!(rv2, 101112u64);
         assert_eq!(flag1, true);
@@ -47,19 +77,30 @@ mod tests {
         let mut oraminterface: OMapBindingSingleton = unsafe { OMapBindingSingleton::new() };
         unsafe {
             oraminterface.StartInit(sz);
-            oraminterface.Insert(123u64, 456u64);
-            oraminterface.Insert(789u64, 101112u64);
+            let key1 = 123u64;
+            let key2 = 789u64;
+            let rv1: u64 = 456;
+            let rv2: u64 = 101112;
+            oraminterface.Insert(getConstCVoidPtr(&key1), getConstCVoidPtr(&rv1));
+            oraminterface.OInsert(getConstCVoidPtr(&key2), getConstCVoidPtr(&rv2));
             oraminterface.FinishInit();
-            oraminterface.Insert(432u64, 10u64);
+            let key3 = 432u64;
+            let rv3: u64 = 10;
+            oraminterface.Insert(getConstCVoidPtr(&key3), getConstCVoidPtr(&rv3));
         };
         let mut rv1: u64 = 0;
         let mut rv2: u64 = 0;
         let mut rv3: u64 = 0;
         let mut rv4: u64 = 0;
-        let flag1 = unsafe { oraminterface.Find(123u64, &mut rv1) };
-        let flag2 = unsafe { oraminterface.Find(789u64, &mut rv2) };
-        let flag3 = unsafe { oraminterface.Find(432u64, &mut rv3) };
-        let flag4 = unsafe { oraminterface.Find(999u64, &mut rv4) };
+
+        let flag1 =
+            unsafe { oraminterface.Find(getConstCVoidPtr(&123u64), getMutCVoidPtr(&mut rv1)) };
+        let flag2 =
+            unsafe { oraminterface.Find(getConstCVoidPtr(&789u64), getMutCVoidPtr(&mut rv2)) };
+        let flag3 =
+            unsafe { oraminterface.Find(getConstCVoidPtr(&432u64), getMutCVoidPtr(&mut rv3)) };
+        let flag4 =
+            unsafe { oraminterface.Find(getConstCVoidPtr(&999u64), getMutCVoidPtr(&mut rv4)) };
         assert_eq!(rv1, 456u64);
         assert_eq!(rv2, 101112u64);
         assert_eq!(rv3, 10u64);
@@ -76,19 +117,30 @@ mod tests {
         let mut oraminterface: OMapBindingSingleton = unsafe { OMapBindingSingleton::new() };
         unsafe {
             oraminterface.StartInitExternal(sz, 2000000u64);
-            oraminterface.Insert(123u64, 456u64);
-            oraminterface.Insert(789u64, 101112u64);
+            let key1 = 123u64;
+            let key2 = 789u64;
+            let rv1: u64 = 456;
+            let rv2: u64 = 101112;
+            oraminterface.Insert(getConstCVoidPtr(&key1), getConstCVoidPtr(&rv1));
+            oraminterface.OInsert(getConstCVoidPtr(&key2), getConstCVoidPtr(&rv2));
             oraminterface.FinishInit();
-            oraminterface.Insert(432u64, 10u64);
+            let key3 = 432u64;
+            let rv3: u64 = 10;
+            oraminterface.Insert(getConstCVoidPtr(&key3), getConstCVoidPtr(&rv3));
         };
         let mut rv1: u64 = 0;
         let mut rv2: u64 = 0;
         let mut rv3: u64 = 0;
         let mut rv4: u64 = 0;
-        let flag1 = unsafe { oraminterface.Find(123u64, &mut rv1) };
-        let flag2 = unsafe { oraminterface.Find(789u64, &mut rv2) };
-        let flag3 = unsafe { oraminterface.Find(432u64, &mut rv3) };
-        let flag4 = unsafe { oraminterface.Find(999u64, &mut rv4) };
+
+        let flag1 =
+            unsafe { oraminterface.Find(getConstCVoidPtr(&123u64), getMutCVoidPtr(&mut rv1)) };
+        let flag2 =
+            unsafe { oraminterface.Find(getConstCVoidPtr(&789u64), getMutCVoidPtr(&mut rv2)) };
+        let flag3 =
+            unsafe { oraminterface.Find(getConstCVoidPtr(&432u64), getMutCVoidPtr(&mut rv3)) };
+        let flag4 =
+            unsafe { oraminterface.Find(getConstCVoidPtr(&999u64), getMutCVoidPtr(&mut rv4)) };
         assert_eq!(rv1, 456u64);
         assert_eq!(rv2, 101112u64);
         assert_eq!(rv3, 10u64);

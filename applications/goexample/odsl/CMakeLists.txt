@@ -22,7 +22,7 @@ set(CMAKE_CXX_FLAGS "${CMAKE_C_FLAGS} -march=native -mtune=native")
 set(CPP_PARENT_PATH "../../../omap")
 
 
-set(SOURCES odsl.i ${CPP_PARENT_PATH}/common/encutils.cpp ${CPP_PARENT_PATH}/common/tracing/tracer.cpp ${CPP_PARENT_PATH}/external_memory/server/serverBackend.cpp ${CPP_PARENT_PATH}/interface/interface.cpp)
+set(SOURCES odsl.i ${CPP_PARENT_PATH}/common/encutils.cpp ${CPP_PARENT_PATH}/common/tracing/tracer.cpp ${CPP_PARENT_PATH}/external_memory/server/serverBackend.cpp)
 
 # Add SWIG module
 swig_add_library(mylib TYPE SHARED LANGUAGE go SOURCES ${SOURCES})

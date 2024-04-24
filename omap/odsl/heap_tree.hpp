@@ -32,7 +32,7 @@ struct HeapTree {
   /** By reducing the size of each packed subtree and store the packed tree in
    * each level following the reverse lexico order. We can trade off locality on
    * each path to locality in eviction*/
-  static consteval int findBestLexicoGroupLevel() {
+  static constexpr int findBestLexicoGroupLevel() {
     double minMissRate = 1.0 + double(evict_freq);
     int bestLevel = 0;
     for (int i = 0; i < node_per_page_log2; ++i) {
@@ -234,7 +234,7 @@ struct HeapTree {
 
   struct BatchAccessor {
     HeapTree& tree;
-    Vec::BatchAccessor arrAccessor;
+    typename Vec::BatchAccessor arrAccessor;
 
     BatchAccessor(HeapTree& _tree) : tree(_tree), arrAccessor(_tree.arr) {}
 

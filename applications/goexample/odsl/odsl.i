@@ -1,10 +1,10 @@
 %module odsl
 %{
 #include "stdint.h"
-#include "interface/common_interface.hpp"
-#include "interface/omap_interface.hpp"
-#include "interface/par_omap_interface.hpp"
-#include "interface/recoram_interface.hpp"
+#include "interface/common_impl.hpp"
+#include "interface/omap_impl.hpp"
+#include "interface/par_omap_impl.hpp"
+#include "interface/recoram_impl.hpp"
 %}
 
 /* Let's just grab the original header file here */
