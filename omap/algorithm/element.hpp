@@ -83,6 +83,10 @@ template <const size_t size>
 struct Bytes {
   uint8_t data[size];
 
+  Bytes() = default;
+  
+  explicit Bytes(const void* _data) { memcpy(data, _data, size); }
+
   bool operator==(const Bytes<size>& other) const {
     return obliCheckEqual<size>(data, other.data);
   }

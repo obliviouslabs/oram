@@ -2,6 +2,7 @@ package odsl
 
 import (
 	"testing"
+	"unsafe"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -15,13 +16,19 @@ func TestORAM(t *testing.T) {
 	assert.Equal(t, uint64(2), val)
 }
 
+func getUintPtr(num *uint64) uintptr {
+	return uintptr(unsafe.Pointer(num))
+}
+
 func TestOMap(t *testing.T) {
 	var omap OMapBindingSingleton
 	omap = NewOMapBindingSingleton()
 	omap.InitEmpty(1000)
-	omap.Insert(1, 2)
+	key := uint64(1)
+	val := uint64(2)
+	omap.Insert(getUintPtr(&key), getUintPtr(&val))
 	var findRes uint64
-	foundFlag := omap.Find(1, &findRes)
+	foundFlag := omap.Find(getUintPtr(&key), getUintPtr(&findRes))
 	assert.Equal(t, true, foundFlag)
 	assert.Equal(t, uint64(2), findRes)
 }

@@ -3,16 +3,16 @@
 
 typedef void* omap_t;
 typedef void* initializer_t;
-typedef uint64_t K;
-typedef uint64_t V;
+
 /**
  * @brief Binds to OMap implementation.
  *
  */
-struct OMapBindingSingleton {
+template <uint64_t key_size, uint64_t val_size>
+struct OMapGenericBinding {
   omap_t omap;                // pointer to the OMap object
   initializer_t initializer;  // pointer to the OMap initializer
-  OMapBindingSingleton();
+  OMapGenericBinding();
 
   /**
    * @brief Initializes an empty OMap. Assumes sufficiently large enclave size.
@@ -40,7 +40,7 @@ struct OMapBindingSingleton {
    * @return Always false if called during initialization. Otherwise, returns
    * true if the key already exists, false otherwise.
    */
-  bool Insert(K key, V val);
+  bool Insert(const void* keyPtr, const void* valPtr);
 
   /**
    * @brief Inserts a key-value pair into the map obliviously. The method can be
@@ -53,7 +53,7 @@ struct OMapBindingSingleton {
    * @return true
    * @return false
    */
-  bool OInsert(K key, V val);
+  bool OInsert(const void* keyPtr, const void* valPtr);
 
   /**
    * @brief Finds a key in the map. The method is oblivious.
@@ -62,7 +62,7 @@ struct OMapBindingSingleton {
    * @param val Outputs the value corresponding to the key.
    * @return true if the key is found, false otherwise.
    */
-  bool Find(K key, V& val);
+  bool Find(const void* keyPtr, void* valPtr);
 
   /**
    * @brief Erases a key from the map. The method is not oblivious, and can leak
@@ -71,7 +71,7 @@ struct OMapBindingSingleton {
    * @param key The key to erase.
    * @return true if the key existed in the map, false otherwise.
    */
-  bool Erase(K key);
+  bool Erase(const void* keyPtr);
 
   /**
    * @brief Erases a key from the map obliviously. 1~2x slower than Erase.
@@ -79,7 +79,7 @@ struct OMapBindingSingleton {
    * @param key The key to erase.
    * @return true if the key existed in the map, false otherwise.
    */
-  bool OErase(K key);
+  bool OErase(const void* keyPtr);
 
   /**
    * @brief Start initializing the OMap. Assumes sufficiently large EPC. Cannot
@@ -106,5 +106,112 @@ struct OMapBindingSingleton {
    */
   void FinishInit();
 
-  ~OMapBindingSingleton();
+  ~OMapGenericBinding();
 };
+
+#include "odsl/omap.hpp"
+
+template <uint64_t key_size, uint64_t val_size>
+using MapGenericType = ODSL::OHashMap<Bytes<key_size>, Bytes<val_size>, ODSL::FULL_OBLIVIOUS, uint32_t>;
+
+template <uint64_t key_size, uint64_t val_size>
+using InitializerGenericType = typename MapGenericType<key_size, val_size>::InitContext;
+
+#define MapType MapGenericType<key_size, val_size>
+#define InitializerType InitializerGenericType<key_size, val_size>
+
+template <uint64_t key_size, uint64_t val_size>
+OMapGenericBinding<key_size, val_size>::OMapGenericBinding() {
+  omap = nullptr;
+  initializer = nullptr;
+}
+
+template <uint64_t key_size, uint64_t val_size>
+void OMapGenericBinding<key_size, val_size>::InitEmpty(uint32_t size) {
+  omap = (void*)(new MapType(size));
+  ((MapType*)omap)->Init();
+}
+
+template <uint64_t key_size, uint64_t val_size>
+void OMapGenericBinding<key_size, val_size>::InitEmptyExternal(uint32_t size,
+                                                     uint64_t cacheBytes) {
+  omap = (void*)(new MapType(size, cacheBytes));
+  ((MapType*)omap)->Init();
+}
+
+template <uint64_t key_size, uint64_t val_size>
+void OMapGenericBinding<key_size, val_size>::StartInit(uint32_t size) {
+  omap = (void*)(new MapType(size));
+  initializer = (void*)(((MapType*)omap)->NewInitContext());
+}
+
+template <uint64_t key_size, uint64_t val_size>
+void OMapGenericBinding<key_size, val_size>::StartInitExternal(uint32_t size,
+                                                     uint64_t cacheBytes) {
+  omap = (void*)(new MapType(size, cacheBytes));
+  initializer = (void*)(((MapType*)omap)->NewInitContext());
+}
+
+template <uint64_t key_size, uint64_t val_size>
+void OMapGenericBinding<key_size, val_size>::FinishInit() {
+  Assert(initializer, "FinishInit without StartInit");
+  ((InitializerType*)initializer)->Finalize();
+  delete (InitializerType*)initializer;
+  initializer = nullptr;
+}
+
+template <uint64_t key_size, uint64_t val_size>
+bool OMapGenericBinding<key_size, val_size>::Insert(const void* keyPtr, const void* valPtr) {
+  Bytes<key_size> key(keyPtr);
+  Bytes<val_size> val(valPtr);
+  if (initializer) {
+    ((InitializerType*)initializer)->Insert(key, val);
+    return false;
+  }
+  return ((MapType*)omap)->Insert(key, val);
+}
+
+template <uint64_t key_size, uint64_t val_size>
+bool OMapGenericBinding<key_size, val_size>::OInsert(const void* keyPtr, const void* valPtr) {
+  Bytes<key_size> key(keyPtr);
+  Bytes<val_size> val(valPtr);
+  if (initializer) {
+    ((InitializerType*)initializer)->Insert(key, val);
+    return false;
+  }
+  return ((MapType*)omap)->OInsert(key, val);
+}
+
+template <uint64_t key_size, uint64_t val_size>
+bool OMapGenericBinding<key_size, val_size>::Find(const void* keyPtr, void* valPtr) {
+  Bytes<key_size> key(keyPtr);
+  Bytes<val_size> val(valPtr);
+  Assert(!initializer, "Find during initialization");
+  bool found = ((MapType*)omap)->Find(key, val);
+  memcpy(valPtr, val.GetData(), val_size);
+  return found;
+}
+
+template <uint64_t key_size, uint64_t val_size>
+bool OMapGenericBinding<key_size, val_size>::Erase(const void* keyPtr) {
+  Assert(!initializer, "Erase during initialization");
+  Bytes<key_size> key(keyPtr);
+  return ((MapType*)omap)->Erase(key);
+}
+
+template <uint64_t key_size, uint64_t val_size>
+bool OMapGenericBinding<key_size, val_size>::OErase(const void* keyPtr) {
+  Assert(!initializer, "Erase during initialization");
+  Bytes<key_size> key(keyPtr);
+  return ((MapType*)omap)->OErase(key);
+}
+
+template <uint64_t key_size, uint64_t val_size>
+OMapGenericBinding<key_size, val_size>::~OMapGenericBinding() {
+  if (omap) {
+    delete (MapType*)omap;
+  }
+  if (initializer) {
+    delete (InitializerType*)initializer;
+  }
+}

@@ -6,4 +6,4 @@ ninja -C build
 cp build/odsl.go odsl.go
 LD_PATH=/usr/local/lib/
 export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$LD_PATH
-cp go/libodsl.so $LD_PATH
+sudo cp go/libodsl.so $LD_PATH
