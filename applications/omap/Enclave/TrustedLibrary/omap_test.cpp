@@ -8,6 +8,7 @@
 
 #include "odsl/omap.hpp"
 #include "odsl/omap_improved.hpp"
+#include "odsl/page_oram.hpp"
 #include "odsl/par_omap.hpp"
 #include "odsl/recursive_oram.hpp"
 #include "sgx_thread.h"
@@ -568,7 +569,7 @@ void testOMap() {
   printf("test omap\n");
   size_t mapSize = 1e6;
   size_t initSize = 1e6;
-  OHashMap<uint64_t, int64_t, true> omap(mapSize);
+  OHashMap<uint64_t, int64_t, FULL_OBLIVIOUS> omap(mapSize);
   std::unordered_map<uint64_t, int64_t> map;
   for (size_t i = 0; i < initSize; i++) {
     map[i] = i * 3;
@@ -644,7 +645,8 @@ using ERC20_Balance = Bytes<104>;
 void testOMapBatchAccess(size_t mapSize = 1e5) {
   size_t initSize = mapSize;
   printf("default heap size %lu\n", DEFAULT_HEAP_SIZE);
-  using OMap = OHashMap<ETH_Addr, ERC20_Balance, true, uint32_t, false>;
+  using OMap =
+      OHashMap<ETH_Addr, ERC20_Balance, FULL_OBLIVIOUS, uint32_t, false>;
   OMap omap((uint32_t)mapSize, 10 MB);
   std::unordered_map<ETH_Addr, ERC20_Balance> map;
   std::vector<ETH_Addr> addrs(initSize);
@@ -710,8 +712,8 @@ void testOHashMapPerf(size_t mapSize = 5e6) {
   size_t round = 1e5;
   size_t initSize = mapSize;
   printf("default heap size %lu\n", DEFAULT_HEAP_SIZE);
-  OHashMap<ETH_Addr, ERC20_Balance, true, uint32_t, false> omap(
-      (uint32_t)mapSize, DEFAULT_HEAP_SIZE / 3 * 2);
+  OHashMap<ETH_Addr, ERC20_Balance, FULL_OBLIVIOUS, uint32_t, false> omap(
+      (uint32_t)mapSize, DEFAULT_HEAP_SIZE);
 
   std::function<std::pair<ETH_Addr, ERC20_Balance>(uint64_t)> readerFunc =
       [](uint64_t) { return std::pair<ETH_Addr, ERC20_Balance>(); };
@@ -800,10 +802,54 @@ void testOHashMapImproved(size_t mapSize = 5e6) {
   printf("oram find time %f us\n", (double)timediff * 1e-3 / (double)round);
 }
 
+void testPageOMap(size_t mapSize = 5e6) {
+  size_t round = 1e5;
+  size_t initSize = mapSize;
+  printf("default heap size %lu\n", DEFAULT_HEAP_SIZE);
+  OHashMap<ETH_Addr, ERC20_Balance, PAGE_OBLIVIOUS, uint32_t> omap(
+      (uint32_t)mapSize, DEFAULT_HEAP_SIZE / 3 * 2);
+
+  // std::function<std::pair<ETH_Addr, ERC20_Balance>(uint64_t)> readerFunc =
+  //     [](uint64_t) { return std::pair<ETH_Addr, ERC20_Balance>(); };
+
+  // EM::VirtualVector::VirtualReader<std::pair<ETH_Addr, ERC20_Balance>>
+  // reader(
+  //     initSize, readerFunc);
+  uint64_t start, end;
+  printf("mapSize = %u, threadCount = %d, batchSize = %u\n", mapSize, 1, 1);
+  ocall_measure_time(&start);
+  omap.Init();
+  ocall_measure_time(&end);
+  uint64_t timediff = end - start;
+  printf("oram init time %f s\n", (double)timediff * 1e-9);
+
+  ocall_measure_time(&start);
+  for (size_t r = 0; r < round; ++r) {
+    ETH_Addr addr;
+    ERC20_Balance balance;
+    omap.Insert(addr, balance);
+  }
+  ocall_measure_time(&end);
+  timediff = end - start;
+  printf("oram insert time %f us\n", (double)timediff * 1e-3 / (double)round);
+
+  ocall_measure_time(&start);
+  for (size_t r = 0; r < round; ++r) {
+    ETH_Addr addr;
+    addr.SetRand();
+    ERC20_Balance balance;
+    omap.Find(addr, balance);
+  }
+  ocall_measure_time(&end);
+  timediff = end - start;
+  printf("oram find time %f us\n", (double)timediff * 1e-3 / (double)round);
+}
+
 void testOHashMapPerfSignal(size_t mapSize = 5e6) {
   size_t round = 1e5;
   size_t initSize = mapSize - round;
-  OHashMap<uint64_t, Bytes<240>, true, uint32_t> omap((uint32_t)mapSize);
+  OHashMap<uint64_t, Bytes<240>, FULL_OBLIVIOUS, uint32_t> omap(
+      (uint32_t)mapSize);
 
   std::function<std::pair<uint64_t, Bytes<240>>(uint64_t)> readerFunc =
       [](uint64_t) { return std::pair<uint64_t, Bytes<240>>(); };
@@ -1098,6 +1144,7 @@ void ecall_omap_perf() {
     // testRecursiveORAMPerf();
 
     testOHashMapImproved();
+    // testPageOMap();
     // printf("heap used %lu\n", g_peak_heap_used);
     // testOMapBatchAccess();
     // testORAMInit();

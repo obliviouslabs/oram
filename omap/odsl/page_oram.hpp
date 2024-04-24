@@ -61,7 +61,7 @@ struct PageORAM {
     SetSize(size);
   }
 
-  void SetSize(UidType size) {
+  void SetSize(UidType size, uint64_t cacheBytes = 0) {
     numPages = divRoundUp(size, item_per_page) * 1.3;
     // std::cout << "size: " << size << " numPages: " << numPages << std::endl;
     frontend.SetSize(numPages);
@@ -165,10 +165,10 @@ struct PageORAM {
   }
 
  private:
-
   template <class Func>
-  requires UpdateFunction<Func, T>
-  void access(UidType address, const Func& accessor, PageIdxType pageIdx, Page_& page) {
+    requires UpdateFunction<Func, T>
+  void access(UidType address, const Func& accessor, PageIdxType pageIdx,
+              Page_& page) {
     bool foundInStash = false;
     bool foundInPage = false;
     PageIdxType newPageIdx = UniformRandom(numPages - 1);

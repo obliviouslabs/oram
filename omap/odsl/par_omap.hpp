@@ -24,7 +24,7 @@ namespace ODSL {
 template <typename K, typename V, typename PositionType = uint64_t>
 struct ParOMap {
  private:
-  using BaseMap = OHashMap<K, V, true, PositionType, true>;
+  using BaseMap = OHashMap<K, V, FULL_OBLIVIOUS, PositionType, true>;
 
   struct KVPair {
     K key;
@@ -334,7 +334,7 @@ struct ParOMap {
    */
   struct InitContext {
     using Element = Algorithm::TaggedT<KVPair>;
-    using NonObliviousOHashMap = OHashMap<K, V, false, PositionType>;
+    using NonObliviousOHashMap = OHashMap<K, V, NON_OBLIVIOUS, PositionType>;
     ParOMap& omap;                                // reference to the parent map
     std::vector<NonObliviousOHashMap*> nonOMaps;  // non-oblivious maps
     std::vector<uint64_t> factors;  // number of ways in each level of butterfly
@@ -435,7 +435,7 @@ struct ParOMap {
       shardCount = omap.shards.size();
       uint64_t maxInitSizePerShard =
           maxQueryPerShard(initSize, shardCount, -60);
-      using NonObliviousOHashMap = OHashMap<K, V, false, PositionType>;
+      using NonObliviousOHashMap = OHashMap<K, V, NON_OBLIVIOUS, PositionType>;
       nonOMaps.resize(shardCount);
 
       using Element = Algorithm::TaggedT<KVPair>;

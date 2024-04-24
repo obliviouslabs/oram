@@ -6,7 +6,7 @@
 
 using namespace ODSL;
 
-template <bool isOblivious>
+template <ObliviousLevel isOblivious>
 void testOHashMap() {
   for (int r = 0; r < 1e3; ++r) {
     int mapSize = 50;
@@ -70,7 +70,7 @@ void testOHashMap() {
   }
 }
 
-template <bool isOblivious>
+template <ObliviousLevel isOblivious>
 void testOHashMapInitFromReader() {
   for (int rr = 0; rr < 1e2; ++rr) {
     int mapSize = 5000;
@@ -169,8 +169,8 @@ void testOHashMapInitFromNonObliviousWithDummy() {
   for (int rr = 0; rr < 1e1; ++rr) {
     int mapSize = 5000;
     int keySpace = 10000;
-    OHashMap<int, int, true> map(mapSize);
-    OHashMap<int, int, false> nonOMap(mapSize);
+    OHashMap<int, int, FULL_OBLIVIOUS> map(mapSize);
+    OHashMap<int, int, NON_OBLIVIOUS> nonOMap(mapSize);
     std::unordered_map<int, int> std_map;
     for (int r = 0; r < mapSize; ++r) {
       int key = rand() % keySpace;
@@ -208,7 +208,7 @@ void testOHashMapInitFromNonObliviousWithDummy() {
   }
 }
 
-template <bool isOblivious>
+template <ObliviousLevel isOblivious>
 void testOHashMapFindBatch() {
   for (int rr = 0; rr < 10; ++rr) {
     int mapSize = 23456;
@@ -254,7 +254,7 @@ void testOHashMapFindBatch() {
   }
 }
 
-template <bool isOblivious>
+template <ObliviousLevel isOblivious>
 void testReplaceCount() {
   // test replace count distribution
   int mapSize = 100000;
@@ -265,7 +265,7 @@ void testReplaceCount() {
 
   std::vector<uint64_t> stashLoads(30, 0);
   for (int rr = 0; rr < outerRound; ++rr) {
-    OHashMap<int, int, false> map(mapSize, MAX_CACHE_SIZE);
+    OHashMap<int, int, NON_OBLIVIOUS> map(mapSize, MAX_CACHE_SIZE);
     map.Init();
     const auto& stash = map.GetStash();
     for (int i = 0; i < mapSize; ++i) {
@@ -331,28 +331,34 @@ void testOMap() {
   }
 }
 
-TEST(Cuckoo, OHashMapNonOblivious) { testOHashMap<false>(); }
+TEST(Cuckoo, OHashMapNonOblivious) { testOHashMap<NON_OBLIVIOUS>(); }
 
-TEST(Cuckoo, OHashMapOblivious) { testOHashMap<true>(); }
+TEST(Cuckoo, OHashMapOblivious) { testOHashMap<FULL_OBLIVIOUS>(); }
 
 TEST(Cuckoo, OMapOblivious) { testOMap(); }
 
 TEST(Cuckoo, OHashMapInitFromReaderNonOblivious) {
-  testOHashMapInitFromReader<false>();
+  testOHashMapInitFromReader<NON_OBLIVIOUS>();
 }
 
 TEST(Cuckoo, OHashMapInitFromReaderOblivious) {
-  testOHashMapInitFromReader<true>();
+  testOHashMapInitFromReader<FULL_OBLIVIOUS>();
 }
 
-TEST(Cuckoo, OHashMapFindBatchOblivious) { testOHashMapFindBatch<true>(); }
+TEST(Cuckoo, OHashMapFindBatchOblivious) {
+  testOHashMapFindBatch<FULL_OBLIVIOUS>();
+}
 
 TEST(Cuckoo, OHashMapInitWithDummy) {
   testOHashMapInitFromNonObliviousWithDummy();
 }
 
-TEST(Cuckoo, ReplaceCountDistriNonOblivious) { testReplaceCount<false>(); }
+TEST(Cuckoo, ReplaceCountDistriNonOblivious) {
+  testReplaceCount<NON_OBLIVIOUS>();
+}
 
-TEST(Cuckoo, ReplaceCountDistriOblivious) { testReplaceCount<true>(); }
+TEST(Cuckoo, ReplaceCountDistriOblivious) {
+  testReplaceCount<FULL_OBLIVIOUS>();
+}
 
 TEST(Cuckoo, OHashMapPushInit) { testOHashMapPushInit(); }

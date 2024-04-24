@@ -39,7 +39,7 @@ ORAMBindingSingleton::~ORAMBindingSingleton() {
 #include "interface/omap_interface.hpp"
 #include "odsl/omap.hpp"
 
-using MapType = OHashMap<K, V, true, uint32_t>;
+using MapType = OHashMap<K, V, FULL_OBLIVIOUS, uint32_t>;
 using InitializerType = typename MapType::InitContext;
 
 OMapBindingSingleton::OMapBindingSingleton() {

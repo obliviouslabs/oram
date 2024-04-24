@@ -1,4 +1,5 @@
 #pragma once
+#include "page_oram.hpp"
 #include "recursive_oram.hpp"
 
 /// @brief This file implements a cuckoo hash map built on top of the
@@ -293,6 +294,8 @@ struct OHashMapBucket {
 #endif
 };
 
+enum ObliviousLevel { NON_OBLIVIOUS, PAGE_OBLIVIOUS, FULL_OBLIVIOUS };
+
 /**
  * @brief An cuckoo hash map built on top of either recursive ORAM or a standard
  * vector. It contains two hash tables, and a stash for elements that cannot be
@@ -304,7 +307,8 @@ struct OHashMapBucket {
  * @tparam PositionType the type of the position
  * @tparam parallel_init whether to initialize the two hash tables in parallel
  */
-template <typename K, typename V, const bool isOblivious = true,
+template <typename K, typename V,
+          const ObliviousLevel isOblivious = FULL_OBLIVIOUS,
           typename PositionType = uint64_t, const bool parallel_init = true>
 struct OHashMap {
  private:
@@ -323,7 +327,10 @@ struct OHashMap {
   PositionType tableSize;
   using BucketType = OHashMapBucket<K, V, bucketSize>;
   // for oblivious hash map, we use recursive ORAM
-  using ObliviousTableType = RecursiveORAM<BucketType, PositionType>;
+  using ObliviousTableType =
+      std::conditional_t<isOblivious == FULL_OBLIVIOUS,
+                         RecursiveORAM<BucketType, PositionType>,
+                         PageORAM<BucketType, PositionType>>;
   // for non-oblivious hash map, we cache the front of the vector, for the
   // remaining data store it encrypted and authenticated in external memory,
   // check freshness when swapped in.
@@ -609,7 +616,7 @@ struct OHashMap {
                                     const KeyIter keyEnd,
                                     ValResIter valResBegin,
                                     std::vector<PositionType>& hashIndices) {
-    static_assert(isOblivious);
+    static_assert(isOblivious > NON_OBLIVIOUS);
 
     Assert(tableNum == 0 || tableNum == 1);
 
@@ -802,7 +809,7 @@ struct OHashMap {
 
   const StashType& GetStash() const { return stash; }
 
-  using NonObliviousHashMap = OHashMap<K, V, false, PositionType>;
+  using NonObliviousHashMap = OHashMap<K, V, NON_OBLIVIOUS, PositionType>;
 
   /**
    * @brief Initialize the oblivious hash map from another non-oblivious hash
@@ -811,7 +818,7 @@ struct OHashMap {
    * @param other the non-oblivious hash map
    */
   void InitFromNonOblivious(NonObliviousHashMap& other) {
-    static_assert(isOblivious,
+    static_assert(isOblivious > NON_OBLIVIOUS,
                   "Only oblivious hash map can call this function");
     if (_size != other.size()) {
       throw std::runtime_error("OHashMap InitFromNonOblivious failed");
@@ -995,7 +1002,7 @@ struct OHashMap {
    * @return InitContext
    */
   InitContext* NewInitContext(uint64_t additionalCacheBytes = 0) {
-    static_assert(isOblivious,
+    static_assert(isOblivious > NON_OBLIVIOUS,
                   "Only oblivious hash map can call this function");
     return new InitContext(*this, additionalCacheBytes);
   }
@@ -1317,7 +1324,8 @@ struct OHashMap {
    * @param tableNum the table number to write back, 0 or 1
    */
   void WriteBackTable(int tableNum) {
-    static_assert(isOblivious);
+    static_assert(isOblivious > NON_OBLIVIOUS,
+                  "Only oblivious hash map can call this function");
     Assert(tableNum == 0 || tableNum == 1);
     if (tableNum == 0) {
       table0.WriteBack();
