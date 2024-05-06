@@ -308,6 +308,7 @@ struct ORAM {
       }
       PERFCTR_INCREMENT(CIRCUITORAM_OVERFLOW);
       if (!retry) {
+        // printState();
         throw std::runtime_error("ORAM read failed");
       }
       --retry;
@@ -770,7 +771,7 @@ struct ORAM {
     bool keepFlag = updateFunc(out);
     UidType newUid = DUMMY<UidType>();
     obliMove(keepFlag, newUid, updatedUid);
-    Block_ newBlock(out, newPos, updatedUid);
+    Block_ newBlock(out, newPos, newUid);
     writeBlockWithRetry(newBlock, pos, pathDepth, nodeIdxArr);
     return newPos;
   }

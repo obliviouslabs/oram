@@ -533,9 +533,7 @@ TEST(LinearORAM, testBatchReadWriteCompact) { testBatchReadWrite<true>(); }
 
 template <const uint64_t element_size>
 void testThreshold() {
-  struct Element {
-    uint8_t data[element_size];
-  };
+  using Element = Bytes<element_size>;
   using LinearORAM_ = ODSL::LinearORAM::ORAM<Element, uint32_t>;
   using CircuitORAM_ =
       ODSL::CircuitORAM::ORAM<Element, 2, 20, uint32_t, uint32_t, 4096, false>;

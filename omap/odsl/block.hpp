@@ -48,7 +48,13 @@ struct Block {
 #ifndef ENCLAVE_MODE
   friend std::ostream& operator<<(std::ostream& os, const Block& block) {
     os << "Block{data: " << block.data << ", position: " << block.position
-       << ", uid: " << (block.IsDummy() ? -1 : block.uid) << "}";
+       << ", uid: ";
+    if (block.IsDummy()) {
+      os << "-1";
+    } else {
+      os << block.uid;
+    }
+    os << "}";
     return os;
   }
 #endif

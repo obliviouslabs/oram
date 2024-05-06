@@ -1062,6 +1062,7 @@ struct OPosMap {
     //           << " key hash: " << (uint64_t)keyHash << std::endl;
     OPosMapEntry entryToInsert = {keyHash, idx1, value};
     entryToInsert.setValid(!isDummy);
+    entryToInsert.setInvalid(isDummy);
     bool exist = insertEntryOblivious(entryToInsert, idx0);
     obliMove(exist, value, entryToInsert.value);
     // the element just swapped out is more likely to get inserted to somewhere
@@ -1100,6 +1101,7 @@ struct OPosMap {
     indexer.getHashIndices(keyToHash, idx0, idx1, keyHash, uid, extraHash);
     OPosMapEntry entryToFind = {keyHash, idx1, value};
     entryToFind.setValid(!isDummy);
+    entryToFind.setInvalid(isDummy);
     // std::cout << "idx0: " << idx0 << " idx1: " << idx1
     //           << " key hash: " << (uint64_t)keyHash << std::endl;
     // BucketType bucket;
@@ -1205,57 +1207,76 @@ struct OPosMap {
     read_rand((uint8_t*)&randKey, sizeof(K));
     obliMove(isDummy, keyToHash, randKey);
     indexer.getHashIndices(keyToHash, idx0, idx1, keyHash, uid, extraHash);
+    // std::cout << "idx0: " << idx0 << " idx1: " << idx1
+    //           << " key hash: " << (uint64_t)keyHash << std::endl;
     bool erased = false;
-    auto eraseTable0Func = [&](BucketType& bucket) {
-      OPosMapEntry entryToErase;
-      entryToErase.setInvalid(true);
+    OPosMapEntry entryToErase = {keyHash, idx1, DUMMY<V>()};
+    entryToErase.setValid(!isDummy);
+    entryToErase.setInvalid(isDummy);
+    auto eraseTable0Func = [&](BucketType& bucket0) {
+      PositionType entryToErasePos = DUMMY<PositionType>();
       int eraseTable0Idx = -1;
       for (int i = 0; i < bucketSize; ++i) {
-        auto& entry = bucket.entries[i];
-        bool matchFlag = (entry.keyHash == keyHash) & (entry.otherIdx == idx1);
-        obliMove(matchFlag, entryToErase, entry);
+        OPosMapEntry& entry = bucket0.entries[i];
+        bool matchFlag =
+            (entry.keyHash == entryToErase.keyHash) & (entry.otherIdx == idx1);
+        // if (matchFlag) {
+        //   std::cout << "Found in table 0 idx " << idx0 << " offset " << i
+        //             << std::endl;
+        // }
+        obliMove(matchFlag, entryToErasePos, entry.value);
         obliMove(matchFlag, eraseTable0Idx, i);
       }
-      auto eraseTable1Func = [&](BucketType& bucket) {
+      auto eraseTable1Func = [&](BucketType& bucket1) {
         int eraseTable1Idx = -1;
         for (int i = 0; i < bucketSize; ++i) {
-          auto& entry = bucket.entries[i];
-          bool matchFlag =
-              (entry.keyHash == keyHash) & (entry.otherIdx == idx0);
-          obliMove(matchFlag, entryToErase, entry);
+          OPosMapEntry& entry = bucket1.entries[i];
+          bool matchFlag = (entry.keyHash == entryToErase.keyHash) &
+                           (entry.otherIdx == idx0);
+          // if (matchFlag) {
+          //   std::cout << "Found in table 1 idx " << idx1 << " offset " << i
+          //             << std::endl;
+          // }
+          obliMove(matchFlag, entryToErasePos, entry.value);
           obliMove(matchFlag, eraseTable1Idx, i);
         }
+
         size_t eraseStashIdx = -1;
         for (size_t i = 0; i < stash.size(); ++i) {
           auto& stashEntry = stash[i];
-          auto& entry = stashEntry.entry;
-          bool match = (entry.keyHash == keyHash) & (entry.otherIdx == idx1) &
-                       (stashEntry.idx0 == idx0);
-          obliMove(match, entryToErase, entry);
+          OPosMapEntry& entry = stashEntry.entry;
+          bool match = (entry.keyHash == entryToErase.keyHash) &
+                       (entry.otherIdx == idx1) & (stashEntry.idx0 == idx0);
+          // if (match) {
+          //   std::cout << "Found in stash idx " << i << std::endl;
+          // }
+          obliMove(match, entryToErasePos, entry.value);
           obliMove(match, eraseStashIdx, i);
         }
-        entryToErase.setInvalid(isDummy);
+        obliMove(isDummy, entryToErasePos, DUMMY<PositionType>());
         // we check the main map to ensure that the element is actually present
         // (rather than a false positive) before erasing it
-        erased = mainMapErase(entryToErase, uid, extraHash);
-
+        erased = mainMapErase(entryToErasePos, uid, extraHash);
+        // std::cout << "Main map erase " << erased << std::endl;
         for (int i = 0; i < bucketSize; ++i) {
-          auto& entry = bucket.entries[i];
+          auto& entry = bucket0.entries[i];
           entry.setInvalid(erased & (i == eraseTable0Idx));
         }
         for (int i = 0; i < bucketSize; ++i) {
-          auto& entry = bucket.entries[i];
+          auto& entry = bucket1.entries[i];
           entry.setInvalid(erased & (i == eraseTable1Idx));
         }
         for (size_t i = 0; i < stash.size(); ++i) {
           auto& stashEntry = stash[i];
           // TODO: optimize by set eraseStashIdx to -1 if erasedInMainMap
-          stashEntry.setInvalid(erased & (i == eraseStashIdx));
+          stashEntry.entry.setInvalid(erased & (i == eraseStashIdx));
         }
       };
+      table1.Access(idx1, eraseTable1Func);
     };
 
     table0.Access(idx0, eraseTable0Func);
+    // std::cout << "PosMap erase done\n" << std::endl;
     load -= erased;
     return erased;
   }
@@ -1345,6 +1366,11 @@ struct OMap {
     // collide
 
     bool insertToStashFlag = false;
+    // std::cout << "Insert key " << key << " at pos " << pos << " uid " << uid
+    //           << " extra hash " << extraHash << (exist ? "exist" : "not
+    //           exist")
+    //           << " and write to " << newPos << std::endl
+    //           << std::endl;
     oram.Update(pos, uid, newPos, [&](ORAMEntry& prevPair) {
       bool sameKey = prevPair.hash == extraHash;
       insertToStashFlag = exist & !sameKey;
@@ -1357,9 +1383,9 @@ struct OMap {
     // stash, replace, otherwise, insert)
     // case 3: not exist -> if the key exists in stash, remove it and set exist
     // flag to true, otherwise don't change the stash
-    // if (insertToStashFlag) {
-    //   printf("Insert to stash\n");
-    // }
+    if (insertToStashFlag) {
+      printf("Insert to stash\n");
+    }
     bool existInStash = false;
     // first pass, check if key exists in stash
     for (StashEntry& pair : stash) {
@@ -1370,9 +1396,9 @@ struct OMap {
     }
     insertToStashFlag &= !existInStash;
     exist |= existInStash;
-    // if (insertToStashFlag) {
-    //   printf("Still insert to stash\n");
-    // }
+    if (insertToStashFlag) {
+      printf("Still insert to stash\n");
+    }
     // second pass, insert to stash if needed
     for (StashEntry& pair : stash) {
       bool insertFlag = !pair.valid & insertToStashFlag;
@@ -1383,6 +1409,7 @@ struct OMap {
   }
 
   bool Find(const K& key, V& value) {
+    // std::cout << "Find key " << key << std::endl;
     PositionType newPos = oram.GetRandPos();
     PositionType pos = newPos;
     UidType uid;
@@ -1416,23 +1443,31 @@ struct OMap {
   }
 
   bool Erase(const K& key) {
-    PositionType newPos = DUMMY<PositionType>();  // oram.GetRandPos();
-    PositionType pos = newPos;
-    // UidType uid;
-    // HExtra extraHash;
-    using PosMapEntry = typename PosMapType::OPosMapEntry;
-    auto mainMapErase = [&](const UidType& uid, const HExtra& extraHash) {
+    PositionType newPos = oram.GetRandPos();  // possibly the erasure is dummy
+
+    auto mainMapErase = [&](PositionType pos, UidType uid,
+                            const HExtra& extraHash) {
+      // std::cout << "Erase key " << key << " at pos " << pos << " uid " << uid
+      //           << " extra hash " << extraHash << std::endl;
+      // if the position map doesn't find the key, perform a dummy erase
+      bool dummyFlag = pos == DUMMY<PositionType>();
+      obliMove(dummyFlag, uid, DUMMY<UidType>());
+      obliMove(dummyFlag, pos, oram.GetRandPos());
       bool exist = false;
-      bool found = oram.Update(pos, uid, newPos, [&](ORAMEntry& prevPair) {
+      oram.Update(pos, uid, newPos, [&](ORAMEntry& prevPair) {
         bool sameKey = prevPair.hash == extraHash;
         exist = sameKey;
+        // return false to erase the entry
+        // std::cout << "Should keep " << !sameKey << std::endl;
         return !sameKey;
       });
-      exist &= found;
+
+      exist &= !dummyFlag;
+      // std::cout << "Main map exist " << exist << std::endl;
       return exist;
     };
 
-    bool erased = keyPosMap.Erase(key, mainMapErase, false);
+    bool erased = keyPosMap.OErase(key, mainMapErase, false);
 
     for (StashEntry& pair : stash) {
       bool matchFlag = pair.valid & (pair.key == key);
