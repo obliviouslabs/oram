@@ -300,28 +300,27 @@ void testReplaceCount() {
   }
 }
 
-void testOMapErase() {
+void testOMapEraseSimple() {
   int mapSize = 10;
   OMap<int, int> map(mapSize);
   map.Init();
   bool found = map.Insert(123, 345);
   ASSERT_FALSE(found);
-  // found = map.Insert(432, 543);
+  found = map.Insert(432, 543);
   found = map.Erase(123);
   ASSERT_TRUE(found);
-  // found = map.Erase(123);
-  // ASSERT_FALSE(found);
-  // found = map.Erase(432);
-  // ASSERT_TRUE(found);
-  // found = map.Erase(432);
-  // ASSERT_FALSE(found);
-  map.oram.printState();
+  found = map.Erase(123);
+  ASSERT_FALSE(found);
+  found = map.Erase(432);
+  ASSERT_TRUE(found);
+  found = map.Erase(432);
+  ASSERT_FALSE(found);
 }
 
 void testOMap() {
   for (int r = 0; r < 1e2; ++r) {
-    int mapSize = 500;
-    int keySpace = 1000;
+    int mapSize = UniformRandom(100, 1000);
+    int keySpace = UniformRandom(mapSize, mapSize * 3);
     OMap<int, int> map(mapSize);
     map.Init();
     std::unordered_map<int, int> std_map;
@@ -334,17 +333,17 @@ void testOMap() {
         ASSERT_EQ(exist, std_map.find(key) != std_map.end());
         std_map[key] = value;
       }
-      // if (rand() % 2 == 0) {
-      //   int key = rand() % keySpace;
-      //   bool found = map.Erase(key);
-      //   auto it = std_map.find(key);
-      //   if (it != std_map.end()) {
-      //     ASSERT_TRUE(found);
-      //     std_map.erase(it);
-      //   } else {
-      //     ASSERT_FALSE(found);
-      //   }
-      // }
+      if (rand() % 2 == 0) {
+        int key = rand() % keySpace;
+        bool found = map.Erase(key);
+        auto it = std_map.find(key);
+        if (it != std_map.end()) {
+          ASSERT_TRUE(found);
+          std_map.erase(it);
+        } else {
+          ASSERT_FALSE(found);
+        }
+      }
 
       int key = rand() % keySpace;
       int value;
@@ -362,9 +361,9 @@ void testOMap() {
 
 TEST(Cuckoo, OHashMapNonOblivious) { testOHashMap<NON_OBLIVIOUS>(); }
 
-TEST(Cuckoo, OHashMapOblivious) { testOHashMap<FULL_OBLIVIOUS>(); }
+TEST(Cuckoo, OHashMapObliviousMixed) { testOHashMap<FULL_OBLIVIOUS>(); }
 
-TEST(Cuckoo, OMapObliviousErase) { testOMapErase(); }
+TEST(Cuckoo, OMapObliviousErase) { testOMapEraseSimple(); }
 
 TEST(Cuckoo, OMapOblivious) { testOMap(); }
 
