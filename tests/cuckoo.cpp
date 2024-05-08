@@ -359,6 +359,92 @@ void testOMap() {
   }
 }
 
+void testOMapInitFromReader() {
+  for (int rr = 0; rr < 1e2; ++rr) {
+    int mapSize = 500;
+    int keySpace = 1000;
+    OMap<int, int> map(mapSize);
+    std::unordered_map<int, int> std_map;
+    for (int r = 0; r < mapSize; ++r) {
+      int key = rand() % keySpace;
+      int value = rand();
+      std_map[key] = value;
+    }
+    auto it = std_map.begin();
+    EM::VirtualVector::VirtualReader<std::pair<int, int>> reader(
+        std_map.size(), [&it](uint64_t) { return *it++; });
+    map.InitFromReader(reader);
+    for (int r = 0; r < 2 * keySpace; ++r) {
+      if (std_map.size() < mapSize) {
+        int key = rand() % keySpace;
+        int value = rand();
+        map.Insert(key, value);
+
+        std_map[key] = value;
+      }
+      if (rand() % 2 == 0) {
+        int key = rand() % keySpace;
+        bool found = map.Erase(key);
+        auto it = std_map.find(key);
+        if (it != std_map.end()) {
+          ASSERT_TRUE(found);
+          std_map.erase(it);
+        } else {
+          ASSERT_FALSE(found);
+        }
+      }
+
+      int key = rand() % keySpace;
+      int value;
+      bool foundFlag = map.Find(key, value);
+      auto itFind = std_map.find(key);
+      if (itFind != std_map.end()) {
+        ASSERT_TRUE(foundFlag);
+        ASSERT_EQ(value, itFind->second);
+      } else {
+        ASSERT_FALSE(foundFlag);
+      }
+    }
+  }
+}
+
+template <int key_size, int value_size>
+void testOMapInitFromReaderPerf(uint32_t mapSize) {
+  OMap<Bytes<key_size>, Bytes<value_size>, uint32_t> map(mapSize);
+
+  EM::VirtualVector::VirtualReader<
+      std::pair<Bytes<key_size>, Bytes<value_size>>>
+      reader(mapSize, [](uint64_t) {
+        std::pair<Bytes<key_size>, Bytes<value_size>> p;
+        p.first.SetRand();
+        // p.second.SetRand();
+        return p;
+      });
+  map.InitFromReader(reader);
+}
+
+template <int key_size, int value_size>
+void testOHashMapInitFromReaderPerf(uint32_t mapSize) {
+  if (EM::Backend::g_DefaultBackend) {
+    delete EM::Backend::g_DefaultBackend;
+  }
+  size_t BackendSize = 2e9;
+  EM::Backend::g_DefaultBackend =
+      new EM::Backend::MemServerBackend(BackendSize);
+  OHashMap<Bytes<key_size>, Bytes<value_size>, FULL_OBLIVIOUS, uint32_t> map(
+      mapSize);
+
+  EM::VirtualVector::VirtualReader<
+      std::pair<Bytes<key_size>, Bytes<value_size>>>
+      reader(mapSize, [](uint64_t) {
+        std::pair<Bytes<key_size>, Bytes<value_size>> p;
+        p.first.SetRand();
+        // p.second.SetRand();
+        return p;
+      });
+  map.InitFromReader(reader);
+}
+
 TEST(Cuckoo, OHashMapNonOblivious) { testOHashMap<NON_OBLIVIOUS>(); }
 
 TEST(Cuckoo, OHashMapObliviousMixed) { testOHashMap<FULL_OBLIVIOUS>(); }
@@ -374,6 +460,12 @@ TEST(Cuckoo, OHashMapInitFromReaderNonOblivious) {
 TEST(Cuckoo, OHashMapInitFromReaderOblivious) {
   testOHashMapInitFromReader<FULL_OBLIVIOUS>();
 }
+
+TEST(Cuckoo, OMapInitFromReaderOblivious) { testOMapInitFromReader(); }
+
+TEST(Cuckoo, OMapInitPerf) { testOMapInitFromReaderPerf<20, 32>(1e7); }
+
+TEST(Cuckoo, OHashMapInitPerf) { testOHashMapInitFromReaderPerf<20, 32>(1e7); }
 
 TEST(Cuckoo, OHashMapFindBatchOblivious) {
   testOHashMapFindBatch<FULL_OBLIVIOUS>();
