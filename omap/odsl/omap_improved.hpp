@@ -9,16 +9,22 @@
 /// bytes).
 namespace ODSL {
 /**
- * @brief Used to hash the key to two positions
+ * @brief Hash the key to two positions and use remaining hash bits to
+ * distinguish entries.
+ * @tparam K the key type
+ * @tparam H the type of the hash value stored in the position map
+ * @tparam HExtra the type of the extra hash value stored in the main map
+ * @tparam PositionType the type of the position,
  *
  */
-template <typename K, typename H, typename HExtra, typename PositionType,
-          uint64_t uid_length>
+template <typename K, typename H, typename HExtra, typename PositionType>
 struct OPosMapIndexer {
   static constexpr int saltLength = 16;  // 128 bits salt
   uint8_t salts[saltLength];             // salt for secure hash
   PositionType _size;                    // number of buckets in each hash table
-  using UidType = Bytes<uid_length>;     // type of the unique identifier
+  static constexpr uint64_t uid_length =
+      std::min(sizeof(PositionType) * 2 + sizeof(H), 16UL);
+  using UidType = Bytes<uid_length>;  // type of the unique identifier
   OPosMapIndexer() {}
 
   explicit OPosMapIndexer(PositionType size) { SetSize(size); }
@@ -33,6 +39,10 @@ struct OPosMapIndexer {
     read_rand(salts, saltLength);
   }
 
+  /**
+   * @brief Data structure that receives the output of SHA256
+   *
+   */
   struct HashIndices {
     uint64_t h0;
     uint64_t h1;
@@ -52,9 +62,19 @@ struct OPosMapIndexer {
     HashIndices hashIndices;
     secure_hash_with_salt(key, salts, (uint8_t*)&hashIndices,
                           sizeof(hashIndices));
+    // position in table 0
     pos0 = (PositionType)(hashIndices.h0 % _size);
+    // position in table 1
     pos1 = (PositionType)(hashIndices.h1 % _size);
+    // keyHash is used to distinguish entries that have the same positions in
+    // both tables. Set the least significant bit to 1 to indicate a valid
+    // entry. In the position map, uid = (pos0 || pos1 || keyHash) must be
+    // unique. If a newly inserted key-value pair has the same uid as an
+    // existing entry, we will insert it to the stash.
     keyHash = hashIndices.keyHash | (H)1;
+    // extraHash is used to further distinguish entries that shares the same
+    // uid. It is stored in the main map, so that we can check the
+    // existence of an element with very high confidence.
     extraHash = hashIndices.extraHash;
     // generate a unique identifier that includes the key hash and the
     // positions, and with additional bits to distinguish elements
@@ -70,33 +90,38 @@ struct OPosMapIndexer {
 };
 
 /**
- * @brief A single entry (slot) in the hash map. It contains a key and a
- * value, and two flags.
+ * @brief A single entry (slot) in the position map. To compress the size of the
+ * position map, we do not store the key, but store 1) the index of the
+ * key in the other table, which provides some entropy to distinguish entries in
+ * the same slot, and moreover, allows us to swap the entry with the other table
+ * when the entry is evicted 2) an extra hash value "keyHash" to further
+ * distinguish the entries that maps to same same slots in both tables. The
+ * least significant bit of keyHash is used to indicate whether the entry is
+ * valid. In case both the indices and the keyHash collides, we store the entry
+ * in a stash.
  *
  * @tparam K the key type
- * @tparam V the value type
+ * @tparam V the value type, which is the position of the value in the oram
  */
 template <typename K, typename V, typename H, typename PositionType>
 struct GenericOPosMapEntry {
-  // // whether the entry is valid. An invalid entry is an empty slot.
-  // bool valid = false;
-  // // whether the entry is a dummy. A dummy entry is used when the hash map
-  // is
-  // // not built on an ORAM, but we still want to hide whether an insert is
-  // real
-  // // or dummy. In this case, we set valid flag to true, but the dummy flag
-  // to
-  // // true.
-  // bool dummy = false;
   H keyHash = 0;
   PositionType otherIdx;  // the index in the other table
-  V value;
+  V value;  // the value of the entry, i.e., the position of the entry in the
+            // oram that stores the value
+
+  /**
+   * @brief Returns whether the entry is valid
+   */
   bool valid() const { return keyHash & 0x1; }
-  bool dummy() const { return keyHash & 0x2; }
+  /**
+   * @brief Set the entry to valid if real is true
+   */
   void setValid(bool real) { keyHash |= real; }
+  /**
+   * @brief Set the entry to invalid if real is true
+   */
   void setInvalid(bool real) { keyHash &= ~((H)real); }
-  void setDummy(bool real) { keyHash |= (H)(real << 1); }
-  void setNotDummy(bool real) { keyHash &= ~((H)real << 1); }
 #ifndef ENCLAVE_MODE
   // cout
   friend std::ostream& operator<<(std::ostream& os,
@@ -110,7 +135,7 @@ struct GenericOPosMapEntry {
 
 /**
  * @brief A bucket can contain multiple entries that are fully associative.
- * This can significantly increase the load factor of the hash map.
+ * This can significantly increase the load factor of the cuckoo hash table.
  *
  * @tparam K the key type
  * @tparam V the value type
@@ -156,15 +181,18 @@ struct OPosMap {
   using H = uint32_t;       // additional hash bits to distinguish elements
   using HExtra = uint64_t;  // extra hash bits stored in the main map to check
                             // for the existence of an element
-  static constexpr uint64_t uid_length =
-      std::min(sizeof(PositionType) * 2 + sizeof(H), 16UL);
+  using Indexer = OPosMapIndexer<K, H, HExtra, PositionType>;
+
   // assume that the oram size < 2^48
-  using UidType = Bytes<uid_length>;  // type of the unique identifier
+  using UidType = typename Indexer::UidType;  // type of the unique identifier
   using OPosMapEntry = GenericOPosMapEntry<K, V, H, PositionType>;
 
   /**
-   * @brief A stash storing elements that cannot be stored in the hash tables.
-   * Helps deamortize the cost of oblivious insertion.
+   * @brief A stash storing position map entries that cannot be stored in the
+   * hash tables because both buckets are full. The stash works as a queue and
+   * helps deamortize the cost of oblivious insertion. Notice that this stash is
+   * different from the stash in the main map. The latter is used to store
+   * indistinguishable keys.
    *
    * @tparam K the key type
    * @tparam V the value type
@@ -173,8 +201,11 @@ struct OPosMap {
   template <const uint64_t stash_size = 16>
   struct LRUStash {
     struct StashEntry {
+      // the entry for table 0
       OPosMapEntry entry;
+      // the index of the entry in table 0
       PositionType idx0;
+      // the timestamp when the entry is inserted
       uint64_t timestamp;
     };
     using StashVec = std::vector<StashEntry>;
@@ -318,10 +349,14 @@ struct OPosMap {
       EM::CacheFrontVector::EncryptType::ENCRYPT_AND_AUTH_FRESH, 1024>;
   using TableType = std::conditional_t<isOblivious, ObliviousTableType,
                                        NonObliviousTableType>;
+  // the two hash tables
   TableType table0, table1;
-  using Indexer = OPosMapIndexer<K, H, HExtra, PositionType, uid_length>;
+  // the indexer to hash the key
   Indexer indexer;
+
   using StashType = LRUStash<16>;
+  // the stash for elements that cannot be stored in the hash tables due to
+  // bucket size limitation
   StashType stash;
 
   /**
@@ -646,33 +681,27 @@ struct OPosMap {
 
   const StashType& GetStash() const { return stash; }
 
-  void GetUidAndExtraHash(const K& key, UidType& uid, HExtra& extraHash) const {
-    PositionType pos0, pos1;
-    H keyHash;
-    indexer.getHashIndices(key, pos0, pos1, keyHash, uid, extraHash);
-  }
-
   using NonObliviousPosMap = OPosMap<K, V, false, true>;
 
   /**
-   * @brief Initialize the oblivious hash map from another non-oblivious
-   hash
-   * map
+   * @brief Initialize the oblivious position map from another non-oblivious
+   * position map. This function is more efficient than inserting elements one
+   * by one.
    *
-   * @param other the non-oblivious hash map
+   * @param other the non-oblivious position map
    */
   void InitFromNonOblivious(NonObliviousPosMap& other) {
     static_assert(isOblivious,
-                  "Only oblivious hash map can call this function");
+                  "Only oblivious position map can call this function");
     if (_size != other.size()) {
-      throw std::runtime_error("OPosMap InitFromNonOblivious failed");
+      throw std::runtime_error(
+          "OPosMap InitFromNonOblivious failed because the size of the two "
+          "maps are different");
     }
     if (_size == 0) {
       throw std::runtime_error(
           "OPosMap size not set. Call SetSize before initialization.");
     }
-    PositionType load0 = 0;
-    PositionType load1 = 0;
     indexer = other.GetIndexer();
 
     typename NonObliviousTableType::Reader reader0(other.GetTable0().begin(),
@@ -689,14 +718,10 @@ struct OPosMap {
       table0.InitFromReader(reader0);
       table1.InitFromReader(reader1);
     }
-    load = load0 + load1;
+    load = other.GetLoad();
     for (const auto& entry : other.GetStash().stash) {
       const OPosMapEntry& posmapEntry = entry.entry;
       if (posmapEntry.valid()) {
-        // valid is public but dummy is not
-        // since we deleted all dummies, it's likely that we don't need to
-        // put
-        // these entries in the stash
         stash.OInsert(posmapEntry, entry.idx0);
       }
     }
@@ -731,6 +756,8 @@ struct OPosMap {
    *
    * @param key the key to insert
    * @param value the value to insert
+   * @param[out] uid outputs the unique identifier of the key
+   * @param[out] extraHash outputs the extra hash value
    * @param isDummy whether the insertion is dummy
    * @return true if the key already exists, false otherwise
    */
@@ -739,10 +766,13 @@ struct OPosMap {
     PositionType idx0, idx1;
     H keyHash;
     K keyToHash = key;
-    // generate a random key for dummy entry
-    K randKey;
-    read_rand((uint8_t*)&randKey, sizeof(K));
-    obliMove(isDummy, keyToHash, randKey);
+    // if the underlying ram is not oblivious, generate a random key for dummy
+    // entry
+    if constexpr (!isOblivious) {
+      K randKey;
+      read_rand((uint8_t*)&randKey, sizeof(K));
+      obliMove(isDummy, keyToHash, randKey);
+    }
     indexer.getHashIndices(keyToHash, idx0, idx1, keyHash, uid, extraHash);
     OPosMapEntry entryToInsert = {keyHash, idx1, value};
     entryToInsert.setInvalid(isDummy);
@@ -780,10 +810,13 @@ struct OPosMap {
     H keyHash;
     K keyToHash = key;
     bool found = false;
-    // generate a random key for dummy entry
-    K randKey;
-    read_rand((uint8_t*)&randKey, sizeof(K));
-    obliMove(isDummy, keyToHash, randKey);
+    // generate a random key for dummy entry if the underlying ram is not
+    // oblivious
+    if constexpr (!isOblivious) {
+      K randKey;
+      read_rand((uint8_t*)&randKey, sizeof(K));
+      obliMove(isDummy, keyToHash, randKey);
+    }
     indexer.getHashIndices(keyToHash, idx0, idx1, keyHash, uid, extraHash);
     OPosMapEntry entryToFind = {keyHash, idx1, value};
     entryToFind.setInvalid(isDummy);
