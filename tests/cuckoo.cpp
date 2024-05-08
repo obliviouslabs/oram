@@ -317,11 +317,14 @@ void testOMapEraseSimple() {
   ASSERT_FALSE(found);
 }
 
+template <const bool is_improved = true>
 void testOMap() {
-  for (int r = 0; r < 1e2; ++r) {
+  using OMapType = std::conditional_t<is_improved, OMap<int, int>,
+                                      OHashMap<int, int, FULL_OBLIVIOUS>>;
+  for (int r = 0; r < 300; ++r) {
     int mapSize = UniformRandom(100, 1000);
     int keySpace = UniformRandom(mapSize, mapSize * 3);
-    OMap<int, int> map(mapSize);
+    OMapType map(mapSize);
     map.Init();
     std::unordered_map<int, int> std_map;
     for (int r = 0; r < 2 * keySpace; ++r) {
@@ -356,6 +359,34 @@ void testOMap() {
         ASSERT_FALSE(foundFlag);
       }
     }
+  }
+}
+
+template <const int key_size, const int value_size,
+          const bool is_improved = true>
+void testOMapPerf(uint32_t mapSize) {
+  using K = Bytes<key_size>;
+  using V = Bytes<value_size>;
+  using OMapType = std::conditional_t<is_improved, OMap<K, V>,
+                                      OHashMap<K, V, FULL_OBLIVIOUS>>;
+  OMapType map(1e6);
+  map.Init();
+  for (uint32_t r = 0; r < mapSize; ++r) {
+    K key;
+    memcpy(key.data, &r, sizeof(r));
+    V value;
+    map.OInsert(key, value);
+  }
+  for (uint32_t r = 0; r < mapSize; ++r) {
+    K key;
+    memcpy(key.data, &r, sizeof(r));
+    V value;
+    map.Find(key, value);
+  }
+  for (uint32_t r = 0; r < mapSize; ++r) {
+    K key;
+    memcpy(key.data, &r, sizeof(r));
+    map.OErase(key);
   }
 }
 
@@ -451,7 +482,7 @@ TEST(Cuckoo, OHashMapObliviousMixed) { testOHashMap<FULL_OBLIVIOUS>(); }
 
 TEST(Cuckoo, OMapObliviousErase) { testOMapEraseSimple(); }
 
-TEST(Cuckoo, OMapOblivious) { testOMap(); }
+TEST(Cuckoo, OMapOblivious) { testOMap<true>(); }
 
 TEST(Cuckoo, OHashMapInitFromReaderNonOblivious) {
   testOHashMapInitFromReader<NON_OBLIVIOUS>();
@@ -462,6 +493,10 @@ TEST(Cuckoo, OHashMapInitFromReaderOblivious) {
 }
 
 TEST(Cuckoo, OMapInitFromReaderOblivious) { testOMapInitFromReader(); }
+
+TEST(Cuckoo, OMapPerf) { testOMapPerf<20, 32, true>(1e6); }
+
+TEST(Cuckoo, OHashMapPerf) { testOMapPerf<20, 32, false>(1e6); }
 
 TEST(Cuckoo, OMapInitPerf) { testOMapInitFromReaderPerf<20, 32>(1e7); }
 

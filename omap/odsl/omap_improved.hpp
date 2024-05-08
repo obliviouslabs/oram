@@ -13,7 +13,7 @@ namespace ODSL {
  * distinguish entries.
  * @tparam K the key type
  * @tparam H the type of the hash value stored in the position map
- * @tparam HExtra the type of the extra hash value stored in the main map
+ * @tparam HExtra the type of the extra hash value stored in the main oram
  * @tparam PositionType the type of the position,
  *
  */
@@ -73,7 +73,7 @@ struct OPosMapIndexer {
     // existing entry, we will insert it to the stash.
     keyHash = hashIndices.keyHash | (H)1;
     // extraHash is used to further distinguish entries that shares the same
-    // uid. It is stored in the main map, so that we can check the
+    // uid. It is stored in the main oram, so that we can check the
     // existence of an element with very high confidence.
     extraHash = hashIndices.extraHash;
     // generate a unique identifier that includes the key hash and the
@@ -179,7 +179,7 @@ template <typename K, typename PositionType = uint64_t,
 struct OPosMap {
   using V = PositionType;   // value type is the position
   using H = uint32_t;       // additional hash bits to distinguish elements
-  using HExtra = uint64_t;  // extra hash bits stored in the main map to check
+  using HExtra = uint64_t;  // extra hash bits stored in the main oram to check
                             // for the existence of an element
   using Indexer = OPosMapIndexer<K, H, HExtra, PositionType>;
 
@@ -191,7 +191,7 @@ struct OPosMap {
    * @brief A stash storing position map entries that cannot be stored in the
    * hash tables because both buckets are full. The stash works as a queue and
    * helps deamortize the cost of oblivious insertion. Notice that this stash is
-   * different from the stash in the main map. The latter is used to store
+   * different from the stash in the main oram. The latter is used to store
    * indistinguishable keys.
    *
    * @tparam K the key type
@@ -800,9 +800,12 @@ struct OPosMap {
    * @brief Update the value of a key if it exists and return the old value.
    *
    * @param key the key to search
-   * @param value the input new value and value to return
+   * @param[in, out] value the input new value and value to return
+   * @param[out] uid outputs the unique identifier of the key
+   * @param[out] extraHash outputs the extra hash value
    * @param isDummy whether the search is dummy
-   * @return true if the key is found, false otherwise
+   * @return true if there is a matching entry in the position map, false
+   * otherwise
    */
   bool Update(const K& key, V& value, UidType& uid, HExtra& extraHash,
               bool isDummy = false) {
@@ -845,69 +848,20 @@ struct OPosMap {
     return found & (!isDummy);
   }
 
-  //   /**
-  //    * @brief Find the values of a batch of keys obliviously in the two
-  //    tables in
-  //    * parallel. Defer the recursive ORAM writeback procedure. The input may
-  //    have
-  //    * duplicate keys and may be arranged in any order.
-  //    *
-  //    * @tparam KeyIter
-  //    * @tparam ValResIter
-  //    * @param keyBegin
-  //    * @param keyEnd
-  //    * @param valResBegin
-  //    */
-  //   template <class KeyIter, class ValResIter>
-  //   void FindBatchDeferWriteBack(const KeyIter keyBegin, const KeyIter
-  //   keyEnd,
-  //                                ValResIter valResBegin) {
-  //     size_t keySize = std::distance(keyBegin, keyEnd);
-  //     std::vector<std::vector<ValResult>> valResTables(
-  //         2, std::vector<ValResult>(keySize));
-  //     std::vector<std::vector<PositionType>> hashIndices(
-  //         2, std::vector<PositionType>(keySize));
-
-  //     for (size_t i = 0; i < keySize; ++i) {
-  //       indexer.getHashIndices(*(keyBegin + i), hashIndices[0][i],
-  //                              hashIndices[1][i]);
-  //     }
-
-  // #pragma omp parallel for num_threads(2) schedule(static, 1)
-  //     for (int i = 0; i < 2; ++i) {
-  //       findTableBatchDeferWriteBack(i, keyBegin, keyEnd,
-  //       valResTables[i].begin(),
-  //                                    hashIndices[i]);
-  //     }
-
-  //     for (size_t i = 0; i < keySize; ++i) {
-  //       mergeValRes(valResTables[0][i], valResTables[1][i], *(valResBegin +
-  //       i)); (valResBegin + i)->found |=
-  //           searchStash(*(keyBegin + i), (valResBegin + i)->value, stash);
-  //     }
-  //   }
-
-  //   /**
-  //    * @brief Perform writeback of the recursive ORAM.
-  //    *
-  //    * @param tableNum the table number to write back, 0 or 1
-  //    */
-  //   void WriteBackTable(int tableNum) {
-  //     static_assert(isOblivious);
-  //     Assert(tableNum == 0 || tableNum == 1);
-  //     if (tableNum == 0) {
-  //       table0.WriteBack();
-  //     } else {
-  //       table1.WriteBack();
-  //     }
-  //   }
-
   /**
-   * @brief Erase a key from the hash map. The function is oblivious.
+   * @brief Erase a key from the position map. The function is oblivious. Note
+   * that there's chance that the key is not actually present even though the
+   * indices and key hash match. We need to check the extra hash in the main
+   * oram before erasing the entry from the position map.
    *
    * @param key the key to erase
+   * @param value the new value for the entry in case the key is mismatched in
+   * the position map
+   * @param mainMapErase the function to erase the key in the main oram, should
+   * return true if the key is found
    * @param isDummy whether the erase is dummy operation
-   * @return true if the key is found, false otherwise
+   * @return true if there is an entry in the position map that matches the key,
+   * false otherwise
    */
   template <class MainMapEraseFunc>
   bool OErase(const K& key, const V& value,
@@ -917,9 +871,11 @@ struct OPosMap {
     HExtra extraHash;
     H keyHash;
     K keyToHash = key;
-    K randKey;
-    read_rand((uint8_t*)&randKey, sizeof(K));
-    obliMove(isDummy, keyToHash, randKey);
+    if constexpr (!isOblivious) {
+      K randKey;
+      read_rand((uint8_t*)&randKey, sizeof(K));
+      obliMove(isDummy, keyToHash, randKey);
+    }
     indexer.getHashIndices(keyToHash, idx0, idx1, keyHash, uid, extraHash);
     bool erased = false;
     OPosMapEntry entryToErase = {keyHash, idx1, DUMMY<V>()};
@@ -956,7 +912,7 @@ struct OPosMap {
         bool notFoundFlag = (eraseTable0Idx == -1) & (eraseTable1Idx == -1) &
                             (eraseStashIdx == -1);
         obliMove(notFoundFlag | isDummy, uid, DUMMY<UidType>());
-        // we check the main map to ensure that the element is actually present
+        // we check the main oram to ensure that the element is actually present
         // (rather than a false positive) before erasing it
         erased = mainMapErase(entryToErasePos, uid, extraHash);
         for (int i = 0; i < bucketSize; ++i) {
@@ -1184,6 +1140,12 @@ struct OMap {
     initContext.Finalize();
   }
 
+  /**
+   * @brief Insert a key value pair into the map, return true if the key is
+   * already in the map, in which case the value is updated. The function is
+   * oblivious.
+   *
+   */
   bool Insert(const K& key, const V& value) {
     PositionType newPos = oram.GetRandPos();
     PositionType pos = newPos;
@@ -1227,6 +1189,15 @@ struct OMap {
     return existInCuckoo | existInStash;
   }
 
+  bool OInsert(const K& key, const V& value) { return Insert(key, value); }
+
+  /**
+   * @brief Find the value of a key in the map. The function is oblivious.
+   *
+   * @param key the key to search
+   * @param[out] value the value to return
+   * @return true if the key is found, false otherwise
+   */
   bool Find(const K& key, V& value) {
     PositionType newPos = oram.GetRandPos();
     PositionType pos = newPos;
@@ -1250,6 +1221,13 @@ struct OMap {
     return exist;
   }
 
+  /**
+   * @brief Erase a key from the map. The function is oblivious.
+   *
+   * @param key the key to erase
+   * @return true if there is an entry in the position map that matches the key,
+   * false otherwise
+   */
   bool Erase(const K& key) {
     PositionType newPos = oram.GetRandPos();  // possibly the erasure is dummy
     auto mainMapErase = [&](PositionType pos, UidType uid,
@@ -1278,5 +1256,64 @@ struct OMap {
     }
     return erased;
   }
+
+  bool OErase(const K& key) { return Erase(key); }
+
+  //   /**
+  //    * @brief Find the values of a batch of keys obliviously in the two
+  //    tables in
+  //    * parallel. Defer the recursive ORAM writeback procedure. The input may
+  //    have
+  //    * duplicate keys and may be arranged in any order.
+  //    *
+  //    * @tparam KeyIter
+  //    * @tparam ValResIter
+  //    * @param keyBegin
+  //    * @param keyEnd
+  //    * @param valResBegin
+  //    */
+  //   template <class KeyIter, class ValResIter>
+  //   void FindBatchDeferWriteBack(const KeyIter keyBegin, const KeyIter
+  //   keyEnd,
+  //                                ValResIter valResBegin) {
+  //     size_t keySize = std::distance(keyBegin, keyEnd);
+  //     std::vector<std::vector<ValResult>> valResTables(
+  //         2, std::vector<ValResult>(keySize));
+  //     std::vector<std::vector<PositionType>> hashIndices(
+  //         2, std::vector<PositionType>(keySize));
+
+  //     for (size_t i = 0; i < keySize; ++i) {
+  //       indexer.getHashIndices(*(keyBegin + i), hashIndices[0][i],
+  //                              hashIndices[1][i]);
+  //     }
+
+  // #pragma omp parallel for num_threads(2) schedule(static, 1)
+  //     for (int i = 0; i < 2; ++i) {
+  //       findTableBatchDeferWriteBack(i, keyBegin, keyEnd,
+  //       valResTables[i].begin(),
+  //                                    hashIndices[i]);
+  //     }
+
+  //     for (size_t i = 0; i < keySize; ++i) {
+  //       mergeValRes(valResTables[0][i], valResTables[1][i], *(valResBegin +
+  //       i)); (valResBegin + i)->found |=
+  //           searchStash(*(keyBegin + i), (valResBegin + i)->value, stash);
+  //     }
+  //   }
+
+  //   /**
+  //    * @brief Perform writeback of the recursive ORAM.
+  //    *
+  //    * @param tableNum the table number to write back, 0 or 1
+  //    */
+  //   void WriteBackTable(int tableNum) {
+  //     static_assert(isOblivious);
+  //     Assert(tableNum == 0 || tableNum == 1);
+  //     if (tableNum == 0) {
+  //       table0.WriteBack();
+  //     } else {
+  //       table1.WriteBack();
+  //     }
+  //   }
 };
 }  // namespace ODSL
