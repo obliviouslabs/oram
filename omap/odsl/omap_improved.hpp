@@ -359,6 +359,41 @@ struct OPosMap {
   // bucket size limitation
   StashType stash;
 
+  std::thread table1AccessThread;
+  Lock table1AccessLock;
+  Lock table1AccessDoneLock;
+  struct Table1WorkerData {
+    bool found;
+    PositionType idx0;
+    PositionType idx1;
+    H keyHash;
+    V value;
+  };
+  Table1WorkerData table1WorkerData;
+  bool destructedFlag = false;
+
+  void table1AccessFunc() {
+    if constexpr (isOblivious) {
+      auto bucketAccessor1 = [&](BucketType& bucket) {
+        for (int i = 0; i < bucketSize; ++i) {
+          auto& entry = bucket.entries[i];
+          bool matchFlag = (entry.keyHash == table1WorkerData.keyHash) &
+                           (entry.otherIdx == table1WorkerData.idx0);
+          table1WorkerData.found |= matchFlag;
+          obliSwap(matchFlag, entry.value, table1WorkerData.value);
+        }
+      };
+      while (true) {
+        table1AccessLock.lock();
+        if (destructedFlag) {
+          return;
+        }
+        table1.Access(table1WorkerData.idx1, bucketAccessor1);
+        table1AccessDoneLock.unlock();
+      }
+    }
+  }
+
   /**
    * @brief Helper function that accesses the hash table.
    *
@@ -653,6 +688,9 @@ struct OPosMap {
       table1.SetSize(tableSize, remainingCacheBytes);
     }
     stash.SetSize(16);
+    table1AccessLock.lock();
+    table1AccessDoneLock.lock();
+    table1AccessThread = std::thread(&OPosMap::table1AccessFunc, this);
   }
 
   /**
@@ -823,19 +861,29 @@ struct OPosMap {
     indexer.getHashIndices(keyToHash, idx0, idx1, keyHash, uid, extraHash);
     OPosMapEntry entryToFind = {keyHash, idx1, value};
     entryToFind.setInvalid(isDummy);
-    auto bucketAccessor = [&](BucketType& bucket) {
-      for (int i = 0; i < bucketSize; ++i) {
-        auto& entry = bucket.entries[i];
-        bool matchFlag =
-            (entry.keyHash == entryToFind.keyHash) & (entry.otherIdx == idx1);
-        found |= matchFlag;
-        obliSwap(matchFlag, entry.value, value);
-      }
-    };
-    table0.Access(idx0, bucketAccessor);
-    std::swap(idx0, idx1);
-    table1.Access(idx0, bucketAccessor);
-    std::swap(idx0, idx1);
+    table1WorkerData.idx0 = idx0;
+    table1WorkerData.idx1 = idx1;
+    table1WorkerData.keyHash = entryToFind.keyHash;
+    table1WorkerData.value = value;
+    table1WorkerData.found = false;
+    table1AccessLock.unlock();
+    // table 0 and 1 accessed in parallel
+    {
+      auto bucketAccessor0 = [&](BucketType& bucket) {
+        for (int i = 0; i < bucketSize; ++i) {
+          auto& entry = bucket.entries[i];
+          bool matchFlag =
+              (entry.keyHash == entryToFind.keyHash) & (entry.otherIdx == idx1);
+          found |= matchFlag;
+          obliSwap(matchFlag, entry.value, value);
+        }
+      };
+      table0.Access(idx0, bucketAccessor0);
+    }
+    table1AccessDoneLock.lock();
+    found |= table1WorkerData.found;
+    obliMove(table1WorkerData.found, value, table1WorkerData.value);
+
     for (size_t i = 0; i < stash.size(); ++i) {
       auto& stashEntry = stash[i];
       auto& entry = stashEntry.entry;
@@ -935,6 +983,12 @@ struct OPosMap {
     table0.Access(idx0, eraseTable0Func);
     load -= erased;
     return erased;
+  }
+
+  ~OPosMap() {
+    destructedFlag = true;
+    table1AccessLock.unlock();
+    table1AccessThread.join();
   }
 
   //  private:

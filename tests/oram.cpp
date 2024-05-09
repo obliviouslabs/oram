@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
 
+#include <chrono>
 #include <unordered_map>
 
 #include "algorithm/element.hpp"
@@ -441,6 +442,37 @@ TEST(CircuitORAM, ReadPerf) {
          diff.count() * 1e6 / numAccesses);
 }
 
+TEST(CircuitORAM, ReadLatency) {
+  int memSize = 1 << 20;
+  typedef std::chrono::high_resolution_clock Clock;
+  ODSL::CircuitORAM::ORAM<TestElement, 2, 20, uint32_t, uint32_t, 4096, false>
+      oram(memSize);
+  uint64_t numAccesses = 1e5;
+  uint64_t sleepTimeus = 100;
+  auto start = std::chrono::system_clock::now();
+  uint64_t totalLatency = 0;
+  for (uint64_t i = 0; i < numAccesses; i++) {
+    TestElement val;
+    uint32_t readPos = rand() % memSize;
+    auto t1 = Clock::now();
+    oram.Read(readPos, 0, val);
+    auto t2 = Clock::now();
+    uint64_t latency =
+        std::chrono::duration_cast<std::chrono::nanoseconds>(t2 - t1).count();
+
+    // std::this_thread::sleep_for(std::chrono::microseconds(sleepTimeus));
+    for (int j = 0; j < sleepTimeus; j++) {
+      for (int k = 0; k < 1000; k++) {
+        latency = k % 2 ? latency + 1 : latency - 1;
+      }
+    }
+    totalLatency += latency;
+  }
+
+  std::cout << "Read latency: " << totalLatency / numAccesses << " ns"
+            << std::endl;
+}
+
 TEST(CircuitORAM, testInitWithReader) {
   for (int memSize :
        {2,   3,    5,    7,    9,    33,    40,    55,    127,    129,   543,
@@ -647,6 +679,43 @@ TEST(RecursiveORAM, testMixed) {
       } break;
     }
   }
+}
+
+TEST(RecursiveORAM, AccessLatency) {
+  int memSize = 1 << 23;
+  if (EM::Backend::g_DefaultBackend) {
+    delete EM::Backend::g_DefaultBackend;
+  }
+  size_t BackendSize = 4e9;
+  EM::Backend::g_DefaultBackend =
+      new EM::Backend::MemServerBackend(BackendSize);
+  typedef std::chrono::high_resolution_clock Clock;
+  ODSL::RecursiveORAM<TestElement> oram(memSize, 1UL << 32);
+  oram.InitDefault(TestElement());
+  uint64_t numAccesses = 1e5;
+  uint64_t sleepTimeus = 100;
+  auto start = std::chrono::system_clock::now();
+  uint64_t totalLatency = 0;
+  for (uint64_t i = 0; i < numAccesses; i++) {
+    TestElement val;
+    uint32_t readPos = rand() % memSize;
+    auto t1 = Clock::now();
+    oram.Read(readPos, val);
+    auto t2 = Clock::now();
+    uint64_t latency =
+        std::chrono::duration_cast<std::chrono::nanoseconds>(t2 - t1).count();
+
+    // std::this_thread::sleep_for(std::chrono::microseconds(sleepTimeus));
+    for (int j = 0; j < sleepTimeus; j++) {
+      for (int k = 0; k < 1000; k++) {
+        latency = k % 2 ? latency + 1 : latency - 1;
+      }
+    }
+    totalLatency += latency;
+  }
+
+  std::cout << "Read latency: " << totalLatency / numAccesses << " ns"
+            << std::endl;
 }
 
 TEST(RecursiveORAM, testBatchAccessDefer) {

@@ -412,6 +412,17 @@ void testOMapThroughput(uint32_t mapSize) {
             << " ops/s" << std::endl;
 }
 
+void busySleep(uint64_t us) {
+  auto t1 = std::chrono::high_resolution_clock::now();
+  while (true) {
+    auto t2 = std::chrono::high_resolution_clock::now();
+    if (std::chrono::duration_cast<std::chrono::microseconds>(t2 - t1).count() >
+        us) {
+      break;
+    }
+  }
+}
+
 template <const int key_size, const int value_size,
           const bool is_improved = true>
 void testOMapLatency(uint32_t mapSize) {
@@ -437,7 +448,7 @@ void testOMapLatency(uint32_t mapSize) {
     uint64_t latency =
         std::chrono::duration_cast<std::chrono::nanoseconds>(t2 - t1).count();
     insertTotalLatency += latency;
-    std::this_thread::sleep_for(std::chrono::microseconds(sleepTimeus));
+    busySleep(sleepTimeus);
   }
   std::cout << "Insert latency: " << insertTotalLatency / round << " ns"
             << std::endl;
@@ -452,7 +463,7 @@ void testOMapLatency(uint32_t mapSize) {
     uint64_t latency =
         std::chrono::duration_cast<std::chrono::nanoseconds>(t2 - t1).count();
     findTotalLatency += latency;
-    std::this_thread::sleep_for(std::chrono::microseconds(sleepTimeus));
+    busySleep(sleepTimeus);
   }
   std::cout << "Find latency: " << findTotalLatency / round << " ns"
             << std::endl;
@@ -466,7 +477,7 @@ void testOMapLatency(uint32_t mapSize) {
     uint64_t latency =
         std::chrono::duration_cast<std::chrono::nanoseconds>(t2 - t1).count();
     eraseTotalLatency += latency;
-    std::this_thread::sleep_for(std::chrono::microseconds(sleepTimeus));
+    busySleep(sleepTimeus);
   }
   std::cout << "Erase latency: " << eraseTotalLatency / round << " ns"
             << std::endl;
@@ -576,13 +587,13 @@ TEST(Cuckoo, OHashMapInitFromReaderOblivious) {
 
 TEST(Cuckoo, OMapInitFromReaderOblivious) { testOMapInitFromReader(); }
 
-TEST(Cuckoo, OMapThroughput) { testOMapThroughput<20, 32, true>(1e6); }
+TEST(Cuckoo, OMapThroughput) { testOMapThroughput<20, 32, true>(5e6); }
 
-TEST(Cuckoo, OHashMapThroughput) { testOMapThroughput<20, 32, false>(1e6); }
+TEST(Cuckoo, OHashMapThroughput) { testOMapThroughput<20, 32, false>(5e6); }
 
-TEST(Cuckoo, OMapLatency) { testOMapLatency<20, 32, true>(1e6); }
+TEST(Cuckoo, OMapLatency) { testOMapLatency<20, 32, true>(5e6); }
 
-TEST(Cuckoo, OHashMapLatency) { testOMapLatency<20, 32, false>(1e6); }
+TEST(Cuckoo, OHashMapLatency) { testOMapLatency<20, 32, false>(5e6); }
 
 TEST(Cuckoo, OMapInitPerf) { testOMapInitFromReaderPerf<20, 32>(1e7); }
 
