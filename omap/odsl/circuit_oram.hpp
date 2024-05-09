@@ -61,13 +61,23 @@ struct ORAM {
   std::vector<Block_> path;  // a buffer for reading and writing paths, the
                              // first stashSize blocks are the stash
   int writeBackPathDepth;
-  PositionType writeBackNodeIdxArr[64];
-  PositionType writeBackPos;
-  Block_ writeBackBlock;  // a buffer for writing back a block
+
+  struct WorkerParams {
+    bool findFlag;
+    PositionType writeBackNodeIdxArr[64];
+    PositionType writeBackPos;
+    UidType workerUid;
+    Block_ writeBackBlock;
+  };
+
+  WorkerParams workerParams;
+
+  // a buffer for writing back a block
 
   uint64_t rootNonce = 0;  // nonce for the root bucket
 
   Lock mutex;
+  Lock continueMutex;
   // Conditional variable to trigger maintenance thread
   Lock maintenanceLock;
   bool destructed = false;
@@ -472,9 +482,20 @@ struct ORAM {
       if (destructed) {
         return;
       }
+      writeBackPathDepth = readPathAndGetNodeIdxArr(
+          workerParams.writeBackPos, workerParams.writeBackNodeIdxArr);
+      workerParams.findFlag = ReadElementAndRemoveFromPath(
+          path.begin(), path.begin() + (writeBackPathDepth * Z + stashSize),
+          workerParams.workerUid, workerParams.writeBackBlock.data);
+      continueMutex.unlock();
+      maintenanceLock.lock();
+      if (destructed) {
+        return;
+      }
       // std::cout << "Maintenance op" << std::endl;
-      writeBlockWithRetry(writeBackBlock, writeBackPos, writeBackPathDepth,
-                          writeBackNodeIdxArr);
+      writeBlockWithRetry(workerParams.writeBackBlock,
+                          workerParams.writeBackPos, writeBackPathDepth,
+                          workerParams.writeBackNodeIdxArr);
       // std::cout << "Maintenance op done for oram of size " << size()
       //           << std::endl;
       mutex.unlock();
@@ -532,6 +553,7 @@ struct ORAM {
     }
     path.resize(stashSize + Z * depth);
     maintenanceLock.lock();
+    continueMutex.lock();
     // start maintenance thread
     maintenanceThread = std::thread(&ORAM::startMaintenanceThread, this);
   }
@@ -626,15 +648,15 @@ struct ORAM {
   PositionType Read(PositionType pos, const UidType& uid, T& out,
                     PositionType newPos) {
     mutex.lock();
-    writeBackPathDepth = readPathAndGetNodeIdxArr(pos, writeBackNodeIdxArr);
-
-    bool findFlag = ReadElementAndRemoveFromPath(
-        path.begin(), path.begin() + (writeBackPathDepth * Z + stashSize), uid,
-        out);
-
-    writeBackBlock = Block_(out, newPos, uid);
-    writeBackPos = pos;
-    obliMove(!findFlag, writeBackBlock.uid, DUMMY<UidType>());
+    workerParams.writeBackBlock.position = newPos;
+    workerParams.writeBackBlock.uid = uid;
+    workerParams.writeBackPos = pos;
+    workerParams.workerUid = uid;
+    maintenanceLock.unlock();
+    continueMutex.lock();
+    obliMove(!workerParams.findFlag, workerParams.writeBackBlock.uid,
+             DUMMY<UidType>());
+    out = workerParams.writeBackBlock.data;
 
     maintenanceLock.unlock();
     return newPos;
@@ -665,10 +687,14 @@ struct ORAM {
   template <const int _evict_freq = evict_freq>
   PositionType Write(const UidType& uid, const T& in, PositionType newPos) {
     mutex.lock();
-    writeBackPos = (evictCounter++) % _size;
-    writeBackPathDepth =
-        readPathAndGetNodeIdxArr(writeBackPos, writeBackNodeIdxArr);
-    writeBackBlock = Block_(in, newPos, uid);
+    workerParams.writeBackPos = (evictCounter++) % _size;
+    workerParams.workerUid = DUMMY<UidType>();
+    workerParams.writeBackBlock.position = newPos;
+    workerParams.writeBackBlock.uid = uid;
+
+    maintenanceLock.unlock();
+    continueMutex.lock();
+    workerParams.writeBackBlock.data = in;
     maintenanceLock.unlock();
 
     return newPos;
@@ -812,21 +838,17 @@ struct ORAM {
                       const Func& updateFunc, T& out,
                       const UidType& updatedUid) {
     mutex.lock();
-    writeBackPos = pos;
-    writeBackPathDepth = readPathAndGetNodeIdxArr(pos, writeBackNodeIdxArr);
-    ReadElementAndRemoveFromPath(
-        path.begin(), path.begin() + (writeBackPathDepth * Z + stashSize), uid,
-        out);
-    bool keepFlag = updateFunc(out);
-    writeBackBlock = {out, newPos, DUMMY<UidType>()};
-    // UidType newUid = DUMMY<UidType>();
-    obliMove(keepFlag, writeBackBlock.uid, updatedUid);
-    // std::cout << "Read done for oram of size " << size() << std::endl;
+    workerParams.writeBackPos = pos;
+    workerParams.workerUid = uid;
+    workerParams.writeBackBlock.position = newPos;
+    workerParams.writeBackBlock.uid = DUMMY<UidType>();
     maintenanceLock.unlock();
-    // Block_ newBlock(out, newPos, newUid);
-    // writeBlockWithRetry(writeBackBlock, writeBackPos, writeBackPathDepth,
-    //                     writeBackNodeIdxArr);
-    // mutex.unlock();
+    continueMutex.lock();
+    bool keepFlag = updateFunc(workerParams.writeBackBlock.data);
+
+    obliMove(keepFlag, workerParams.writeBackBlock.uid, updatedUid);
+    out = workerParams.writeBackBlock.data;
+    maintenanceLock.unlock();
     return newPos;
   }
 
