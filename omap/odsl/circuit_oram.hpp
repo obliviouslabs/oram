@@ -1,5 +1,10 @@
 #pragma once
 
+#include <omp.h>
+
+#include <semaphore>
+#include <thread>
+
 #include "oram_common.hpp"
 
 /// @brief This file implements Circuit ORAM (https://eprint.iacr.org/2014/672),
@@ -55,8 +60,17 @@ struct ORAM {
 
   std::vector<Block_> path;  // a buffer for reading and writing paths, the
                              // first stashSize blocks are the stash
+  int writeBackPathDepth;
+  PositionType writeBackNodeIdxArr[64];
+  PositionType writeBackPos;
+  Block_ writeBackBlock;  // a buffer for writing back a block
 
   uint64_t rootNonce = 0;  // nonce for the root bucket
+
+  Lock mutex;
+  // Conditional variable to trigger maintenance thread
+  Lock maintenanceLock;
+  bool destructed = false;
 
   /**
    * @brief Evict the buffered path
@@ -449,6 +463,24 @@ struct ORAM {
     }
   }
 
+  std::thread maintenanceThread;
+
+  void startMaintenanceThread() {
+    while (true) {
+      maintenanceLock.lock();
+
+      if (destructed) {
+        return;
+      }
+      // std::cout << "Maintenance op" << std::endl;
+      writeBlockWithRetry(writeBackBlock, writeBackPos, writeBackPathDepth,
+                          writeBackNodeIdxArr);
+      // std::cout << "Maintenance op done for oram of size " << size()
+      //           << std::endl;
+      mutex.unlock();
+    }
+  }
+
  public:
   ORAM() {}
 
@@ -481,6 +513,7 @@ struct ORAM {
    * @param cacheBytes The maximum size of the tree-top cache in bytes.
    */
   void SetSize(PositionType size, uint64_t cacheBytes = MAX_CACHE_SIZE) {
+    std::cout << "Circuit oram size: " << size << std::endl;
     if (_size) {
       throw std::runtime_error("Circuit ORAM double initialization");
     }
@@ -498,6 +531,15 @@ struct ORAM {
       throw std::runtime_error("Circuit ORAM too large");
     }
     path.resize(stashSize + Z * depth);
+    maintenanceLock.lock();
+    // start maintenance thread
+    maintenanceThread = std::thread(&ORAM::startMaintenanceThread, this);
+  }
+
+  ~ORAM() {
+    destructed = true;
+    maintenanceLock.unlock();
+    maintenanceThread.join();
   }
 
   /**
@@ -583,15 +625,18 @@ struct ORAM {
    */
   PositionType Read(PositionType pos, const UidType& uid, T& out,
                     PositionType newPos) {
-    PositionType nodeIdxArr[64];
-    int pathDepth = readPathAndGetNodeIdxArr(pos, nodeIdxArr);
+    mutex.lock();
+    writeBackPathDepth = readPathAndGetNodeIdxArr(pos, writeBackNodeIdxArr);
 
     bool findFlag = ReadElementAndRemoveFromPath(
-        path.begin(), path.begin() + (pathDepth * Z + stashSize), uid, out);
+        path.begin(), path.begin() + (writeBackPathDepth * Z + stashSize), uid,
+        out);
 
-    Block_ newBlock(out, newPos, uid);
-    obliMove(!findFlag, newBlock.uid, DUMMY<UidType>());
-    writeBlockWithRetry(newBlock, pos, pathDepth, nodeIdxArr);
+    writeBackBlock = Block_(out, newPos, uid);
+    writeBackPos = pos;
+    obliMove(!findFlag, writeBackBlock.uid, DUMMY<UidType>());
+
+    maintenanceLock.unlock();
     return newPos;
   }
 
@@ -619,11 +664,13 @@ struct ORAM {
    */
   template <const int _evict_freq = evict_freq>
   PositionType Write(const UidType& uid, const T& in, PositionType newPos) {
-    PositionType pos = (evictCounter++) % _size;
-    PositionType nodeIdxArr[64];
-    int pathDepth = readPathAndGetNodeIdxArr(pos, nodeIdxArr);
-    Block_ newBlock(in, newPos, uid);
-    writeBlockWithRetry<_evict_freq>(newBlock, pos, pathDepth, nodeIdxArr);
+    mutex.lock();
+    writeBackPos = (evictCounter++) % _size;
+    writeBackPathDepth =
+        readPathAndGetNodeIdxArr(writeBackPos, writeBackNodeIdxArr);
+    writeBackBlock = Block_(in, newPos, uid);
+    maintenanceLock.unlock();
+
     return newPos;
   }
 
@@ -764,15 +811,22 @@ struct ORAM {
   PositionType Update(PositionType pos, const UidType& uid, PositionType newPos,
                       const Func& updateFunc, T& out,
                       const UidType& updatedUid) {
-    PositionType nodeIdxArr[64];
-    int pathDepth = readPathAndGetNodeIdxArr(pos, nodeIdxArr);
+    mutex.lock();
+    writeBackPos = pos;
+    writeBackPathDepth = readPathAndGetNodeIdxArr(pos, writeBackNodeIdxArr);
     ReadElementAndRemoveFromPath(
-        path.begin(), path.begin() + (pathDepth * Z + stashSize), uid, out);
+        path.begin(), path.begin() + (writeBackPathDepth * Z + stashSize), uid,
+        out);
     bool keepFlag = updateFunc(out);
-    UidType newUid = DUMMY<UidType>();
-    obliMove(keepFlag, newUid, updatedUid);
-    Block_ newBlock(out, newPos, newUid);
-    writeBlockWithRetry(newBlock, pos, pathDepth, nodeIdxArr);
+    writeBackBlock = {out, newPos, DUMMY<UidType>()};
+    // UidType newUid = DUMMY<UidType>();
+    obliMove(keepFlag, writeBackBlock.uid, updatedUid);
+    // std::cout << "Read done for oram of size " << size() << std::endl;
+    maintenanceLock.unlock();
+    // Block_ newBlock(out, newPos, newUid);
+    // writeBlockWithRetry(writeBackBlock, writeBackPos, writeBackPathDepth,
+    //                     writeBackNodeIdxArr);
+    // mutex.unlock();
     return newPos;
   }
 
@@ -1048,6 +1102,6 @@ struct ORAM {
     }
 #endif
   }
-};
+};  // namespace ODSL::CircuitORAM
 
 }  // namespace ODSL::CircuitORAM

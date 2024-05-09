@@ -1,5 +1,7 @@
 #include <gtest/gtest.h>
 
+#include <chrono>
+
 #include "odsl/omap.hpp"
 #include "odsl/omap_improved.hpp"
 #include "unordered_map"
@@ -364,30 +366,110 @@ void testOMap() {
 
 template <const int key_size, const int value_size,
           const bool is_improved = true>
-void testOMapPerf(uint32_t mapSize) {
+void testOMapThroughput(uint32_t mapSize) {
   using K = Bytes<key_size>;
   using V = Bytes<value_size>;
   using OMapType = std::conditional_t<is_improved, OMap<K, V>,
                                       OHashMap<K, V, FULL_OBLIVIOUS>>;
-  OMapType map(1e6);
+  OMapType map(mapSize);
+  uint32_t round = 1e5;
   map.Init();
-  for (uint32_t r = 0; r < mapSize; ++r) {
+  typedef std::chrono::high_resolution_clock Clock;
+  auto t1 = Clock::now();
+  for (uint32_t r = 0; r < round; ++r) {
     K key;
     memcpy(key.data, &r, sizeof(r));
     V value;
     map.OInsert(key, value);
   }
-  for (uint32_t r = 0; r < mapSize; ++r) {
+  auto t2 = Clock::now();
+  uint64_t insertTotalLatency =
+      std::chrono::duration_cast<std::chrono::nanoseconds>(t2 - t1).count();
+  std::cout << "Insert throughput: " << round * 1e9 / insertTotalLatency
+            << " ops/s" << std::endl;
+  t1 = Clock::now();
+  for (uint32_t r = 0; r < round; ++r) {
     K key;
     memcpy(key.data, &r, sizeof(r));
     V value;
     map.Find(key, value);
   }
-  for (uint32_t r = 0; r < mapSize; ++r) {
+  t2 = Clock::now();
+  uint64_t findTotalLatency =
+      std::chrono::duration_cast<std::chrono::nanoseconds>(t2 - t1).count();
+  std::cout << "Find throughput: " << round * 1e9 / findTotalLatency << " ops/s"
+            << std::endl;
+  t1 = Clock::now();
+  for (uint32_t r = 0; r < round; ++r) {
     K key;
     memcpy(key.data, &r, sizeof(r));
     map.OErase(key);
   }
+  t2 = Clock::now();
+  uint64_t eraseTotalLatency =
+      std::chrono::duration_cast<std::chrono::nanoseconds>(t2 - t1).count();
+  std::cout << "Erase throughput: " << round * 1e9 / eraseTotalLatency
+            << " ops/s" << std::endl;
+}
+
+template <const int key_size, const int value_size,
+          const bool is_improved = true>
+void testOMapLatency(uint32_t mapSize) {
+  using K = Bytes<key_size>;
+  using V = Bytes<value_size>;
+  using OMapType = std::conditional_t<is_improved, OMap<K, V>,
+                                      OHashMap<K, V, FULL_OBLIVIOUS>>;
+  OMapType map(mapSize);
+  map.Init();
+
+  // use a high resolution timer
+  typedef std::chrono::high_resolution_clock Clock;
+  uint64_t insertTotalLatency = 0;
+  uint32_t round = 1e5;
+  uint64_t sleepTimeus = 100;
+  for (uint32_t r = 0; r < round; ++r) {
+    K key;
+    memcpy(key.data, &r, sizeof(r));
+    V value;
+    auto t1 = Clock::now();
+    map.OInsert(key, value);
+    auto t2 = Clock::now();
+    uint64_t latency =
+        std::chrono::duration_cast<std::chrono::nanoseconds>(t2 - t1).count();
+    insertTotalLatency += latency;
+    std::this_thread::sleep_for(std::chrono::microseconds(sleepTimeus));
+  }
+  std::cout << "Insert latency: " << insertTotalLatency / round << " ns"
+            << std::endl;
+  uint64_t findTotalLatency = 0;
+  for (uint32_t r = 0; r < round; ++r) {
+    K key;
+    memcpy(key.data, &r, sizeof(r));
+    V value;
+    auto t1 = Clock::now();
+    map.Find(key, value);
+    auto t2 = Clock::now();
+    uint64_t latency =
+        std::chrono::duration_cast<std::chrono::nanoseconds>(t2 - t1).count();
+    findTotalLatency += latency;
+    std::this_thread::sleep_for(std::chrono::microseconds(sleepTimeus));
+  }
+  std::cout << "Find latency: " << findTotalLatency / round << " ns"
+            << std::endl;
+  uint64_t eraseTotalLatency = 0;
+  for (uint32_t r = 0; r < round; ++r) {
+    K key;
+    memcpy(key.data, &r, sizeof(r));
+    auto t1 = Clock::now();
+    map.OErase(key);
+    auto t2 = Clock::now();
+    uint64_t latency =
+        std::chrono::duration_cast<std::chrono::nanoseconds>(t2 - t1).count();
+    eraseTotalLatency += latency;
+    std::this_thread::sleep_for(std::chrono::microseconds(sleepTimeus));
+  }
+  std::cout << "Erase latency: " << eraseTotalLatency / round << " ns"
+            << std::endl;
 }
 
 void testOMapInitFromReader() {
@@ -494,9 +576,13 @@ TEST(Cuckoo, OHashMapInitFromReaderOblivious) {
 
 TEST(Cuckoo, OMapInitFromReaderOblivious) { testOMapInitFromReader(); }
 
-TEST(Cuckoo, OMapPerf) { testOMapPerf<20, 32, true>(1e6); }
+TEST(Cuckoo, OMapThroughput) { testOMapThroughput<20, 32, true>(1e6); }
 
-TEST(Cuckoo, OHashMapPerf) { testOMapPerf<20, 32, false>(1e6); }
+TEST(Cuckoo, OHashMapThroughput) { testOMapThroughput<20, 32, false>(1e6); }
+
+TEST(Cuckoo, OMapLatency) { testOMapLatency<20, 32, true>(1e6); }
+
+TEST(Cuckoo, OHashMapLatency) { testOMapLatency<20, 32, false>(1e6); }
 
 TEST(Cuckoo, OMapInitPerf) { testOMapInitFromReaderPerf<20, 32>(1e7); }
 
