@@ -428,8 +428,8 @@ template <const int key_size, const int value_size,
 void testOMapLatency(uint32_t mapSize) {
   using K = Bytes<key_size>;
   using V = Bytes<value_size>;
-  using OMapType = std::conditional_t<is_improved, OMap<K, V>,
-                                      OHashMap<K, V, FULL_OBLIVIOUS>>;
+  using OMapType = std::conditional_t<is_improved, OMap<K, V, uint32_t>,
+                                      OHashMap<K, V, FULL_OBLIVIOUS, uint32_t>>;
   OMapType map(mapSize);
   map.Init();
 

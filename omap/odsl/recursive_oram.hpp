@@ -22,7 +22,7 @@ struct RecursiveORAM {
  private:
   typedef PositionType UidType;
   // Each internal node (i.e. position map node) has fan_out children
-  static constexpr short fan_out = std::max(64 / (int)sizeof(PositionType), 2);
+  static constexpr short fan_out = std::max(32 / (int)sizeof(PositionType), 2);
 
   /**
    * @brief Defines the internal node of the position map, stores the positions

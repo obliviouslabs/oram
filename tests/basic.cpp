@@ -1,7 +1,11 @@
 #include <gtest/gtest.h>
+#include <pthread.h>
+
+#include <chrono>
 
 #include "common/cmp_intrinsics.hpp"
 #include "common/encrypted.hpp"
+#include "common/lock_util.hpp"
 #include "common/mov_intrinsics.hpp"
 #include "odsl/heap_tree.hpp"
 #include "testutils.hpp"
@@ -472,6 +476,46 @@ TEST(Basic, Encrypted) {
 }
 
 TEST(Basic, EncryptPerf) { testEncryptPerf<4096>(); }
+
+void testSpinLockPerf() {
+  pthread_t workerThread;
+  struct LockPair {
+    Lock mainLock;
+    Lock workerLock;
+  };
+  LockPair lockPair;
+
+  lockPair.mainLock.lock();
+  lockPair.workerLock.lock();
+  // create worker thread that runs:
+  //       for (int i = 0; i < round; ++i) {
+  //         workerLock.lock();
+  //         mainLock.unlock();
+  //       }
+  //
+  pthread_create(
+      &workerThread, NULL,
+      [](void* arg) -> void* {
+        LockPair* lockPair = (LockPair*)arg;
+        for (int i = 0; i < 1e6; ++i) {
+          lockPair->workerLock.lock();
+          lockPair->mainLock.unlock();
+        }
+        return NULL;
+      },
+      &lockPair);
+  auto start = std::chrono::system_clock::now();
+  for (int i = 0; i < 1e6; ++i) {
+    lockPair.workerLock.unlock();
+    lockPair.mainLock.lock();
+  }
+  auto end = std::chrono::system_clock::now();
+  uint64_t timediff =
+      std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count();
+  printf("spin lock time %f ns\n", (double)timediff / 1e6);
+}
+
+TEST(Basic, SpinLockPerf) { testSpinLockPerf(); }
 
 template <const size_t page_size>
 void testHeapTreeCorrectness() {

@@ -359,7 +359,7 @@ struct OPosMap {
   // bucket size limitation
   StashType stash;
 
-  std::thread table1AccessThread;
+  pthread_t table1AccessThread;
   Lock table1AccessLock;
   Lock table1AccessDoneLock;
   struct Table1WorkerData {
@@ -690,7 +690,13 @@ struct OPosMap {
     stash.SetSize(16);
     table1AccessLock.lock();
     table1AccessDoneLock.lock();
-    table1AccessThread = std::thread(&OPosMap::table1AccessFunc, this);
+    pthread_create(
+        &table1AccessThread, NULL,
+        [](void* obj) -> void* {
+          ((OPosMap*)obj)->table1AccessFunc();
+          return NULL;
+        },
+        this);
   }
 
   /**
@@ -988,7 +994,7 @@ struct OPosMap {
   ~OPosMap() {
     destructedFlag = true;
     table1AccessLock.unlock();
-    table1AccessThread.join();
+    pthread_join(table1AccessThread, NULL);
   }
 
   //  private:

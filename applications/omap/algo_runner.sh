@@ -3,14 +3,14 @@ source /startsgxenv.sh
 
 cp ../../omap/common/encutils.cpp ./Enclave/TrustedLibrary/encutils.cpp
 
-SGX_MODE=SIM # HW or SIM
+SGX_MODE=HW # HW or SIM
 
 # Algorithms:
 MIN_ENCLAVE_SIZE=8192 # enclave size in MB
 MAX_ENCLAVE_SIZE=8192
 CORE_ID=5 # the cpu core id to run the program
 DISK_IO=0 # 0: no disk IO, 1: disk IO
-TCS_NUM=2
+TCS_NUM=16
 
 if [ $SGX_MODE = HW ]
 then

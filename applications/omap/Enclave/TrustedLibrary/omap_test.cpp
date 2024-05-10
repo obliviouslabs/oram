@@ -1110,6 +1110,44 @@ void testOHashMapPerfDiffCond() {
   }
 }
 
+void testSpinLockPerf() {
+  pthread_t workerThread;
+  struct LockPair {
+    Lock mainLock;
+    Lock workerLock;
+  };
+  LockPair lockPair;
+
+  lockPair.mainLock.lock();
+  lockPair.workerLock.lock();
+  // create worker thread that runs:
+  //       for (int i = 0; i < round; ++i) {
+  //         workerLock.lock();
+  //         mainLock.unlock();
+  //       }
+  //
+  pthread_create(
+      &workerThread, NULL,
+      [](void* arg) -> void* {
+        LockPair* lockPair = (LockPair*)arg;
+        for (int i = 0; i < 1e6; ++i) {
+          lockPair->workerLock.lock();
+          lockPair->mainLock.unlock();
+        }
+        return NULL;
+      },
+      &lockPair);
+  uint64_t start, end;
+  ocall_measure_time(&start);
+  for (int i = 0; i < 1e6; ++i) {
+    lockPair.workerLock.unlock();
+    lockPair.mainLock.lock();
+  }
+  ocall_measure_time(&end);
+  uint64_t timediff = end - start;
+  printf("spin lock time %f ns\n", (double)timediff / 1e6);
+}
+
 void ecall_omap() {
   if (EM::Backend::g_DefaultBackend) {
     delete EM::Backend::g_DefaultBackend;
@@ -1142,8 +1180,8 @@ void ecall_omap_perf() {
     // testEncryptPerf<4096>();
     // testOHashMapPerfDiffCond();
     // testRecursiveORAMPerf();
-
-    testOHashMapImproved();
+    testSpinLockPerf();
+    // testOHashMapImproved();
     // testPageOMap();
     // printf("heap used %lu\n", g_peak_heap_used);
     // testOMapBatchAccess();

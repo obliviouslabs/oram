@@ -1,9 +1,7 @@
 #pragma once
 
 #include <omp.h>
-
-#include <semaphore>
-#include <thread>
+#include <pthread.h>
 
 #include "oram_common.hpp"
 
@@ -78,8 +76,8 @@ struct ORAM {
 
   Lock mutex;
   Lock continueMutex;
-  // Conditional variable to trigger maintenance thread
-  Lock maintenanceLock;
+  // Conditional variable to trigger worker thread
+  Lock workerLock;
   bool destructed = false;
 
   /**
@@ -473,11 +471,11 @@ struct ORAM {
     }
   }
 
-  std::thread maintenanceThread;
+  pthread_t workerThread;
 
-  void startMaintenanceThread() {
+  void startWorkerThread() {
     while (true) {
-      maintenanceLock.lock();
+      workerLock.lock();
 
       if (destructed) {
         return;
@@ -488,15 +486,15 @@ struct ORAM {
           path.begin(), path.begin() + (writeBackPathDepth * Z + stashSize),
           workerParams.workerUid, workerParams.writeBackBlock.data);
       continueMutex.unlock();
-      maintenanceLock.lock();
+      workerLock.lock();
       if (destructed) {
         return;
       }
-      // std::cout << "Maintenance op" << std::endl;
+      // std::cout << "Worker op" << std::endl;
       writeBlockWithRetry(workerParams.writeBackBlock,
                           workerParams.writeBackPos, writeBackPathDepth,
                           workerParams.writeBackNodeIdxArr);
-      // std::cout << "Maintenance op done for oram of size " << size()
+      // std::cout << "Worker op done for oram of size " << size()
       //           << std::endl;
       mutex.unlock();
     }
@@ -534,7 +532,6 @@ struct ORAM {
    * @param cacheBytes The maximum size of the tree-top cache in bytes.
    */
   void SetSize(PositionType size, uint64_t cacheBytes = MAX_CACHE_SIZE) {
-    std::cout << "Circuit oram size: " << size << std::endl;
     if (_size) {
       throw std::runtime_error("Circuit ORAM double initialization");
     }
@@ -552,16 +549,22 @@ struct ORAM {
       throw std::runtime_error("Circuit ORAM too large");
     }
     path.resize(stashSize + Z * depth);
-    maintenanceLock.lock();
+    workerLock.lock();
     continueMutex.lock();
-    // start maintenance thread
-    maintenanceThread = std::thread(&ORAM::startMaintenanceThread, this);
+    // start worker thread
+    pthread_create(
+        &workerThread, NULL,
+        [](void* oram) -> void* {
+          reinterpret_cast<ORAM*>(oram)->startWorkerThread();
+          return NULL;
+        },
+        this);
   }
 
   ~ORAM() {
     destructed = true;
-    maintenanceLock.unlock();
-    maintenanceThread.join();
+    workerLock.unlock();
+    pthread_join(workerThread, NULL);
   }
 
   /**
@@ -652,13 +655,13 @@ struct ORAM {
     workerParams.writeBackBlock.uid = uid;
     workerParams.writeBackPos = pos;
     workerParams.workerUid = uid;
-    maintenanceLock.unlock();
+    workerLock.unlock();
     continueMutex.lock();
     obliMove(!workerParams.findFlag, workerParams.writeBackBlock.uid,
              DUMMY<UidType>());
     out = workerParams.writeBackBlock.data;
 
-    maintenanceLock.unlock();
+    workerLock.unlock();
     return newPos;
   }
 
@@ -692,10 +695,10 @@ struct ORAM {
     workerParams.writeBackBlock.position = newPos;
     workerParams.writeBackBlock.uid = uid;
 
-    maintenanceLock.unlock();
+    workerLock.unlock();
     continueMutex.lock();
     workerParams.writeBackBlock.data = in;
-    maintenanceLock.unlock();
+    workerLock.unlock();
 
     return newPos;
   }
@@ -842,13 +845,13 @@ struct ORAM {
     workerParams.workerUid = uid;
     workerParams.writeBackBlock.position = newPos;
     workerParams.writeBackBlock.uid = DUMMY<UidType>();
-    maintenanceLock.unlock();
+    workerLock.unlock();
     continueMutex.lock();
     bool keepFlag = updateFunc(workerParams.writeBackBlock.data);
 
     obliMove(keepFlag, workerParams.writeBackBlock.uid, updatedUid);
     out = workerParams.writeBackBlock.data;
-    maintenanceLock.unlock();
+    workerLock.unlock();
     return newPos;
   }
 
