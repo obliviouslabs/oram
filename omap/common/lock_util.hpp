@@ -4,13 +4,13 @@
 #define TCS_NUM 1
 #endif
 #if TCS_NUM > 1
-#include "sgx_spinlock.h"
+// #include "sgx_spinlock.h"
 #include "sgx_thread.h"
-struct Lock {
-  sgx_spinlock_t _lock = SGX_SPINLOCK_INITIALIZER;
-  void lock() { sgx_spin_lock(&_lock); }
-  void unlock() { sgx_spin_unlock(&_lock); }
-};
+// struct Lock {
+//   sgx_spinlock_t _lock = SGX_SPINLOCK_INITIALIZER;
+//   void lock() { sgx_spin_lock(&_lock); }
+//   void unlock() { sgx_spin_unlock(&_lock); }
+// };
 
 struct Mutex {
   sgx_thread_mutex_t _lock = SGX_THREAD_MUTEX_INITIALIZER;
@@ -31,6 +31,18 @@ struct Mutex {
 #endif
 
 #else
+
+struct Mutex {
+  void lock() { _lock.lock(); }
+  void unlock() { _lock.unlock(); }
+  Mutex() {}
+  Mutex(const Mutex&) {}
+
+ private:
+  std::mutex _lock;
+};
+#endif
+
 #include <atomic>
 // TTASSpinlock
 struct Lock {
@@ -55,17 +67,6 @@ struct Lock {
  private:
   std::atomic<bool> flag;
 };
-
-struct Mutex {
-  void lock() { _lock.lock(); }
-  void unlock() { _lock.unlock(); }
-  Mutex() {}
-  Mutex(const Mutex&) {}
-
- private:
-  std::mutex _lock;
-};
-#endif
 
 template <typename LockType>
 struct Critical {

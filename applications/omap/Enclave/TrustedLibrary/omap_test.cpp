@@ -638,9 +638,9 @@ void testOMap() {
   printf("oram find time %f us\n", (double)timediff * 1e-3 / (double)round);
 }
 
-using ETH_Addr = Bytes<32>;
+using ETH_Addr = Bytes<20>;
 
-using ERC20_Balance = Bytes<104>;
+using ERC20_Balance = Bytes<32>;
 
 void testOMapBatchAccess(size_t mapSize = 1e5) {
   size_t initSize = mapSize;
@@ -1180,8 +1180,8 @@ void ecall_omap_perf() {
     // testEncryptPerf<4096>();
     // testOHashMapPerfDiffCond();
     // testRecursiveORAMPerf();
-    testSpinLockPerf();
-    // testOHashMapImproved();
+    // testSpinLockPerf();
+    testOHashMapImproved();
     // testPageOMap();
     // printf("heap used %lu\n", g_peak_heap_used);
     // testOMapBatchAccess();
