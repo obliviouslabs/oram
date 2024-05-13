@@ -103,6 +103,16 @@ struct Vector {
     }
   }
 
+  void InitDefault(const T& defaultVal) {
+    for (size_t i = 0; i < cacheSize; ++i) {
+      intVec[i] = defaultVal;
+    }
+    if (extVec)
+      for (size_t i = 0; i < extVec->size(); ++i) {
+        (*extVec)[i] = defaultVal;
+      }
+  }
+
   static uint64_t GetMinMemoryUsage() { return ExtVec::GetMemoryUsage(); }
 
   static uint64_t GetMemoryUsage(uint64_t N, uint64_t cacheSize) {
