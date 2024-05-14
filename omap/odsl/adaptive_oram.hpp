@@ -36,6 +36,26 @@ struct ORAM {
 
   ORAM(PositionType size, size_t cacheBytes) { SetSize(size, cacheBytes); }
 
+  void PauseWorker() {
+    if (isLinear) {
+      // linear oram doesn't have a worker (for now)
+    } else if (isCached) {
+      cachedTreeOram->PauseWorker();
+    } else {
+      treeOram->PauseWorker();
+    }
+  }
+
+  void ResumeWorker() {
+    if (isLinear) {
+      // linear oram doesn't have a worker (for now)
+    } else if (isCached) {
+      cachedTreeOram->ResumeWorker();
+    } else {
+      treeOram->ResumeWorker();
+    }
+  }
+
   ~ORAM() {
     if (linearOram) {
       delete linearOram;

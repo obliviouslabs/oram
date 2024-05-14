@@ -433,7 +433,7 @@ struct OPosMap {
   // bucket size limitation
   StashType stash;
 
-  pthread_t table1AccessThread;
+  pthread_t table1AccessThread = 0;
   Lock table1AccessLock;
   Lock table1AccessDoneLock;
   struct Table1WorkerData {
@@ -444,8 +444,12 @@ struct OPosMap {
     V value;
   };
   Table1WorkerData table1WorkerData;
-  bool destructedFlag = false;
+  std::atomic<bool> workerStopped = true;
 
+  /**
+   * @brief The function that accesses hash table 1 in parallel in the
+   * background.
+   */
   void table1AccessFunc() {
     if constexpr (isOblivious) {
       auto bucketAccessor1 = [&](BucketType& bucket) {
@@ -459,7 +463,7 @@ struct OPosMap {
       };
       while (true) {
         table1AccessLock.lock();
-        if (destructedFlag) {
+        if (workerStopped.load()) {
           return;
         }
         updateHelper(table1WorkerData.idx1, table1, bucketAccessor1);
@@ -870,13 +874,7 @@ struct OPosMap {
     stash.SetSize(16);
     table1AccessLock.lock();
     table1AccessDoneLock.lock();
-    pthread_create(
-        &table1AccessThread, NULL,
-        [](void* obj) -> void* {
-          ((OPosMap*)obj)->table1AccessFunc();
-          return NULL;
-        },
-        this);
+    ResumeWorkers();
   }
 
   /**
@@ -1276,11 +1274,43 @@ struct OPosMap {
     return erased;
   }
 
-  ~OPosMap() {
-    destructedFlag = true;
-    table1AccessLock.unlock();
-    pthread_join(table1AccessThread, NULL);
+  /**
+   * @brief Pause all the worker threads. The omap cannot serve queries until
+   * resume workers is called.
+   *
+   */
+  void PauseWorkers() {
+    if (!workerStopped.exchange(true)) {
+      table1AccessLock.unlock();
+      pthread_join(table1AccessThread, NULL);
+      if constexpr (isOblivious) {
+        table0.PauseWorkers();
+        table1.PauseWorkers();
+      }
+    }
   }
+
+  /**
+   * @brief Resume all the worker threads.
+   *
+   */
+  void ResumeWorkers() {
+    if (workerStopped.exchange(false)) {
+      pthread_create(
+          &table1AccessThread, NULL,
+          [](void* obj) -> void* {
+            ((OPosMap*)obj)->table1AccessFunc();
+            return NULL;
+          },
+          this);
+      if constexpr (isOblivious) {
+        table0.ResumeWorkers();
+        table1.ResumeWorkers();
+      }
+    }
+  }
+
+  ~OPosMap() { PauseWorkers(); }
 
 };  // class OPosMap
 
@@ -1714,6 +1744,16 @@ struct OMap {
       erased |= matchFlag;
     }
     return erased;
+  }
+
+  void PauseWorkers() {
+    keyPosMap.PauseWorkers();
+    oram.PauseWorker();
+  }
+
+  void ResumeWorkers() {
+    keyPosMap.ResumeWorkers();
+    oram.ResumeWorker();
   }
 };
 }  // namespace ODSL

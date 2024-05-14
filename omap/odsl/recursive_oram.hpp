@@ -308,6 +308,20 @@ struct RecursiveORAM {
     // accessor(dummyNode.data[0]);
   }
 
+  void PauseWorkers() {
+    for (auto& oram : internalOrams) {
+      oram.PauseWorker();
+    }
+    leafOram.PauseWorker();
+  }
+
+  void ResumeWorkers() {
+    for (auto& oram : internalOrams) {
+      oram.ResumeWorker();
+    }
+    leafOram.ResumeWorker();
+  }
+
  private:
   /**
    * @brief A custom data structure to store the data to be written back to the

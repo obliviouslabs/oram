@@ -78,7 +78,7 @@ struct ORAM {
   Lock continueMutex;
   // Conditional variable to trigger worker thread
   Lock workerLock;
-  bool destructed = false;
+  std::atomic<bool> workerStopped;
 
   /**
    * @brief Evict the buffered path
@@ -471,13 +471,18 @@ struct ORAM {
     }
   }
 
+  // delegate oram operations to the worker thread
   pthread_t workerThread;
 
+  /**
+   * @brief Start the worker thread.
+   *
+   */
   void startWorkerThread() {
     while (true) {
       workerLock.lock();
 
-      if (destructed) {
+      if (workerStopped.load()) {
         return;
       }
       writeBackPathDepth = readPathAndGetNodeIdxArr(
@@ -487,28 +492,25 @@ struct ORAM {
           workerParams.workerUid, workerParams.writeBackBlock.data);
       continueMutex.unlock();
       workerLock.lock();
-      if (destructed) {
+      if (workerStopped.load()) {
         return;
       }
-      // std::cout << "Worker op" << std::endl;
       writeBlockWithRetry(workerParams.writeBackBlock,
                           workerParams.writeBackPos, writeBackPathDepth,
                           workerParams.writeBackNodeIdxArr);
-      // std::cout << "Worker op done for oram of size " << size()
-      //           << std::endl;
       mutex.unlock();
     }
   }
 
  public:
-  ORAM() {}
+  ORAM() : workerStopped(true) {}
 
   /**
    * @brief Construct a new ORAM object
    *
    * @param size Capacity of the ORAM
    */
-  explicit ORAM(PositionType size) { SetSize(size); }
+  explicit ORAM(PositionType size) : workerStopped(true) { SetSize(size); }
 
   /**
    * @brief Construct a new ORAM object
@@ -516,7 +518,9 @@ struct ORAM {
    * @param size Capacity of the ORAM
    * @param cacheBytes The maximum size of the tree-top cache in bytes.
    */
-  ORAM(PositionType size, uint64_t cacheBytes) { SetSize(size, cacheBytes); }
+  ORAM(PositionType size, uint64_t cacheBytes) : workerStopped(true) {
+    SetSize(size, cacheBytes);
+  }
 
   /**
    * @brief Get the Stash object
@@ -551,20 +555,38 @@ struct ORAM {
     path.resize(stashSize + Z * depth);
     workerLock.lock();
     continueMutex.lock();
-    // start worker thread
-    pthread_create(
-        &workerThread, NULL,
-        [](void* oram) -> void* {
-          reinterpret_cast<ORAM*>(oram)->startWorkerThread();
-          return NULL;
-        },
-        this);
+    ResumeWorker();
   }
 
-  ~ORAM() {
-    destructed = true;
-    workerLock.unlock();
-    pthread_join(workerThread, NULL);
+  ~ORAM() { PauseWorker(); }
+
+  /**
+   * @brief Pause the worker thread to save resource
+   *
+   */
+  void PauseWorker() {
+    // atomically read workerStopped flag and set it to true
+    if (!workerStopped.exchange(true)) {
+      workerLock.unlock();
+      pthread_join(workerThread, NULL);
+      workerThread = 0;
+    }
+  }
+
+  /**
+   * @brief Resume the worker thread
+   *
+   */
+  void ResumeWorker() {
+    if (workerStopped.exchange(false)) {
+      pthread_create(
+          &workerThread, NULL,
+          [](void* oram) -> void* {
+            reinterpret_cast<ORAM*>(oram)->startWorkerThread();
+            return NULL;
+          },
+          this);
+    }
   }
 
   /**
@@ -650,6 +672,7 @@ struct ORAM {
    */
   PositionType Read(PositionType pos, const UidType& uid, T& out,
                     PositionType newPos) {
+    Assert(!workerStopped.load());
     mutex.lock();
     workerParams.writeBackBlock.position = newPos;
     workerParams.writeBackBlock.uid = uid;
@@ -689,6 +712,7 @@ struct ORAM {
    */
   template <const int _evict_freq = evict_freq>
   PositionType Write(const UidType& uid, const T& in, PositionType newPos) {
+    Assert(!workerStopped.load());
     mutex.lock();
     workerParams.writeBackPos = (evictCounter++) % _size;
     workerParams.workerUid = DUMMY<UidType>();
@@ -840,6 +864,7 @@ struct ORAM {
   PositionType Update(PositionType pos, const UidType& uid, PositionType newPos,
                       const Func& updateFunc, T& out,
                       const UidType& updatedUid) {
+    Assert(!workerStopped.load());
     mutex.lock();
     workerParams.writeBackPos = pos;
     workerParams.workerUid = uid;

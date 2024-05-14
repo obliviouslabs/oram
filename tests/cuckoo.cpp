@@ -357,7 +357,16 @@ void testOMap() {
           ASSERT_FALSE(found);
         }
       }
-
+      if (rand() % 1000 == 0) {
+        // test pause and resume workers, both operations should be idempotent,
+        // and pause should block until all worker threads are joined
+        if constexpr (is_improved) {
+          map.PauseWorkers();
+          map.PauseWorkers();
+          map.ResumeWorkers();
+          map.ResumeWorkers();
+        }
+      }
       int key = rand() % keySpace;
       int value;
       // std::cout << "Find key: " << key << std::endl;
@@ -371,6 +380,16 @@ void testOMap() {
         ASSERT_EQ(value, it->second);
       } else {
         ASSERT_FALSE(foundFlag);
+      }
+      if (rand() % 1000 == 0) {
+        // test pause and resume workers, both operations should be idempotent,
+        // and pause should block until all worker threads are joined
+        if constexpr (is_improved) {
+          map.PauseWorkers();
+          map.PauseWorkers();
+          map.ResumeWorkers();
+          map.ResumeWorkers();
+        }
       }
     }
   }
