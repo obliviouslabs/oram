@@ -4,7 +4,7 @@
 
 #include "algorithm/merge_split.hpp"
 #include "algorithm/param_select.hpp"
-#include "omap.hpp"
+#include "omap_short_kv.hpp"
 
 /// @brief A parallel oblivious map by sharding. Each shard is an oblivious map,
 /// and we load balance a batch of queries to each shard obliviously.

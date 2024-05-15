@@ -1,7 +1,7 @@
 #include <gtest/gtest.h>
 
-#include "odsl/omap.hpp"
 #include "odsl/omap_improved.hpp"
+#include "odsl/omap_short_kv.hpp"
 #include "unordered_map"
 
 using namespace ODSL;
