@@ -186,10 +186,6 @@ struct LRUStash {
    * @param entry the entry to insert
    */
   void Insert(const KVEntry& entry) {
-    if (oInserted || (stash.size() >= stash_size)) {
-      OInsert(entry);
-      return;
-    }
     stash.push_back(entry);
     timestamps.push_back(currTime);
   }
