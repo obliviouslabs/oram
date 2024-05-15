@@ -73,14 +73,3 @@ common - common c++ utilies, cpu abstractions, cryptography abstractions and tra
 external_memory - external memory vector abstraction
 external_memory/server - server abstraction for different external memory scenarios (sgx, file system, ram)
 
-
-### Profiling code
-
-1) Compile with ENABLE_PROFILING
-
-2) For the functions that need profiling, add PROFILE_F(); at as the first line of the function code. Additionally add the function name to trace_events.hxx
-
-3) Use PROFILER_SET(false); to disable profiling, use PROFILER_RESET() to write the profile to the log file (see profiling related functions in profiling_test to confirm).
-
-4) Use any of the tools in "Links to view flamegraph files" above to look at the profiling, adjust uncached IO time based on the results of the benchmarks enclave (benchmark_sgx).
-

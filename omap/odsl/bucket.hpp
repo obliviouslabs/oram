@@ -20,6 +20,13 @@ struct Bucket {
   Bucket(Bucket&& other) = default;
   Bucket& operator=(const Bucket& other) = default;
   Bucket& operator=(Bucket&& other) = default;
+  static inline Bucket DUMMY() {
+    Bucket b;
+    for (int i = 0; i < Z; i++) {
+      b.blocks[i] = BlockType();
+    }
+    return b;
+  }
 
 #ifndef ENCLAVE_MODE
   // cout
@@ -39,10 +46,20 @@ struct FreshORAMNode {
   BucketType bucket;
   uint64_t leftNonce = 0;
   uint64_t rightNonce = 0;
+  static inline FreshORAMNode DUMMY() {
+    FreshORAMNode node;
+    node.bucket = BucketType::DUMMY();
+    return node;
+  }
 };
 
 template <typename BucketType>
 struct NonFreshORAMNode {
   BucketType bucket;
+  static inline NonFreshORAMNode DUMMY() {
+    NonFreshORAMNode node;
+    node.bucket = BucketType::DUMMY();
+    return node;
+  }
 };
 };  // namespace ODSL

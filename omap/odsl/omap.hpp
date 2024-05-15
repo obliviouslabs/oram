@@ -319,6 +319,8 @@ struct OPosMap {
      */
     void OPopOldest(OPosMapEntry& entry, PositionType& idx0) {
       StashEntry oldestEntry;
+      idx0 = 0;
+      oldestEntry.idx0 = 0;
       uint64_t oldestTime = currTime;
       size_t oldestIdx = stash.size();
       for (size_t i = 0; i < stash.size(); ++i) {
@@ -343,6 +345,8 @@ struct OPosMap {
      */
     void PopOldest(OPosMapEntry& entry, PositionType& idx0) {
       StashEntry oldestEntry;
+      idx0 = 0;
+      oldestEntry.idx0 = 0;
       uint64_t oldestTime = currTime;
       size_t oldestIdx = stash.size();
       for (size_t i = 0; i < stash.size(); ++i) {
@@ -1040,10 +1044,12 @@ struct OPosMap {
       // use FIFO order so that we won't get stuck by loops in the random graph
       // of cuckoo hashing
       stash.OPopOldest(entryToInsert, idx0);
+      const bool isDummy = !entryToInsert.valid();
       if constexpr (!isOblivious) {
-        obliMove(!entryToInsert.valid(), idx0,
-                 (PositionType)UniformRandom(tableSize - 1));
-        obliMove(!entryToInsert.valid(), entryToInsert.otherIdx,
+        // the underlying ram is not oblivious, generate a random access
+        // position
+        obliMove(isDummy, idx0, (PositionType)UniformRandom(tableSize - 1));
+        obliMove(isDummy, entryToInsert.otherIdx,
                  (PositionType)UniformRandom(tableSize - 1));
       }
       insertEntryObliviousRetry(entryToInsert, idx0, 1);
@@ -1437,14 +1443,9 @@ struct OMap {
     void Insert(const K& key, const V& value) {
       if constexpr (!omap.keyPosMap.isObliviousPosMap) {
         omap.Insert(key, value);
-        return;
+      } else {
+        omap.InsertWithCustomPosMap(key, value, *nonObliviousPosMap);
       }
-      UidType uid;
-      HExtra extraHash;
-      PositionType pos = omap.oram.GetRandPos();
-      // TODO: change to insert here
-      nonObliviousPosMap->OInsert(key, pos, uid, extraHash);
-      omap.oram.Write(uid, {extraHash, value}, pos);
     }
 
     void Insert(const std::pair<K, V>& entry) {
@@ -1503,14 +1504,8 @@ struct OMap {
     initContext.Finalize();
   }
 
-  /**
-   * @brief Insert a key value pair into the map, return true if the key is
-   * already in the map, in which case the value is updated. The function is
-   * not oblivious and reveals whether the key exists. It is faster than
-   * OInsert, and should be used when the database is public.
-   *
-   */
-  bool Insert(const K& key, const V& value) {
+  template <class PosMap>
+  bool InsertWithCustomPosMap(const K& key, const V& value, PosMap& posMap) {
     // first pass, check if key exists in stash, if so, replace the value and we
     // are done
     for (StashEntry& pair : stash) {
@@ -1524,8 +1519,7 @@ struct OMap {
     PositionType pos = newPos;
     UidType uid;
     HExtra extraHash;
-    bool existInCuckoo = keyPosMap.Insert(key, pos, uid, extraHash);
-    // obliMove(!existInCuckoo, pos, oram.GetRandPos());
+    bool existInCuckoo = posMap.Insert(key, pos, uid, extraHash);
     if (!existInCuckoo) {
       pos = oram.GetRandPos();
     }
@@ -1566,17 +1560,23 @@ struct OMap {
     return existInCuckoo;
   }
 
+  /**
+   * @brief Insert a key value pair into the map, return true if the key is
+   * already in the map, in which case the value is updated. The function is
+   * not oblivious and reveals whether the key exists. It is faster than
+   * OInsert, and should be used when the database is public.
+   *
+   */
+  bool Insert(const K& key, const V& value) {
+    return InsertWithCustomPosMap(key, value, keyPosMap);
+  }
+
   bool OInsert(const K& key, const V& value) {
     PositionType newPos = oram.GetRandPos();
     PositionType pos = newPos;
     UidType uid;
     HExtra extraHash;
     bool existInCuckoo = keyPosMap.OInsert(key, pos, uid, extraHash, false);
-    // if (existInCuckoo) {
-    //   std::cout << "Found position " << pos << " for key " << key << "\n";
-    // } else {
-    //   std::cout << "Doesn't exist in cuckoo\n";
-    // }
 
     obliMove(!existInCuckoo, pos, oram.GetRandPos());
     bool existInStash = false;
@@ -1585,34 +1585,20 @@ struct OMap {
     // are done
     for (StashEntry& pair : stash) {
       bool matchFlag = pair.valid & (pair.key == key);
-      // if (matchFlag) {
-      //   std::cout << "find in stash\n";
-      // }
       obliMove(matchFlag, pair.value, value);
       existInStash |= matchFlag;
-      // pair.valid &= insertToStashFlag | !matchFlag;
     }
     bool insertToStashFlag = false;
     bool updateKeepFlag = existInCuckoo | !existInStash;
     oram.Update(pos, uid, newPos, [&](ORAMEntry& prevPair) {
       bool sameKey = prevPair.hash == extraHash;
-      // if (!sameKey) {
-      //   std::cout << "Different key\n";
-      // }
       insertToStashFlag = existInCuckoo & !sameKey & !existInStash;
       bool modifyPairFlag = !existInStash & !insertToStashFlag;
       existInCuckoo &= sameKey;
-      // if (modifyPairFlag) {
-      //   std::cout << "Modify value in oram to " << value << "\n";
-      // }
       obliMove(modifyPairFlag, prevPair, {extraHash, value});
 
       return updateKeepFlag;
     });
-    // std::cout << "Write to new position " << newPos << "\n";
-    // if (insertToStashFlag) {
-    //   std::cout << "Insert to stash\n";
-    // }
     // case 1: exist and same key -> don't change stash
     // case 2: exist and not same key -> put to the stash (if the key exists in
     // stash, replace, otherwise, insert)
@@ -1627,7 +1613,6 @@ struct OMap {
     }
     if (insertToStashFlag) {
       PERFCTR_INCREMENT(OHMAP_DEAMORT_OVERFLOW);
-      // printf("stash overflow\n");
       stash.push_back({true, key, value});
     }
     return existInCuckoo | existInStash;
@@ -1755,5 +1740,9 @@ struct OMap {
     keyPosMap.ResumeWorkers();
     oram.ResumeWorker();
   }
+  /**
+   * @brief Get the number of elements in the map
+   */
+  PositionType GetLoad() const { return keyPosMap.GetLoad(); }
 };
 }  // namespace ODSL

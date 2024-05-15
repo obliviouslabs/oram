@@ -331,7 +331,7 @@ struct ORAM {
       PERFCTR_INCREMENT(CIRCUITORAM_OVERFLOW);
       if (!retry) {
         // printState();
-        throw std::runtime_error("ORAM read failed");
+        throw std::runtime_error("ORAM overflows");
       }
       --retry;
       pos = (evictCounter++) % _size;
@@ -546,8 +546,8 @@ struct ORAM {
     if (cacheLevel < 0) {
       throw std::runtime_error("Circuit ORAM cache size too small");
     }
-    TreeNode_ dummyNode = TreeNode_();
-    tree.InitWithDefault(_size, dummyNode, cacheLevel);
+
+    tree.InitWithDefault(_size, TreeNode_::DUMMY(), cacheLevel);
     depth = GetLogBaseTwo(_size - 1) + 2;
     if (depth > 64) {
       throw std::runtime_error("Circuit ORAM too large");

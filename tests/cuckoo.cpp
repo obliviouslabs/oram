@@ -114,11 +114,14 @@ void testOHashMapInitFromReader() {
   }
 }
 
-void testOHashMapPushInit() {
+template <const bool is_improved = true>
+void testPushInit() {
   for (int rr = 0; rr < 1e2; ++rr) {
-    int mapSize = 5000;
-    int keySpace = 10000;
-    OHashMap<int, int> map(mapSize);
+    int mapSize = UniformRandom32(10, 8000);
+    int keySpace = UniformRandom32(mapSize / 2, mapSize * 5);
+    using OMapType = std::conditional_t<is_improved, OMap<int, int>,
+                                        OHashMap<int, int, FULL_OBLIVIOUS>>;
+    OMapType map(mapSize);
     std::unordered_map<int, int> std_map;
     for (int r = 0; r < mapSize; ++r) {
       int key = rand() % keySpace;
@@ -148,7 +151,7 @@ void testOHashMapPushInit() {
         int key = rand() % keySpace;
         int value = rand();
 
-        map.OInsert(key, value);
+        map.Insert(key, value);
         std_map[key] = value;
       }
 
@@ -321,7 +324,47 @@ void testOMapEraseSimple() {
 
 int rand(int l, int r) { return rand() % (r + 1 - l) + l; }
 
-template <const bool is_improved = true>
+void testOInsertAfterInsert() {
+  for (int r = 0; r < 1000; ++r) {
+    int mapSize = rand(10, 500);
+    int keySpace = rand(mapSize, mapSize * 5);
+    OMap<int, int> map(mapSize);
+    map.Init();
+    std::unordered_map<int, int> std_map;
+    int threshold = rand(1, mapSize - 1);
+    for (int r = 0; r < 2 * keySpace; ++r) {
+      if (std_map.size() < threshold) {
+        int key = rand() % keySpace;
+        int value = rand();
+        bool exist = map.Insert(key, value);
+        if (exist != (std_map.find(key) != std_map.end())) {
+          std::cout << "key: " << key << std::endl;
+        }
+        ASSERT_EQ(exist, std_map.find(key) != std_map.end());
+        std_map[key] = value;
+      } else if (std_map.size() < mapSize) {
+        int key = rand() % keySpace;
+        int value = rand();
+        bool exist = map.OInsert(key, value);
+        if (exist != (std_map.find(key) != std_map.end())) {
+          std::cout << "key: " << key << std::endl;
+        }
+        ASSERT_EQ(exist, std_map.find(key) != std_map.end());
+        std_map[key] = value;
+      } else {
+        break;
+      }
+    }
+    for (auto [key, value] : std_map) {
+      int value1;
+      bool found = map.Find(key, value1);
+      ASSERT_TRUE(found);
+      ASSERT_EQ(value, value1);
+    }
+  }
+}
+
+template <const bool is_improved = true, const bool is_public_db = true>
 void testOMap() {
   using OMapType = std::conditional_t<is_improved, OMap<int, int>,
                                       OHashMap<int, int, FULL_OBLIVIOUS>>;
@@ -337,9 +380,8 @@ void testOMap() {
       if (std_map.size() < mapSize) {
         int key = rand() % keySpace;
         int value = rand();
-        // std::cout << "Insert key: " << key << " value: " << value <<
-        // std::endl;
-        bool exist = map.Insert(key, value);
+        bool exist =
+            is_public_db ? map.Insert(key, value) : map.OInsert(key, value);
         if (exist != (std_map.find(key) != std_map.end())) {
           std::cout << "roundSeed: " << roundSeed << std::endl;
         }
@@ -348,7 +390,7 @@ void testOMap() {
       }
       if (rand() % 2 == 0) {
         int key = rand() % keySpace;
-        bool found = map.Erase(key);
+        bool found = is_public_db ? map.Erase(key) : map.OErase(key);
         auto it = std_map.find(key);
         if (it != std_map.end()) {
           ASSERT_TRUE(found);
@@ -395,7 +437,7 @@ void testOMap() {
   }
 }
 
-template <const int key_size, const int value_size, const bool isPublicDb,
+template <const int key_size, const int value_size, const bool is_public_db,
           const bool is_improved = true>
 void testOMapThroughput(uint32_t mapSize) {
   using K = Bytes<key_size>;
@@ -409,9 +451,10 @@ void testOMapThroughput(uint32_t mapSize) {
   auto t1 = Clock::now();
   for (uint32_t r = 0; r < round; ++r) {
     K key;
+    memset(key.data, 0, key_size);
     memcpy(key.data, &r, sizeof(r));
     V value;
-    if constexpr (isPublicDb) {
+    if constexpr (is_public_db) {
       map.Insert(key, value);
     } else {
       map.OInsert(key, value);
@@ -425,6 +468,7 @@ void testOMapThroughput(uint32_t mapSize) {
   t1 = Clock::now();
   for (uint32_t r = 0; r < round; ++r) {
     K key;
+    memset(key.data, 0, key_size);
     memcpy(key.data, &r, sizeof(r));
     V value;
     map.Find(key, value);
@@ -437,8 +481,9 @@ void testOMapThroughput(uint32_t mapSize) {
   t1 = Clock::now();
   for (uint32_t r = 0; r < round; ++r) {
     K key;
+    memset(key.data, 0, key_size);
     memcpy(key.data, &r, sizeof(r));
-    if constexpr (isPublicDb) {
+    if constexpr (is_public_db) {
       map.Erase(key);
     } else {
       map.OErase(key);
@@ -622,9 +667,15 @@ TEST(Cuckoo, OHashMapObliviousMixed) { testOHashMap<FULL_OBLIVIOUS>(); }
 
 TEST(Cuckoo, OMapObliviousErase) { testOMapEraseSimple(); }
 
-TEST(Cuckoo, OMapOblivious) { testOMap<true>(); }
+TEST(Cuckoo, OMapObliviousInsertAfterInsert) { testOInsertAfterInsert(); }
 
-TEST(Cuckoo, OHashMapOblivious) { testOMap<false>(); }
+TEST(Cuckoo, OMapObliviousPublicDb) { testOMap<true, true>(); }
+
+TEST(Cuckoo, OHashMapObliviousPublicDb) { testOMap<false, true>(); }
+
+TEST(Cuckoo, OMapObliviousPrivateDb) { testOMap<true, false>(); }
+
+TEST(Cuckoo, OHashMapObliviousPrivateDb) { testOMap<false, false>(); }
 
 TEST(Cuckoo, OHashMapInitFromReaderNonOblivious) {
   testOHashMapInitFromReader<NON_OBLIVIOUS>();
@@ -646,9 +697,9 @@ TEST(Cuckoo, OMapLatency) { testOMapLatency<20, 32, true, true>(5e6); }
 
 TEST(Cuckoo, OHashMapLatency) { testOMapLatency<20, 32, true, false>(5e6); }
 
-TEST(Cuckoo, OMapInitPerf) { testOMapInitFromReaderPerf<20, 32>(1e7); }
+TEST(Cuckoo, OMapInitPerf) { testOMapInitFromReaderPerf<20, 32>(1e6); }
 
-TEST(Cuckoo, OHashMapInitPerf) { testOHashMapInitFromReaderPerf<20, 32>(1e7); }
+TEST(Cuckoo, OHashMapInitPerf) { testOHashMapInitFromReaderPerf<20, 32>(1e6); }
 
 TEST(Cuckoo, OHashMapFindBatchOblivious) {
   testOHashMapFindBatch<FULL_OBLIVIOUS>();
@@ -666,4 +717,6 @@ TEST(Cuckoo, ReplaceCountDistriOblivious) {
   testReplaceCount<FULL_OBLIVIOUS>();
 }
 
-TEST(Cuckoo, OHashMapPushInit) { testOHashMapPushInit(); }
+TEST(Cuckoo, OHashMapPushInit) { testPushInit<false>(); }
+
+TEST(Cuckoo, OMapPushInit) { testPushInit<true>(); }
