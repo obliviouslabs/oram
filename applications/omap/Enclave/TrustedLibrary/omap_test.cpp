@@ -6,8 +6,8 @@
 #include <functional>
 #include <unordered_map>
 
-#include "odsl/omap.hpp"
 #include "odsl/omap_improved.hpp"
+#include "odsl/omap_short_kv.hpp"
 #include "odsl/page_oram.hpp"
 #include "odsl/par_omap.hpp"
 #include "odsl/recursive_oram.hpp"

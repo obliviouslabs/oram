@@ -1,6 +1,6 @@
 #pragma once
-#include "par_omap_interface.hpp"
 #include "odsl/par_omap.hpp"
+#include "par_omap_interface.hpp"
 
 using ParMapType = ODSL::ParOMap<K, V, uint32_t>;
 using ParInitializerType = typename ParMapType::InitContext;

@@ -1,12 +1,14 @@
 #pragma once
+#include "odsl/omap_short_kv.hpp"
 #include "omap_interface.hpp"
-#include "odsl/omap.hpp"
 
 template <uint64_t key_size, uint64_t val_size>
-using MapGenericType = ODSL::OHashMap<Bytes<key_size>, Bytes<val_size>, ODSL::FULL_OBLIVIOUS, uint32_t>;
+using MapGenericType = ODSL::OHashMap<Bytes<key_size>, Bytes<val_size>,
+                                      ODSL::FULL_OBLIVIOUS, uint32_t>;
 
 template <uint64_t key_size, uint64_t val_size>
-using InitializerGenericType = typename MapGenericType<key_size, val_size>::InitContext;
+using InitializerGenericType =
+    typename MapGenericType<key_size, val_size>::InitContext;
 
 #define MapType MapGenericType<key_size, val_size>
 #define InitializerType InitializerGenericType<key_size, val_size>
@@ -24,8 +26,8 @@ void OMapGenericBinding<key_size, val_size>::InitEmpty(uint32_t size) {
 }
 
 template <uint64_t key_size, uint64_t val_size>
-void OMapGenericBinding<key_size, val_size>::InitEmptyExternal(uint32_t size,
-                                                     uint64_t cacheBytes) {
+void OMapGenericBinding<key_size, val_size>::InitEmptyExternal(
+    uint32_t size, uint64_t cacheBytes) {
   omap = (void*)(new MapType(size, cacheBytes));
   ((MapType*)omap)->Init();
 }
@@ -37,8 +39,8 @@ void OMapGenericBinding<key_size, val_size>::StartInit(uint32_t size) {
 }
 
 template <uint64_t key_size, uint64_t val_size>
-void OMapGenericBinding<key_size, val_size>::StartInitExternal(uint32_t size,
-                                                     uint64_t cacheBytes) {
+void OMapGenericBinding<key_size, val_size>::StartInitExternal(
+    uint32_t size, uint64_t cacheBytes) {
   omap = (void*)(new MapType(size, cacheBytes));
   initializer = (void*)(((MapType*)omap)->NewInitContext());
 }
@@ -52,7 +54,8 @@ void OMapGenericBinding<key_size, val_size>::FinishInit() {
 }
 
 template <uint64_t key_size, uint64_t val_size>
-bool OMapGenericBinding<key_size, val_size>::Insert(const void* keyPtr, const void* valPtr) {
+bool OMapGenericBinding<key_size, val_size>::Insert(const void* keyPtr,
+                                                    const void* valPtr) {
   Bytes<key_size> key(keyPtr);
   Bytes<val_size> val(valPtr);
   if (initializer) {
@@ -63,7 +66,8 @@ bool OMapGenericBinding<key_size, val_size>::Insert(const void* keyPtr, const vo
 }
 
 template <uint64_t key_size, uint64_t val_size>
-bool OMapGenericBinding<key_size, val_size>::OInsert(const void* keyPtr, const void* valPtr) {
+bool OMapGenericBinding<key_size, val_size>::OInsert(const void* keyPtr,
+                                                     const void* valPtr) {
   Bytes<key_size> key(keyPtr);
   Bytes<val_size> val(valPtr);
   if (initializer) {
@@ -74,7 +78,8 @@ bool OMapGenericBinding<key_size, val_size>::OInsert(const void* keyPtr, const v
 }
 
 template <uint64_t key_size, uint64_t val_size>
-bool OMapGenericBinding<key_size, val_size>::Find(const void* keyPtr, void* valPtr) {
+bool OMapGenericBinding<key_size, val_size>::Find(const void* keyPtr,
+                                                  void* valPtr) {
   Bytes<key_size> key(keyPtr);
   Bytes<val_size> val(valPtr);
   Assert(!initializer, "Find during initialization");
