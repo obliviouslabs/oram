@@ -1,10 +1,9 @@
 #pragma once
-#include "odsl/omap_short_kv.hpp"
-#include "omap_interface.hpp"
+#include "odsl/omap.hpp"
+#include "omap_generic_interface.hpp"
 
 template <uint64_t key_size, uint64_t val_size>
-using MapGenericType = ODSL::OHashMap<Bytes<key_size>, Bytes<val_size>,
-                                      ODSL::FULL_OBLIVIOUS, uint32_t>;
+using MapGenericType = ODSL::OMap<Bytes<key_size>, Bytes<val_size>, uint32_t>;
 
 template <uint64_t key_size, uint64_t val_size>
 using InitializerGenericType =

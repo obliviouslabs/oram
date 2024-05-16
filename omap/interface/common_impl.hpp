@@ -2,7 +2,7 @@
 #include <stdint.h>
 #include <stdio.h>
 
-#include "omap_interface.hpp"
+#include "omap_generic_interface.hpp"
 void HelloWorld(uint32_t num) { printf("Hello, world %u!\n", num); }
 
 #include "external_memory/server/serverBackend.hpp"
