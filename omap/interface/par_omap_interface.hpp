@@ -10,11 +10,11 @@ typedef uint64_t V;
  * @brief Binds to Parallel OMap implementation.
  *
  */
-struct ParOMapBindingSingleton {
+struct ParOMapBinding {
   par_omap_t omap;            // Pointer to the ParOMap instance.
   initializer_t initializer;  // Pointer to the ParOMap initializer.
 
-  ParOMapBindingSingleton();
+  ParOMapBinding();
 
   /**
    * @brief Initializes an empty parallel OMap, assuming sufficiently large

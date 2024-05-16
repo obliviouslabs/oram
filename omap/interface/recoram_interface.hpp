@@ -4,9 +4,9 @@
 typedef void* oram_t;
 typedef uint64_t T;
 
-struct ORAMBindingSingleton {
+struct ORAMBinding {
   oram_t oram;  // pointer to the ORAM object
-  ORAMBindingSingleton();
+  ORAMBinding();
 
   /**
    * @brief Initializes an empty ORAM. Assumes sufficiently large enclave size.
@@ -40,5 +40,5 @@ struct ORAMBindingSingleton {
    */
   T Read(uint32_t addr);
 
-  ~ORAMBindingSingleton();
+  ~ORAMBinding();
 };

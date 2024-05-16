@@ -24,7 +24,7 @@ mod tests {
     #[test]
     fn test_oram() {
         let sz = 100000u32;
-        let mut oraminterface: ORAMBindingSingleton = unsafe { ORAMBindingSingleton::new() };
+        let mut oraminterface: ORAMBinding = unsafe { ORAMBinding::new() };
         unsafe {
             oraminterface.InitORAM(sz);
             oraminterface.Write(0u32, 1u64);
@@ -49,7 +49,7 @@ mod tests {
     #[test]
     fn test_omap() {
         let sz = 10000u32;
-        let mut oraminterface: OMapBindingSingleton = unsafe { OMapBindingSingleton::new() };
+        let mut oraminterface: OMapBinding_8_8 = unsafe { OMapBinding_8_8::new() };
         unsafe {
             oraminterface.InitEmpty(sz);
             let key1 = 123u64;
@@ -72,9 +72,33 @@ mod tests {
     }
 
     #[test]
+    fn test_omap_larger_kv() {
+        // 20 bytes key and 32 bytes value
+        let sz = 10000u32;
+        let mut oraminterface: OMapBinding_20_32 = unsafe { OMapBinding_20_32::new() };
+        unsafe {
+            oraminterface.InitEmpty(sz);
+            let key1 = [1u8; 20];
+            let key2 = [2u8; 20];
+            let v1 = [3u8; 32];
+            let v2 = [4u8; 32];
+            oraminterface.Insert(getConstCVoidPtr(&key1), getConstCVoidPtr(&v1));
+            oraminterface.OInsert(getConstCVoidPtr(&key2), getConstCVoidPtr(&v2));
+            let mut rv1 = [0u8; 32];
+            let mut rv2 = [0u8; 32];
+            let flag1 = oraminterface.Find(getConstCVoidPtr(&key1), getMutCVoidPtr(&mut rv1));
+            let flag2 = oraminterface.Find(getConstCVoidPtr(&key2), getMutCVoidPtr(&mut rv2));
+            assert_eq!(rv1, v1);
+            assert_eq!(rv2, v2);
+            assert_eq!(flag1, true);
+            assert_eq!(flag2, true);
+        };
+    }
+
+    #[test]
     fn test_omap_init() {
         let sz = 100000u32;
-        let mut oraminterface: OMapBindingSingleton = unsafe { OMapBindingSingleton::new() };
+        let mut oraminterface: OMapBinding_8_8 = unsafe { OMapBinding_8_8::new() };
         unsafe {
             oraminterface.StartInit(sz);
             let key1 = 123u64;
@@ -114,7 +138,7 @@ mod tests {
     #[test]
     fn test_omap_init_ext_mem() {
         let sz = 100000u32;
-        let mut oraminterface: OMapBindingSingleton = unsafe { OMapBindingSingleton::new() };
+        let mut oraminterface: OMapBinding_8_8 = unsafe { OMapBinding_8_8::new() };
         unsafe {
             oraminterface.StartInitExternal(sz, 2000000u64);
             let key1 = 123u64;
@@ -154,7 +178,7 @@ mod tests {
     #[test]
     fn test_par_omap() {
         let sz = 10000u32;
-        let mut oraminterface: ParOMapBindingSingleton = unsafe { ParOMapBindingSingleton::new() };
+        let mut oraminterface: ParOMapBinding = unsafe { ParOMapBinding::new() };
         unsafe {
             oraminterface.InitEmpty(sz, 4u32);
             let mut flags = vec![false; 4];
@@ -183,7 +207,7 @@ mod tests {
     #[test]
     fn test_par_omap_init() {
         let sz = 10000u32;
-        let mut oraminterface: ParOMapBindingSingleton = unsafe { ParOMapBindingSingleton::new() };
+        let mut oraminterface: ParOMapBinding = unsafe { ParOMapBinding::new() };
         unsafe {
             oraminterface.StartInit(sz, 4u32, 4u32);
             let mut flags = vec![false; 2];

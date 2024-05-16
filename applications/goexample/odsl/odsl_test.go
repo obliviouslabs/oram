@@ -8,8 +8,8 @@ import (
 )
 
 func TestORAM(t *testing.T) {
-	var oram ORAMBindingSingleton
-	oram = NewORAMBindingSingleton()
+	var oram ORAMBinding
+	oram = NewORAMBinding()
 	oram.InitORAM(1000)
 	oram.Write(1, 2)
 	val := oram.Read(1)
@@ -21,8 +21,8 @@ func getUintPtr(num *uint64) uintptr {
 }
 
 func TestOMap(t *testing.T) {
-	var omap OMapBindingSingleton
-	omap = NewOMapBindingSingleton()
+	var omap OMapBinding
+	omap = NewOMapBinding()
 	omap.InitEmpty(1000)
 	key := uint64(1)
 	val := uint64(2)
@@ -34,8 +34,8 @@ func TestOMap(t *testing.T) {
 }
 
 func TestParOMap(t *testing.T) {
-	var paromap ParOMapBindingSingleton
-	paromap = NewParOMapBindingSingleton()
+	var paromap ParOMapBinding
+	paromap = NewParOMapBinding()
 	paromap.InitEmpty(1000, 4)
 	keys := []uint64{1, 2, 3, 4, 5}
 	vals := []uint64{10, 20, 30, 40, 50}
