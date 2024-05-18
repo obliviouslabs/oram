@@ -54,7 +54,12 @@ struct ORAM {
   PositionType evictCounter = 0;  // counter for reverse lexicographic eviction
 
   std::vector<Block_> path;  // a buffer for reading and writing paths, the
-                             // first stashSize blocks are the stash
+  // first stashSize blocks are the stash
+
+#ifdef DISK_IO
+  uint32_t latestPrefetchReceipt = 0;
+  typename HeapTree_::BatchAccessor* globalTreeAccessor = NULL;
+#endif
 
   uint64_t rootNonce = 0;  // nonce for the root bucket
 
@@ -326,11 +331,24 @@ struct ORAM {
    * @return int The depth of the path
    */
   int readPathAndGetNodeIdxArr(PositionType pos, PositionType nodeIdxArr[64]) {
-    int pathDepth = tree.GetNodeIdxArr(nodeIdxArr, pos);
     uint64_t expectedNonce;
+
+    int pathDepth;
+
+#ifdef DISK_IO
+    if (!tree.IsFullyCached()) {
+      pathDepth = globalTreeAccessor->GetNodeIdxArrAndPrefetch(
+          nodeIdxArr, pos, latestPrefetchReceipt);
+      globalTreeAccessor->FlushRead();
+      readPathFromAccessor(*globalTreeAccessor, pos, pathDepth, nodeIdxArr,
+                           latestPrefetchReceipt);
+      return pathDepth;
+    }
+#endif
     if constexpr (check_freshness) {
       expectedNonce = rootNonce;
     }
+    pathDepth = tree.GetNodeIdxArr(nodeIdxArr, pos);
     for (int i = 0; i < pathDepth; ++i) {
       const TreeNode_& node = tree.GetNodeByIdx(nodeIdxArr[i]);
       if constexpr (check_freshness) {
@@ -350,6 +368,22 @@ struct ORAM {
    */
   void writeBackPath(PositionType pos, int pathDepth,
                      const PositionType nodeIdxArr[64]) {
+#ifdef DISK_IO
+    if (!tree.IsFullyCached()) {
+      writePathToAccessor(*globalTreeAccessor, pos, pathDepth, nodeIdxArr,
+                          latestPrefetchReceipt);
+      globalTreeAccessor->FlushWrite();
+      // uint32_t prefetchReceipt = 0;
+      // pathDepth = treeAccessor.GetNodeIdxArrAndPrefetch(nodeIdxArr,
+      // pos,
+      // prefetchReceipt);
+      // treeAccessor.FlushRead();
+      // readPathFromAccessor(treeAccessor, pos, pathDepth, nodeIdxArr,
+      //                      prefetchReceipt);
+      // return pathDepth;
+      // return;
+    }
+#endif
     if constexpr (check_freshness) {
       ++rootNonce;
     }
@@ -383,7 +417,7 @@ struct ORAM {
 
   void writePathToAccessor(typename HeapTree_::BatchAccessor& treeAccessor,
                            PositionType pos, int pathDepth,
-                           PositionType* nodeIdxArr,
+                           const PositionType* nodeIdxArr,
                            uint32_t pathPrefetchReceipt) {
     if constexpr (check_freshness) {
       ++rootNonce;
@@ -498,6 +532,17 @@ struct ORAM {
       throw std::runtime_error("Circuit ORAM too large");
     }
     path.resize(stashSize + Z * depth);
+#ifdef DISK_IO
+    globalTreeAccessor = new typename HeapTree_::BatchAccessor(tree);
+#endif
+  }
+
+  ~ORAM() {
+#ifdef DISK_IO
+    if (globalTreeAccessor) {
+      delete globalTreeAccessor;
+    }
+#endif
   }
 
   /**

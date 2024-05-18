@@ -325,7 +325,7 @@ struct Vector {
 
   struct BatchAccessor {
     IntVec& intVec;
-    size_t cacheSize;
+    size_t& cacheSize;
     typename ExtVec::BatchAccessor extAccessor;
 
     BatchAccessor(Vector& vec)

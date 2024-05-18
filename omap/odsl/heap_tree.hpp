@@ -246,8 +246,6 @@ struct HeapTree {
       // printf("read path %d with %d nodes\n", (int)idx, pathLen);
       for (int i = 0; i < pathLen; ++i) {
         levelReceipt = arrAccessor.Prefetch(outputBegin[i]);
-        // printf("prefetches %d and get receipt %d\n", (int)outputBegin[i],
-        //        (int)levelReceipt);
       }
       // the receipt of cached levels can be arbitrary
       pathPrefetchReceipt = levelReceipt - (pathLen - 1);
