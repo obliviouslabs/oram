@@ -147,6 +147,9 @@ struct Cached : S {
     std::vector<T> prefetchCache;
 
     void readBatch() {
+      if (indices.empty()) {
+        return;
+      }
       prefetchCachePosMap.resize(indices.size());
       std::sort(indices.begin(), indices.end(),
                 [](const auto& a, const auto& b) { return a.first < b.first; });
