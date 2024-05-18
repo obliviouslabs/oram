@@ -86,6 +86,18 @@ cd applications/omap
 
 ## Performance Benchmark
 
+The benchmark below is conducted with an Intel(R) Xeon(R) Platinum 8352S processor (48M Cache, 2.20 GHz). We limit the enclave size to be 64 GB, and swap the rest of the data to an SSD.
+
+### Sequential Access
+
+First, we test the performance of sequential access. Namely, we launch each access after the previous access returns the result. 
+
+![image](applications/omap/perf_tests/pipeline/Latency.jpg)
+
+![image](applications/omap/perf_tests/pipeline/Init_Time.jpg)
+
+### Batch Access
+
 ## Architecture Overview
 
 Below, we give an overview of our oblivious data structure in a top-down order.
@@ -124,7 +136,7 @@ To utilize the locality of our binary tree structure, the pages in external memo
 
 ### Storage Frontend for Encryption/Decryption
 
-Assuming that the data is stored partly in secure memory and partly in insecure external memory, we need to encrypt the data when swapping it to external memory and decrypt it when swapping it back. The storage frontend (`external_memory/serverFrontend.hpp`) manages this encryption and decryption procedure. We use the AES-GCM scheme to provide both secrecy and authenticity. To fully utilize hardware acceleration, we recommend a page size of at least 1 kB.
+Assuming that the data is stored partly in secure memory and partly in insecure external memory, we need to encrypt the data when swapping it to external memory and decrypt it when swapping it back. The storage frontend (`external_memory/serverFrontend.hpp`) handles this encryption and decryption procedure. We use the AES-GCM scheme to provide both secrecy and authenticity. To fully utilize hardware acceleration, we recommend a page size of at least 1 kB. When accessing 4 kB pages, our custom page swap handler is about 16 times faster than using the default dynamic page swap feature in Intel SGX v2.
 
 To conserve secure memory space, we do not check the freshness of the pages at the storage frontend. Instead, we use a version number tree to resolve freshness. Each node in the binary tree stores the number of times its children have been accessed, which is sufficient for finding mismatches and preventing replay attacks.
 

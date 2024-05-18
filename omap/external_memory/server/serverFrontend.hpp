@@ -228,6 +228,9 @@ struct NonCachedServerFrontendInstance {
 
   void flushRead() {
     uint64_t batchSize = readBufferOffsets.size();
+    if (batchSize == 0) {
+      return;
+    }
     readBuffer.resize(batchSize);
     backend.ReadBatch(readBufferOffsets.size(), sizeOfT,
                       readBufferOffsets.data(),
@@ -243,6 +246,9 @@ struct NonCachedServerFrontendInstance {
 
   void flushWrite() {
     uint64_t batchSize = writeBackBufferOffsets.size();
+    if (batchSize == 0) {
+      return;
+    }
     backend.WriteBatch(writeBackBufferOffsets.size(), sizeOfT,
                        writeBackBufferOffsets.data(),
                        reinterpret_cast<uint8_t*>(writeBackBuffer.data()));
