@@ -11,7 +11,7 @@ using EM::ExtVector::EncryptType;
 template <typename T,
           uint64_t page_size = std::max((1UL << 14) - 32, sizeof(T)),
           const EncryptType enc_type = EncryptType::ENCRYPT_AND_AUTH,
-          const uint64_t ext_cache_bytes = (1UL << 17)>
+          const uint64_t ext_cache_bytes = (1UL << 18)>
 struct Vector {
  private:
   // Set to log base 2, so compiler can optimize division in the direct map
