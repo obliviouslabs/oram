@@ -86,17 +86,25 @@ cd applications/omap
 
 ## Performance Benchmark
 
-The benchmark below is conducted with an Intel(R) Xeon(R) Platinum 8352S processor (48M Cache, 2.20 GHz). We limit the enclave size to be 64 GB, and swap the rest of the data to an SSD.
+The benchmark below is conducted in SGX prerelease mode with an Intel(R) Xeon(R) Platinum 8352S processor (48M Cache, 2.20 GHz). We limit the enclave size to be 64 GB, and swap the rest of the data to an SSD.
 
 ### Sequential Access
 
-First, we test the performance of sequential access. Namely, we launch each access after the previous access returns the result. 
+First, we test the average latency of sequential access. In the test, each access is launched right after the previous access returns the result. A pipelining optimization is enabled to utilize multiple cores.
 
-![image](applications/omap/perf_tests/pipeline/Latency.jpg)
+![image](applications/omap/perf_tests/pipeline/Latency1.jpg)
 
 ![image](applications/omap/perf_tests/pipeline/Init_Time.jpg)
 
 ### Batch Access
+
+Then, we test the average latency for a batch of accesses. The accesses are obliviously load-balanced to multiple sub omaps and processed in parallel. When data fits in the enclave, batched access is faster than sequential access due to more parallelism; otherwise, the performance are close since both are limited by the I/O bandwidth.
+
+![image](applications/omap/perf_tests/pardisk/Latency1000.jpg)
+
+![image](applications/omap/perf_tests/pardisk/Latency100000.jpg)
+
+![image](applications/omap/perf_tests/pardisk/Init_Time.jpg)
 
 ## Architecture Overview
 
@@ -104,7 +112,7 @@ Below, we give an overview of our oblivious data structure in a top-down order.
 
 ### Parallel Oblivious Map for batch queries
 
-When queries arrive in batches, we implement an oblivious load balancing mechanism to distribute them across various shards of the oblivious map, enabling parallel query processing. Drawing inspiration from Snoopy (referenced at https://eprint.iacr.org/2021/1280), we have refined and optimized their load balancing algorithm. The corresponding implementation is available at `odsl/par_omap.hpp`.
+When queries arrive in batches, we implement an oblivious load balancing mechanism to distribute them across multiple shards of the oblivious map, enabling parallel query processing. Drawing inspiration from Snoopy (referenced at https://eprint.iacr.org/2021/1280), we have refined and optimized their load balancing algorithm. The corresponding implementation is available at `odsl/par_omap.hpp`.
 
 ### Oblivious Map
 

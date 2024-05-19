@@ -100,10 +100,12 @@ def create_and_save_plot_init_single_thread(data, file_path):
     y_values = []
     sorted_map_sizes = sorted(set(data['map_size']), key=lambda x: x)
     x_values = sorted_map_sizes
+    plotted_map_sizes = set()
     for map_size in sorted_map_sizes:
         for i in range(len(data['map_size'])):
-            if data['map_size'][i] == map_size:
+            if data['map_size'][i] == map_size and map_size not in plotted_map_sizes:
                 y_values.append(data['init_time'][i])  # Convert us to seconds
+                plotted_map_sizes.add(map_size)
         # print(x_values, y_values)
     plt.plot(x_values, y_values)
 
@@ -117,11 +119,23 @@ def create_and_save_plot_init_single_thread(data, file_path):
     # show all the x ticks
     plt.savefig(file_path + 'Init_Time.jpg', bbox_inches='tight')  # Save the plot as a JPG image
 
-def create_and_save_plot_find_single_thread(data, file_path):
+def create_and_save_plot_find_single_thread(data, file_path, batch_size=1):
     plt.figure()
-    plt.title(f'Latency of different operations\n(32-byte key, 32-byte value, 64 GB EPC, Swapped to SSD)')
+    if batch_size == 1:
+        plt.title(f'Single Thread Throughput\n(32-byte key, 32-byte value, 64 GB EPC, Swapped to SSD)')
+    else:
+        plt.title(f'Latency of different operations in batch of {batch_size}\n(32-byte key, 32-byte value, 64 GB EPC, swap to SSD)')
     plt.xlabel('Number of key-value pairs')
-    plt.ylabel('Latency (us)')
+    if batch_size == 1:
+        plt.ylabel('Latency (us)')
+        rate = 1
+    elif batch_size <= 1e5:
+        plt.ylabel('Latency (ms)')
+        rate = 1e3
+    else:
+        plt.ylabel('Latency (s)')
+        rate = 1e6
+        
     
     
     find_latency = []
@@ -131,10 +145,10 @@ def create_and_save_plot_find_single_thread(data, file_path):
     x_values = sorted_map_sizes
     for map_size in sorted_map_sizes:
         for i in range(len(data['map_size'])):
-            if data['map_size'][i] == map_size:
-                find_latency.append(data['find_time'][i])
-                insert_latency.append(data['insert_time'][i])
-                erase_latency.append(data['erase_time'][i])
+            if data['map_size'][i] == map_size and data['batch_size'][i] == batch_size:
+                find_latency.append(data['find_time'][i] * batch_size / rate)
+                insert_latency.append(data['insert_time'][i] * batch_size / rate)
+                erase_latency.append(data['erase_time'][i] * batch_size / rate)
         
     # plt.plot(x_values, y_values)
     plt.plot(x_values, find_latency, label='Find')
@@ -142,18 +156,21 @@ def create_and_save_plot_find_single_thread(data, file_path):
     plt.plot(x_values, erase_latency, label='Erase')
 
     # plt.ticklabel_format(axis='y', style='sci', scilimits=(0,0))
-    # plt.yscale('log')
+    # if batch_size > 1:
+    plt.yscale('log')
+    plt.gca().yaxis.set_major_locator(LogLocator(base=10.0, subs=[1.0, 2.0, 5.0]))
+    plt.gca().yaxis.set_major_formatter(ScalarFormatter())
     plt.xscale('log')
     # show legend
     plt.legend(loc='upper left', bbox_to_anchor=(0.0, 1.0), borderaxespad=0.5)
-    # plt.gca().xaxis.set_major_locator(LogLocator(base=10.0, subs=[1.0, 2.0, 5.0]))
-    # plt.gca().xaxis.set_major_formatter(ScalarFormatter())
-    plt.savefig(file_path + f'Latency.jpg', bbox_inches='tight')  # Save the plot as a JPG image
+   
+    plt.savefig(file_path + f'Latency{batch_size}.jpg', bbox_inches='tight')  # Save the plot as a JPG image
 
 # Example usage
 # file_path = 'erc20SingleThread/'
 file_path = 'pipeline/'
 file_name = 'omap_perf_disk_64g.log'
+
 parsed_data = parse_text_file(file_path + file_name)
 
 # for map_size in set(parsed_data['map_size']):
@@ -162,4 +179,11 @@ parsed_data = parse_text_file(file_path + file_name)
 # create_and_save_plot_init(parsed_data, file_path)
 
 create_and_save_plot_find_single_thread(parsed_data, file_path)
+create_and_save_plot_init_single_thread(parsed_data, file_path)
+
+file_path = 'pardisk/'
+file_name = 'par_30t_64g.log'
+parsed_data = parse_text_file(file_path + file_name)
+create_and_save_plot_find_single_thread(parsed_data, file_path, 1000)
+create_and_save_plot_find_single_thread(parsed_data, file_path, 100000)
 create_and_save_plot_init_single_thread(parsed_data, file_path)
