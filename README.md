@@ -86,39 +86,24 @@ cd applications/omap
 
 ## Performance Benchmark
 
-<<<<<<< HEAD
-The benchmark below is conducted with an Intel(R) Xeon(R) Platinum 8352S processor (48M Cache, 2.20 GHz). We limit the enclave size to be 64 GB, and swap the rest of the data to an SSD.
-
-### Sequential Access
-
-First, we test the performance of sequential access. Namely, we launch each access after the previous access returns the result. 
-
-![image](applications/omap/perf_tests/pipeline/Latency.jpg)
-=======
-The benchmark below is conducted in SGX prerelease mode with an Intel(R) Xeon(R) Platinum 8352S processor (48M Cache, 2.20 GHz). We limit the enclave size to be 64 GB, and swap the rest of the data to an SSD.
-
 ### Sequential Access
 
 First, we test the average latency of sequential access. In the test, each access is launched right after the previous access returns the result. A pipelining optimization is enabled to utilize multiple cores.
 
-![image](applications/omap/perf_tests/pipeline/Latency1.jpg)
->>>>>>> pageoram
+<img src="applications/omap/perf_tests/pipeline/Latency1.jpg" alt="Latency of sequential access" width="400"/>
 
-![image](applications/omap/perf_tests/pipeline/Init_Time.jpg)
+<img src="applications/omap/perf_tests/pipeline/Init_Time.jpg" alt="Initialization time" width="400"/>
 
 ### Batch Access
 
-<<<<<<< HEAD
-=======
 Then, we test the average latency for a batch of accesses. The accesses are obliviously load-balanced to multiple sub omaps and processed in parallel. When data fits in the enclave, batched access is faster than sequential access due to more parallelism; otherwise, the performance are close since both are limited by the I/O bandwidth.
 
-![image](applications/omap/perf_tests/pardisk/Latency1000.jpg)
+<img src="applications/omap/perf_tests/pardisk/Latency1000.jpg" alt="Latency of batch access of size 1000" width="400"/>
 
-![image](applications/omap/perf_tests/pardisk/Latency100000.jpg)
+<img src="applications/omap/perf_tests/pardisk/Latency100000.jpg" alt="Latency of batch access of size 100000" width="400"/>
 
-![image](applications/omap/perf_tests/pardisk/Init_Time.jpg)
+<img src="applications/omap/perf_tests/pardisk/Init_Time.jpg" alt="Initialization time of parallel oMap" width="400"/>
 
->>>>>>> pageoram
 ## Architecture Overview
 
 Below, we give an overview of our oblivious data structure in a top-down order.
