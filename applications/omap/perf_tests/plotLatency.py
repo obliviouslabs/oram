@@ -1,6 +1,18 @@
 import re
 import matplotlib.pyplot as plt
 from matplotlib.ticker import ScalarFormatter, LogLocator
+import numpy as np
+
+# set the font size
+plt.rcParams.update({'font.size': 12})
+
+# mobilecoinBench
+mcSizes = [2**i for i in range(16, 29)]
+mcLatency = [63.978, 74.725, 99.161, 109.51, 121.86, 133.80, 134.44, 159.24, 173.77, 191.79, 224.05, 240.74, 262.53]
+
+oblixSizes = [2**i for i in range(16, 25)]
+oblixLatency = [0.97e3, 1.2e3, 1.55e3, 1.86e3, 2.2e3, 2.7e3, 3.3e3, 3.9e3, 4.43e3]
+
 # Function to parse the text file and extract relevant information
 def parse_text_file(file_path):
     data = {'map_size': [], 'thread_count': [], 'batch_size': [], 'find_time': [], 'init_time': [], 'insert_time': [], 'erase_time': []}
@@ -68,7 +80,7 @@ def create_and_save_plot_init_single_thread(data, file_path, num_sub_omap=1):
 def create_and_save_plot_find_single_thread(data, file_path, batch_size=1):
     plt.figure()
     if batch_size == 1:
-        plt.title(f'Single Thread Throughput\n(32-byte key, 32-byte value, 64 GB EPC, Swapped to SSD)')
+        plt.title(f'Latency of sequential accesses\n(32-byte key, 32-byte value, 64 GB EPC, Swapped to SSD)')
     else:
         plt.title(f'Latency of different operations in batch of {batch_size}\n(32-byte key, 32-byte value, 64 GB EPC, swap to SSD)')
     plt.xlabel('Number of key-value pairs')
@@ -97,26 +109,32 @@ def create_and_save_plot_find_single_thread(data, file_path, batch_size=1):
                 erase_latency.append(data['erase_time'][i] * batch_size / rate)
         
     # plt.plot(x_values, y_values)
-    plt.plot(x_values, find_latency, label='Find')
+    plt.plot(x_values, find_latency, label='Lookup')
     plt.plot(x_values, insert_latency, label='Insert')
     plt.plot(x_values, erase_latency, label='Erase')
-
+    plt.plot(mcSizes, np.array(mcLatency) * batch_size / rate, label='MobileCoin Lookup', linestyle='dashed')
+    plt.plot(oblixSizes, np.array(oblixLatency) * batch_size / rate, label='Oblix Lookup\n(8-byte key-value)', linestyle='dashed')
+    plt.axvline(x = 4e8, color = 'dimgray', linestyle=':')
+    # use label line
+    plt.text(4.1e8, min(find_latency), 'Disk swap', fontsize=11, color='dimgray')
     # plt.ticklabel_format(axis='y', style='sci', scilimits=(0,0))
     # if batch_size > 1:
     plt.yscale('log')
     plt.gca().yaxis.set_major_locator(LogLocator(base=10.0, subs=[1.0, 2.0, 5.0]))
     plt.gca().yaxis.set_major_formatter(ScalarFormatter())
     plt.xscale('log')
+    # set x axis limit
+    plt.xlim(1e5, 2e9)
     # show legend
-    plt.legend(loc='upper left', bbox_to_anchor=(0.0, 1.0), borderaxespad=0.5)
+    plt.legend(loc='upper left', bbox_to_anchor=(1.0, 0.5), borderaxespad=0.5)
    
     plt.savefig(file_path + f'Latency{batch_size}.jpg', bbox_inches='tight')  # Save the plot as a JPG image
+    plt.savefig(file_path + f'Latency{batch_size}.pdf', bbox_inches='tight')  # Save the plot as a PDF image
 
 # Example usage
 # file_path = 'erc20SingleThread/'
 file_path = 'pipeline/'
 file_name = 'omap_perf_disk_64g.log'
-
 parsed_data = parse_text_file(file_path + file_name)
 
 # for map_size in set(parsed_data['map_size']):
