@@ -779,7 +779,10 @@ void testOHashMapImproved(size_t mapSize = 5e6) {
   ocall_measure_time(&end);
   uint64_t timediff = end - start;
   printf("oram init time %f s\n", (double)timediff * 1e-9);
-
+  // std::vector<uint64_t> cacheEvictor(1UL << 24);
+  // for (size_t i = 0; i < cacheEvictor.size(); i++) {
+  //   cacheEvictor[i] = i;
+  // }
   ocall_measure_time(&start);
   for (size_t r = 0; r < round; ++r) {
     ETH_Addr addr;
@@ -789,7 +792,9 @@ void testOHashMapImproved(size_t mapSize = 5e6) {
   ocall_measure_time(&end);
   timediff = end - start;
   printf("oram insert time %f us\n", (double)timediff * 1e-3 / (double)round);
-
+  // for (size_t i = 0; i < cacheEvictor.size(); i++) {
+  //   cacheEvictor[i]++;
+  // }
   ocall_measure_time(&start);
   for (size_t r = 0; r < round; ++r) {
     ETH_Addr addr;

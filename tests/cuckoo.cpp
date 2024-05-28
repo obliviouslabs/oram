@@ -572,7 +572,7 @@ TEST(Cuckoo, OMapPerfPublicDb) { testOMapPerf<20, 32, true, true>(1e6); }
 
 TEST(Cuckoo, OHashMapPerfPublicDb) { testOMapPerf<20, 32, true, false>(1e6); }
 
-TEST(Cuckoo, OMapPerfPrivateDb) { testOMapPerf<20, 32, false, true>(1e6); }
+TEST(Cuckoo, OMapPerfPrivateDb) { testOMapPerf<32, 32, false, true>(1e6); }
 
 TEST(Cuckoo, OHashMapPerfPrivateDb) { testOMapPerf<20, 32, false, false>(1e6); }
 

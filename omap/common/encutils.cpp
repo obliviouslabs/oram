@@ -147,7 +147,7 @@ bool sgxsd_aes_gcm_run(bool encrypt, const void *p_src, uint32_t src_len,
 }
 
 void aes_256_gcm_encrypt(uint64_t plaintextSize, uint8_t *plaintext,
-                         uint8_t iv[SGXSD_AES_GCM_IV_SIZE],
+                         const uint8_t iv[SGXSD_AES_GCM_IV_SIZE],
                          uint8_t tag[SGXSD_AES_GCM_MAC_SIZE],
                          uint8_t *ciphertext,
                          br_aes_x86ni_ctr_keys *aes_ctx_ptr) {

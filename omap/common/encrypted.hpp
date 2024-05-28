@@ -12,7 +12,7 @@ template <typename T>
 concept Encryptable = requires(typename T::Encrypted_t et) {
   { et };
 };
-}
+}  // namespace Concepts
 
 template <typename T>
 T prp(T val);
@@ -97,7 +97,7 @@ struct FreshEncrypted {
   // Encrypted& operator=(const Encrypted&) = delete;
   // Encrypted(const Encrypted&) = delete;
 
-  INLINE void Encrypt(const T& in, uint8_t iv[IV_SIZE]) {
+  INLINE void Encrypt(const T& in, const uint8_t iv[IV_SIZE]) {
     // PROFILE_F();
 
     aes_256_gcm_encrypt(
@@ -113,14 +113,14 @@ struct FreshEncrypted {
     }
   }
 
-  INLINE void Encrypt(const T& in, uint8_t iv[IV_SIZE],
+  INLINE void Encrypt(const T& in, const uint8_t iv[IV_SIZE],
                       const uint8_t key[AES_BLOCK_SIZE]) {
     // PROFILE_F();
     aex_ctx_t ctx;
     br_aes_x86ni_ctr_init(&ctx, key, AES_BLOCK_SIZE);
     aes_256_gcm_encrypt(
         SIZE, const_cast<uint8_t*>(reinterpret_cast<const uint8_t*>(&in)), iv,
-        tag, data);
+        tag, data, &ctx);
   }
 
   INLINE void Decrypt(T& out, const uint8_t iv[IV_SIZE],

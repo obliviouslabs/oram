@@ -142,11 +142,6 @@ else
 endif
 Crypto_Library_Name := sgx_tcrypto
 
-CLIENT_SOURCES = client.cpp ../../omap/common/encutils.cpp
-CLIENT_TARGET = client
-CLIENT_CXXFLAGS = -Wno-deprecated-declarations -std=c++20 -I../../omap/
-CLIENT_LDFLAGS = -lssl -lcrypto
-
 BEARSSL_SOURCES := \
 	Enclave/bearssl/src/bearssl/aead/gcm.c \
 	Enclave/bearssl/src/bearssl/hash/ghash_pclmul.c \
@@ -227,7 +222,7 @@ endif
 endif
 
 
-.PHONY: all run target client
+.PHONY: all run target
 all: .config_$(Build_Mode)_$(SGX_ARCH)
 	@$(MAKE) target
 
@@ -253,9 +248,6 @@ else
 	@echo "The project has been built in release simulation mode."
 endif
 endif
-
-client: $(CLIENT_SOURCES)
-	$(CXX) $(CLIENT_CXXFLAGS) $(CLIENT_SOURCES) -o $(CLIENT_TARGET) $(CLIENT_LDFLAGS)
 
 run: all
 ifneq ($(Build_Mode), HW_RELEASE)

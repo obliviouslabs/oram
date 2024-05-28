@@ -7,7 +7,7 @@
 
 #include "../../common.hpp"
 #include "crypt.hpp"
-#include "odsl/omap_short_kv.hpp"
+#include "odsl/omap.hpp"
 #include "sgx_error.h"
 #include "sgx_report.h"
 #include "sgx_spinlock.h"
@@ -23,7 +23,7 @@ uint32_t enclave_create_report(const sgx_target_info_t* p_qe3_target,
 
 using namespace ODSL;
 EM::Backend::MemServerBackend* EM::Backend::g_DefaultBackend = nullptr;
-OHashMap<key_type, val_type> omap;
+OMap<key_type, val_type> omap;
 // lock for the global OMAP
 // TODO: use fine grained lock within omap
 sgx_spinlock_t omap_lock = SGX_SPINLOCK_INITIALIZER;
@@ -136,7 +136,7 @@ int ecall_omap_update(uint8_t* key, uint8_t* val, uint32_t keyLength,
   const key_type& k = *reinterpret_cast<key_type*>(key);
   const val_type& v = *reinterpret_cast<val_type*>(val);
   OMapCritical section;
-  bool res = omap.Update(k, v);
+  bool res = omap.Insert(k, v);
   return (int)res;
 }
 
@@ -172,27 +172,24 @@ void ecall_handle_encrypted_query(uint8_t* encryptedQuery,
   for (int i = 0; i < 16; ++i) {
     std::swap(shared_key.s[i], shared_key.s[31 - i]);
   }
-  // for (int i = 0; i < 32; ++i) {
-  //   printf("%02x", shared_key_ptr[i]);
-  // }
-  // printf("\n");
-  // for (int i = 0; i < IV_SIZE; ++i) {
-  //   printf("%02x", encQuery->iv[i]);
-  // }
-  // printf("\n");
   // decrypt query using shared key
   Query query;
   encQuery->encQuery.Decrypt(query, encQuery->iv, shared_key_ptr);
   val_type v;
   Response response;
   EncryptedResponse encResponse;
-  query.addr.ntoh();
   response.nounce = query.nounce;
   {
     OMapCritical section;
     response.tillBlock = globalLastBlock;  // TODO add pending status
+    uint64_t start, end;
+    ocall_measure_time(&start);
     bool found = omap.Find(query.addr, response.balance);
+    ocall_measure_time(&end);
+    response.queryTime = end - start;
     obliMove(!found, response.balance, ERC20_Balance());
+    hton((uint8_t*)&response.tillBlock, sizeof(response.tillBlock));
+    hton((uint8_t*)&response.queryTime, sizeof(response.queryTime));
     response.success = true;
   }
 

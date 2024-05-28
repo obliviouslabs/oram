@@ -181,7 +181,7 @@ void InitKeys(DB_* db) {
       abort();
     }
     publicKeyBase64 =
-        base64_encode((uint8_t*)&public_key, sizeof(sgx_ec256_public_t));
+        base64_encode((uint8_t*)&public_key, sizeof(ec256_public_t));
     sealedPrivateKeyBase64 = base64_encode(sealedData, sealedDataSize);
     db->put("public_key", publicKeyBase64);
     db->put("sealed_private_key", sealedPrivateKeyBase64);
@@ -206,6 +206,25 @@ void InitDB(const char* dbPath) {
     std::cerr << e.what() << std::endl;
     return;
   }
+}
+
+void OutputDB(std::string filePath) {
+  std::ofstream ofs(filePath);
+  DBMetaData metaData = readMetaData(db);
+  ofs << metaData.lastBlock << " " << metaData.lastTxIdx << " "
+      << metaData.recordCount << std::endl;
+  if (!ofs.is_open()) {
+    std::cerr << "Failed to open file " << filePath << std::endl;
+    return;
+  }
+  auto it = db->getIterator();
+  for (it.seekToFirst(); it.isValid(); it.next()) {
+    if (it.key().substr(0, 2) != "0x") {
+      continue;
+    }
+    ofs << it.key() << " " << it.value() << std::endl;
+  }
+  ofs.close();
 }
 
 void DeleteDB(void) {
