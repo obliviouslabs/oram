@@ -469,7 +469,7 @@ if __name__ == "__main__":
 
         def __init__(self):
             self.state = None
-            self.fname = "tx.log"
+            self.fname = "usdt_tx.log"
             self.state_file = "retrieveTransfersState.json"
             # How many second ago we saved the Txt file
             self.last_save = 0

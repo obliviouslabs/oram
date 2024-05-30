@@ -506,26 +506,11 @@ void testOMapInitFromReader() {
 }
 
 template <int key_size, int value_size>
-void testOMapInitFromReaderPerf(uint32_t mapSize) {
-  OMap<Bytes<key_size>, Bytes<value_size>, uint32_t> map(mapSize);
-
-  EM::VirtualVector::VirtualReader<
-      std::pair<Bytes<key_size>, Bytes<value_size>>>
-      reader(mapSize, [](uint64_t) {
-        std::pair<Bytes<key_size>, Bytes<value_size>> p;
-        p.first.SetRand();
-        // p.second.SetRand();
-        return p;
-      });
-  map.InitFromReader(reader);
-}
-
-template <int key_size, int value_size>
 void testOHashMapInitFromReaderPerf(uint32_t mapSize) {
   if (EM::Backend::g_DefaultBackend) {
     delete EM::Backend::g_DefaultBackend;
   }
-  size_t BackendSize = 2e9;
+  size_t BackendSize = 4e9;
   EM::Backend::g_DefaultBackend =
       new EM::Backend::MemServerBackend(BackendSize);
   OHashMap<Bytes<key_size>, Bytes<value_size>, FULL_OBLIVIOUS, uint32_t> map(
@@ -533,13 +518,32 @@ void testOHashMapInitFromReaderPerf(uint32_t mapSize) {
 
   EM::VirtualVector::VirtualReader<
       std::pair<Bytes<key_size>, Bytes<value_size>>>
-      reader(mapSize, [](uint64_t) {
+      reader(mapSize, [](uint64_t i) {
         std::pair<Bytes<key_size>, Bytes<value_size>> p;
-        p.first.SetRand();
-        // p.second.SetRand();
+        memcpy(p.first.data, &i, sizeof(i));
         return p;
       });
   map.InitFromReader(reader);
+}
+
+template <int key_size, int value_size>
+void testOMapInitFromReaderPerf(uint32_t mapSize) {
+  if (EM::Backend::g_DefaultBackend) {
+    delete EM::Backend::g_DefaultBackend;
+  }
+  size_t BackendSize = 4e9;
+  EM::Backend::g_DefaultBackend =
+      new EM::Backend::MemServerBackend(BackendSize);
+  OMap<Bytes<key_size>, Bytes<value_size>, uint32_t> map(mapSize);
+
+  EM::VirtualVector::VirtualReader<
+      std::pair<Bytes<key_size>, Bytes<value_size>>>
+      reader(mapSize, [](uint64_t i) {
+        std::pair<Bytes<key_size>, Bytes<value_size>> p;
+        memcpy(p.first.data, &i, sizeof(i));
+        return p;
+      });
+  map.InitFromReader(reader, mapSize * (key_size + value_size) * 4);
 }
 
 TEST(Cuckoo, OHashMapNonOblivious) { testOHashMap<NON_OBLIVIOUS>(); }
@@ -576,7 +580,7 @@ TEST(Cuckoo, OMapPerfPrivateDb) { testOMapPerf<32, 32, false, true>(1e6); }
 
 TEST(Cuckoo, OHashMapPerfPrivateDb) { testOMapPerf<20, 32, false, false>(1e6); }
 
-TEST(Cuckoo, OMapInitPerf) { testOMapInitFromReaderPerf<20, 32>(1e6); }
+TEST(Cuckoo, OMapInitPerf) { testOMapInitFromReaderPerf<32, 32>(1UL << 24); }
 
 TEST(Cuckoo, OHashMapInitPerf) { testOHashMapInitFromReaderPerf<20, 32>(1e6); }
 

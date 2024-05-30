@@ -239,6 +239,9 @@ std::string GetPublicKeyBase64(void) { return publicKeyBase64; }
 void ActualMain(const char* dbPath) {
   sgx_status_t ret = SGX_ERROR_UNEXPECTED;
   InitDB(dbPath);
+  // OutputDB("usdt_latest.txt");
+  // DeleteDB();
+  // return;
   InitKeys(db);
 
   DBMetaData metaData;
