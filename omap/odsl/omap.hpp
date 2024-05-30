@@ -1414,6 +1414,16 @@ struct OMap {
     initContext.Finalize();
   }
 
+  template <typename Reader>
+    requires Readable<Reader, std::pair<K, V>>
+  void InitFromReader(Reader& reader, uint64_t additionalCacheBytes) {
+    InitContext initContext(*this, additionalCacheBytes);
+    while (!reader.eof()) {
+      initContext.Insert(reader.read());
+    }
+    initContext.Finalize();
+  }
+
   template <class PosMap>
   bool InsertWithCustomPosMap(const K& key, const V& value, PosMap& posMap) {
     // first pass, check if key exists in stash, if so, replace the value and we
