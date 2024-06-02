@@ -3,7 +3,7 @@ Go Binding Example
 -------------------------------
 This example shows how to call the C++ codes from Rust.
 
-1. Build the example with $ cargo build
+1. Build the example with $ rm -r target && cargo build
 2. Run unit tests with $ cargo test
 
 -------------------------------

@@ -106,5 +106,7 @@ struct OMapGenericBinding {
    */
   void FinishInit();
 
+  void Destroy();
+
   ~OMapGenericBinding();
 };

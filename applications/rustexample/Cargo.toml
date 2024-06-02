@@ -1,5 +1,5 @@
 [package]
-name = "rustexample"
+name = "omap"
 version = "0.1.0"
 edition = "2021"
 
@@ -9,3 +9,6 @@ edition = "2021"
 bindgen = "0.69.4"
 cmake = "0.1.50"
 cxx = { version = "1.0.118", features = ["c++14", "c++17", "c++20"] }
+
+[dependencies]
+rand = "0.8.5"

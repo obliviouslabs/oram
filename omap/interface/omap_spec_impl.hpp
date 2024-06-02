@@ -30,6 +30,7 @@
   bool OMapBinding(KS, VS)::Find(const void* keyPtr, void* valPtr) {           \
     return omap.Find(keyPtr, valPtr);                                          \
   }                                                                            \
+  void OMapBinding(KS, VS)::Destroy() { omap.Destroy(); }                      \
   OMapBinding(KS, VS)::~OMapBinding(KS, VS)() {}
 
 #undef DECLARE_OMAP
