@@ -145,6 +145,7 @@ bool OMapGenericBinding<key_size, val_size>::Erase(const void* keyPtr) {
     return ((MapType*)omap)->Erase(key);
   } catch (const std::exception& e) {
     printf("Caught exception in Erase: %s\n", e.what());
+    return false;
   }
 }
 
@@ -160,6 +161,7 @@ bool OMapGenericBinding<key_size, val_size>::OErase(const void* keyPtr) {
     return ((MapType*)omap)->OErase(key);
   } catch (const std::exception& e) {
     printf("Caught exception in OErase: %s\n", e.what());
+    return false;
   }
 }
 
