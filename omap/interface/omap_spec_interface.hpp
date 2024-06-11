@@ -20,6 +20,7 @@
     bool Erase(const void* keyPtr);                             \
     bool OErase(const void* keyPtr);                            \
     bool Find(const void* keyPtr, void* valPtr);                \
+    void Destroy();                                             \
     ~OMapBinding(OMAP_KEY_SIZE, OMAP_VAL_SIZE)();               \
   };
 

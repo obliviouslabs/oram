@@ -80,7 +80,7 @@ def create_and_save_plot_init_single_thread(data, file_path, num_sub_omap=1):
 def create_and_save_plot_find_single_thread(data, file_path, batch_size=1):
     plt.figure()
     if batch_size == 1:
-        plt.title(f'Latency of sequential accesses\n(32-byte key, 32-byte value, 64 GB EPC, Swapped to SSD)')
+        plt.title(f'Latency of sequential accesses\n(32-byte key, 32-byte value, 64 GB EPC, Swap to SSD)')
     else:
         plt.title(f'Latency of different operations in batch of {batch_size}\n(32-byte key, 32-byte value, 64 GB EPC, swap to SSD)')
     plt.xlabel('Number of key-value pairs')
@@ -112,11 +112,11 @@ def create_and_save_plot_find_single_thread(data, file_path, batch_size=1):
     plt.plot(x_values, find_latency, label='Lookup')
     plt.plot(x_values, insert_latency, label='Insert')
     plt.plot(x_values, erase_latency, label='Erase')
-    plt.plot(mcSizes, np.array(mcLatency) * batch_size / rate, label='MobileCoin Lookup', linestyle='dashed')
-    plt.plot(oblixSizes, np.array(oblixLatency) * batch_size / rate, label='Oblix Lookup\n(8-byte key-value)', linestyle='dashed')
+    plt.plot(mcSizes, np.array(mcLatency) * batch_size / rate, label='MobileCoin[1] Lookup', linestyle='dashed')
+    plt.plot(oblixSizes, np.array(oblixLatency) * batch_size / rate, label='Oblix[2] Lookup\n(8-byte key-value)', linestyle='dashed')
     plt.axvline(x = 4e8, color = 'dimgray', linestyle=':')
     # use label line
-    plt.text(4.1e8, min(find_latency), 'Disk swap', fontsize=11, color='dimgray')
+    plt.text(4.2e8, min(find_latency), 'page\nswap', fontsize=11, color='dimgray')
     # plt.ticklabel_format(axis='y', style='sci', scilimits=(0,0))
     # if batch_size > 1:
     plt.yscale('log')
@@ -128,7 +128,7 @@ def create_and_save_plot_find_single_thread(data, file_path, batch_size=1):
     # show legend
     plt.legend(loc='upper left', bbox_to_anchor=(1.0, 0.5), borderaxespad=0.5)
    
-    plt.savefig(file_path + f'Latency{batch_size}.jpg', bbox_inches='tight')  # Save the plot as a JPG image
+    plt.savefig(file_path + f'Latency{batch_size}.jpg', bbox_inches='tight', dpi=600)  # Save the plot as a JPG image
     plt.savefig(file_path + f'Latency{batch_size}.pdf', bbox_inches='tight')  # Save the plot as a PDF image
 
 # Example usage
