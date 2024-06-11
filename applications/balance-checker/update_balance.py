@@ -28,7 +28,7 @@ def read_initial_balances(balance_file):
     
     for line in lines[1:]:
         address, balance = line.strip().split()
-        balances[address] = int(balance)
+        balances[int(address, 16)] = int(balance)
         
     return int(metadata[0]), int(metadata[1]), int(metadata[2]), balances
 
@@ -40,11 +40,12 @@ def update_balances_from_logs(balance_file, log_files, updated_balance_file):
         with open(log_file, 'r') as f:
             for line in f:
                 log_block_number, transaction_id, log_index, from_address, to_address, amount, timestamp = line.strip().split()
+                from_address = int(from_address, 16)
+                to_address = int(to_address, 16)
                 log_block_number = int(log_block_number)
                 log_index = int(log_index)
                 # transaction_id = int(transaction_id)
                 amount = int(amount)
-                
                 # Check if the log entry is relevant (i.e., after the last processed block/transaction)
                 if log_block_number < last_block_number or (log_block_number == last_block_number and log_index <= last_log_index):
                     continue
@@ -65,17 +66,17 @@ def update_balances_from_logs(balance_file, log_files, updated_balance_file):
                 last_log_index = log_index
 
     # remove addresses with zero balance
-    balances = {address: balance for address, balance in balances.items() if balance > 0}
+    balances = {address: balance for address, balance in balances.items() if balance != 0}
     
     # Write updated balances to a new file, sorted by balance (descending)
     with open(updated_balance_file, 'w') as f:
         f.write(f"{last_block_number} {last_log_index} {len(balances)}\n")
         for address, balance in sorted(balances.items(), key=lambda x: x[1], reverse=True):
-            f.write(f"{address} {balance}\n")
+            f.write(f"{hex(address)} {balance}\n")
 
 # Example usage:
 balance_file = 'usdt_balance.txt'
 log_files = ['usdt_tx.log', 'usdt_tx2.log']  # List of log file paths
-updated_balance_file = 'updated_usdt_balances.txt'
+updated_balance_file = 'updated_usdt_balances2.txt'
 
 update_balances_from_logs(balance_file, log_files, updated_balance_file)
