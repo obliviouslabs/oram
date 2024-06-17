@@ -7,7 +7,7 @@ target_include_directories(common PUBLIC .)
 target_include_directories(common PUBLIC ${BEARSSL_INCLUDE_DIRS} ${BEARSSL_INCLUDE_DIRS}/bearssl)
 target_link_libraries (common dl ${BEARSSL_LIBRARY})
 
-add_library (oraminterface interface/interface.cpp common)
+add_library (oraminterface interface/interface.cpp interface/omap_c.cpp common)
 target_compile_definitions(oraminterface PRIVATE BOOST_STACKTRACE_USE_ADDR2LINE)
 target_include_directories(oraminterface PUBLIC .)
 target_link_libraries (oraminterface dl OpenMP::OpenMP_CXX)
