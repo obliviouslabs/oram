@@ -23,6 +23,7 @@ struct RecursiveORAM {
   typedef PositionType UidType;
   // Each internal node (i.e. position map node) has fan_out children
   static constexpr short fan_out = std::max(64 / (int)sizeof(PositionType), 2);
+  bool isInitDefault = false;
 
   /**
    * @brief Defines the internal node of the position map, stores the positions
@@ -115,6 +116,26 @@ struct RecursiveORAM {
     for (short i = 0; i < fan_out; ++i) {
       internalNode.children[i] = initFromReaderHelper(reader, level + 1);
       if (reader.eof()) {
+        break;
+      }
+    }
+    UidType uid = internalOrams[level].GetNextUid();
+    return internalOrams[level].Write(uid, internalNode);
+  }
+
+  LeafNode defaultLeafNode;
+
+  PositionType initDefaultHelper(uint64_t& remain, int level = 0) {
+    if (level == (int)oramSizes.size() - 1) {
+      // UidType uid = leafOram.GetNextUid();
+      // decrement remain by chunk_size until zero
+      remain -= std::min(remain, (uint64_t)chunk_size);
+      return leafOram.GetRandPos();
+    }
+    InternalNode internalNode;
+    for (short i = 0; i < fan_out; ++i) {
+      internalNode.children[i] = initDefaultHelper(remain, level + 1);
+      if (!remain) {
         break;
       }
     }
@@ -231,9 +252,24 @@ struct RecursiveORAM {
    * @param defaultValue The default value to initialize the ORAM with
    */
   void InitDefault(const T& defaultValue) {
-    EM::VirtualVector::VirtualReader<T> reader(
-        _size, [&](PositionType) { return defaultValue; });
-    InitFromReader(reader);
+    if (hasInited) {
+      throw std::runtime_error("RecursiveORAM double initialization");
+    }
+    if (leafOram.isLinear) {
+      // naive initialization for linear ORAM
+      EM::VirtualVector::VirtualReader<T> reader(
+          _size, [&](PositionType) { return defaultValue; });
+      InitFromReader(reader);
+      return;
+    }
+    // otherwise, we need to initialize the ORAM recursively
+    for (short i = 0; i < chunk_size; ++i) {
+      defaultLeafNode.data[i] = defaultValue;
+    }
+    hasInited = true;
+    isInitDefault = true;
+    uint64_t remain = _size;
+    initDefaultHelper(remain);
   }
 
   /**
@@ -303,7 +339,12 @@ struct RecursiveORAM {
       return true;
     };
     // update the actual data
-    leafOram.Update(pos, uids.back(), newPos, updateFunc);
+    if (isInitDefault) {
+      LeafNode node = defaultLeafNode;
+      leafOram.Update(pos, uids.back(), newPos, updateFunc, node);
+    } else {
+      leafOram.Update(pos, uids.back(), newPos, updateFunc);
+    }
     // LeafNode dummyNode;
     // accessor(dummyNode.data[0]);
   }
@@ -332,7 +373,8 @@ struct RecursiveORAM {
      * @param numLevel The number of oram levels, including the leaf level
      * @param batchSize The batch size
      */
-    void Init(int numLevel, uint64_t batchSize) {
+    void Init(int numLevel, uint64_t batchSize,
+              const LeafNode* defaultLeafNode = NULL) {
       uint64_t allBatchSize = batchSize * numLevel;
       uint64_t offset = 0;
       uint64_t uidOffset = offset;
@@ -363,6 +405,12 @@ struct RecursiveORAM {
       memset(newPoses, 0,
              sizeof(PositionType) *
                  batchSize);  // first level of new pos is always 0
+      if (defaultLeafNode != NULL) {
+        // copy the default leaf node to all leaf nodes
+        for (uint64_t i = 0; i < batchSize; ++i) {
+          memcpy(leafNodes + i, defaultLeafNode, sizeof(LeafNode));
+        }
+      }
     }
 
     INLINE UidType* GetUids(int level) { return uids + level * batchSize; }
@@ -411,7 +459,11 @@ struct RecursiveORAM {
     Assert(hasInited);
     int numLevel = (int)oramSizes.size();
     size_t batchSize = address.size();
-    writeBackBuffer.Init(numLevel, batchSize);
+    if (isInitDefault) {
+      writeBackBuffer.Init(numLevel, batchSize, &defaultLeafNode);
+    } else {
+      writeBackBuffer.Init(numLevel, batchSize);
+    }
     std::vector<short> indicesCache(numLevel * batchSize);
     for (size_t i = 0; i < address.size(); ++i) {
       UidType uid = address[i] / chunk_size;

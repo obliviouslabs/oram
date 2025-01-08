@@ -574,9 +574,15 @@ TEST(AdaptiveORAM, testThreshold) {
 }
 
 TEST(RecursiveORAM, testInitDefault) {
-  uint64_t size = 12345;
-  ODSL::RecursiveORAM<TestElement> oram(size);
-  oram.InitDefault(TestElement());
+  for (uint64_t size = 1234; size < 12345; size = size * 4 / 3) {
+    ODSL::RecursiveORAM<int64_t> oram(size);
+    oram.InitDefault(54321);
+    int64_t val;
+    for (uint64_t i = 0; i < size; i += 123) {
+      oram.Read(i, val);
+      ASSERT_EQ(val, 54321);
+    }
+  }
 }
 
 TEST(RecursiveORAM, testReadAfterWrite) {
@@ -596,6 +602,24 @@ TEST(RecursiveORAM, testReadAfterWrite) {
   }
 }
 
+TEST(RecursiveORAM, testReadAfterWriteWithInitDefault) {
+  uint64_t size = 1234;
+  ODSL::RecursiveORAM<int64_t> oram(size);
+  oram.InitDefault(54321);
+  int64_t val;
+  for (uint64_t i = 0; i < size / 2; i++) {
+    oram.Write(i, i * 3);
+  }
+  for (uint64_t i = 0; i < size / 2; i++) {
+    oram.Read(i, val);
+    ASSERT_EQ(val, i * 3);
+  }
+  for (uint64_t i = size / 2; i < size; i++) {
+    oram.Read(i, val);
+    ASSERT_EQ(val, 54321);
+  }
+}
+
 TEST(RecursiveORAM, testReadAfterInit) {
   uint64_t size = 1234;
   StdVector<int64_t> ref(size);
@@ -610,6 +634,42 @@ TEST(RecursiveORAM, testReadAfterInit) {
     int64_t val;
     oram.Read(addr, val);
     ASSERT_EQ(val, ref[addr]);
+  }
+}
+
+TEST(RecursiveORAM, testPerf) {
+  static constexpr uint64_t blockSize = 64;
+  std::vector<uint64_t> sizes = {1UL << 14, 1UL << 16, 1UL << 20};
+  for (uint64_t size : sizes) {
+    struct Block {
+      uint8_t data[blockSize];
+    };
+    // set backend size to 2GB
+    if (EM::Backend::g_DefaultBackend) {
+      delete EM::Backend::g_DefaultBackend;
+    }
+    size_t BackendSize = 10e9;
+    EM::Backend::g_DefaultBackend =
+        new EM::Backend::MemServerBackend(BackendSize);
+    auto init_start = std::chrono::system_clock::now();
+    ODSL::RecursiveORAM<Block> oram(size);
+    oram.InitDefault(Block());
+    auto init_end = std::chrono::system_clock::now();
+    std::chrono::duration<double> init_diff = init_end - init_start;
+    printf("Time for initializing %lu elements of %lu bytes: %f s\n", size,
+           blockSize, init_diff.count());
+    uint64_t test_round = 1e5;
+    // start timer
+    auto start = std::chrono::system_clock::now();
+    for (uint64_t i = 0; i < test_round; i++) {
+      Block b;
+      oram.Write(i % size, b);
+    }
+    auto end = std::chrono::system_clock::now();
+    std::chrono::duration<double> diff = end - start;
+    auto avgTime = diff.count() / test_round;
+    printf("Time per write (%lu bytes block): %f us\n", blockSize,
+           avgTime * 1e6);
   }
 }
 
@@ -650,42 +710,84 @@ TEST(RecursiveORAM, testMixed) {
 }
 
 TEST(RecursiveORAM, testBatchAccessDefer) {
-  uint64_t size = 1234;
-  StdVector<uint64_t> ref(size);
-  ODSL::RecursiveORAM<uint64_t, uint64_t> oram(size, MAX_CACHE_SIZE);
-  for (uint64_t i = 0; i < size; i++) {
-    ref[i] = UniformRandom();
-  }
-  StdVector<uint64_t>::Reader reader(ref.begin(), ref.end());
-  oram.InitFromReader(reader);
-  for (int round = 0; round < 1e4; ++round) {
-    std::vector<uint64_t> addrs(100);
-    for (uint64_t& addr : addrs) {
-      addr = UniformRandom(size - 1);
+  for (uint64_t size = 1000; size < 12345; size = size * 3 / 2) {
+    StdVector<uint64_t> ref(size);
+    ODSL::RecursiveORAM<uint64_t, uint64_t> oram(size, MAX_CACHE_SIZE);
+    for (uint64_t i = 0; i < size; i++) {
+      ref[i] = UniformRandom();
     }
-    std::sort(addrs.begin(), addrs.end());
-    auto incFunc = [&](std::vector<uint64_t>& xs) {
-      for (size_t i = 0; i < addrs.size(); ++i) {
-        if (xs[i] != ref[addrs[i]]) {
-          printf("Read wrong result for uid %lu, expected %lu, got %lu\n",
-                 addrs[i], ref[addrs[i]], xs[i]);
-          abort();
+    StdVector<uint64_t>::Reader reader(ref.begin(), ref.end());
+    oram.InitFromReader(reader);
+    for (int round = 0; round < 1e2; ++round) {
+      std::vector<uint64_t> addrs(rand() % 100 + 1);
+      for (uint64_t& addr : addrs) {
+        addr = UniformRandom(size - 1);
+      }
+      std::sort(addrs.begin(), addrs.end());
+      auto incFunc = [&](std::vector<uint64_t>& xs) {
+        for (size_t i = 0; i < addrs.size(); ++i) {
+          if (xs[i] != ref[addrs[i]]) {
+            printf("Read wrong result for uid %lu, expected %lu, got %lu\n",
+                   addrs[i], ref[addrs[i]], xs[i]);
+            abort();
+          }
+          ++xs[i];
         }
-        ++xs[i];
-      }
-    };
+      };
 
-    oram.BatchAccessDeferWriteBack(addrs, incFunc);
-    for (size_t i = 0; i < addrs.size(); ++i) {
-      if (i == 0 || addrs[i] != addrs[i - 1]) {
-        ++ref[addrs[i]];
+      oram.BatchAccessDeferWriteBack(addrs, incFunc);
+      for (size_t i = 0; i < addrs.size(); ++i) {
+        if (i == 0 || addrs[i] != addrs[i - 1]) {
+          ++ref[addrs[i]];
+        }
+      }
+      oram.WriteBack();
+      for (uint64_t i = 0; i < addrs.size(); i++) {
+        uint64_t val;
+        oram.Read(addrs[i], val);
+        ASSERT_EQ(val, ref[addrs[i]]);
       }
     }
-    oram.WriteBack();
-    for (uint64_t i = 0; i < addrs.size(); i++) {
-      uint64_t val;
-      oram.Read(addrs[i], val);
-      ASSERT_EQ(val, ref[addrs[i]]);
+  }
+}
+
+TEST(RecursiveORAM, testBatchAccessDeferInitDefault) {
+  for (uint64_t size = 1234; size < 12345; size = size * 3 / 2) {
+    StdVector<uint64_t> ref(size);
+    ODSL::RecursiveORAM<uint64_t, uint64_t> oram(size, MAX_CACHE_SIZE);
+    for (uint64_t i = 0; i < size; i++) {
+      ref[i] = 54321;
+    }
+    oram.InitDefault(54321);
+    for (int round = 0; round < 1e2; ++round) {
+      std::vector<uint64_t> addrs(rand() % 100 + 1);
+      for (uint64_t& addr : addrs) {
+        addr = UniformRandom(size - 1);
+      }
+      std::sort(addrs.begin(), addrs.end());
+      auto incFunc = [&](std::vector<uint64_t>& xs) {
+        for (size_t i = 0; i < addrs.size(); ++i) {
+          if (xs[i] != ref[addrs[i]]) {
+            printf("Read wrong result for uid %lu, expected %lu, got %lu\n",
+                   addrs[i], ref[addrs[i]], xs[i]);
+            abort();
+          }
+          ++xs[i];
+        }
+      };
+
+      oram.BatchAccessDeferWriteBack(addrs, incFunc);
+      for (size_t i = 0; i < addrs.size(); ++i) {
+        if (i == 0 || addrs[i] != addrs[i - 1]) {
+          ++ref[addrs[i]];
+        }
+      }
+      oram.WriteBack();
+      for (uint64_t i = 0; i < addrs.size(); i++) {
+        uint64_t val;
+        oram.Read(addrs[i], val);
+        ASSERT_EQ(val, ref[addrs[i]]);
+      }
     }
   }
 }
