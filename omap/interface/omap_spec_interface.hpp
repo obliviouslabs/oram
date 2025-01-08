@@ -26,3 +26,4 @@
 
 #define DECLARE_OMAP(KS, VS) DECLARE_OMAP_BINDING(KS, VS)
 #include "omap_declare.cfg"
+#undef DECLARE_OMAP

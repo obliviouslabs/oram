@@ -38,6 +38,7 @@ add_subdirectory(omap)
 enable_testing()
 add_subdirectory(tests)
 
+add_subdirectory(applications/cexample/src)
 
 
 include(cmake/cppcheck.cmake)

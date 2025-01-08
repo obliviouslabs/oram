@@ -421,7 +421,7 @@ template <const int key_size, const int value_size, const bool is_public_db,
 void testOMapPerf(uint32_t mapSize) {
   using K = Bytes<key_size>;
   using V = Bytes<value_size>;
-  using OMapType = std::conditional_t<is_improved, OMap<K, V>,
+  using OMapType = std::conditional_t<is_improved, OMap<K, V, uint32_t>,
                                       OHashMap<K, V, FULL_OBLIVIOUS>>;
 
   OMapType map(mapSize);
