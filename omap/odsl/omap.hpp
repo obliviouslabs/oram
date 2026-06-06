@@ -995,37 +995,18 @@ struct OPosMap {
     entryToInsert.setInvalid(isDummy);
     bool exist = insertEntryOblivious(entryToInsert, idx0);
     obliMove(exist, value, entryToInsert.value);
-    // the element just swapped out is more likely to get inserted to somewhere
-    // else
-    stash.template OInsert<true>(entryToInsert, idx0);
-    // for (int i = 0; i < 2; ++i) {
-    //   // use FIFO order so that we won't get stuck by loops in the random graph
-    //   // of cuckoo hashing
-    //   stash.OPopOldest(entryToInsert, idx0);
-    //   const bool isDummy = !entryToInsert.valid();
-    //   if constexpr (!isOblivious) {
-    //     // the underlying ram is not oblivious, generate a random access
-    //     // position
-    //     obliMove(isDummy, idx0, (PositionType)UniformRandom(tableSize - 1));
-    //     obliMove(isDummy, entryToInsert.otherIdx,
-    //              (PositionType)UniformRandom(tableSize - 1));
-    //   }
-    //   insertEntryObliviousRetry(entryToInsert, idx0, 1);
-    //   stash.OInsert(entryToInsert, idx0);
-    // }
-
-    // use FIFO order so that we won't get stuck by loops in the random graph
-    // of cuckoo hashing
-    stash.OPopOldest(entryToInsert, idx0);
-    const bool isDummy = !entryToInsert.valid();
+    
+    const bool isSwappedDummy = !entryToInsert.valid();
     if constexpr (!isOblivious) {
       // the underlying ram is not oblivious, generate a random access
       // position
-      obliMove(isDummy, idx0, (PositionType)UniformRandom(tableSize - 1));
-      obliMove(isDummy, entryToInsert.otherIdx,
+      obliMove(isSwappedDummy, idx0, (PositionType)UniformRandom(tableSize - 1));
+      obliMove(isSwappedDummy, entryToInsert.otherIdx,
                 (PositionType)UniformRandom(tableSize - 1));
     }
-    insertEntryObliviousRetry(entryToInsert, idx0, 2);
+    // try one round of insertion
+    insertEntryObliviousRetry(entryToInsert, idx0, 1);
+    // if the insertion fails, insert the entry to the stash. Or perform a dummy insert.
     stash.OInsert(entryToInsert, idx0);
     
     return exist;
