@@ -836,7 +836,7 @@ struct OPosMap {
       uint64_t remainingCacheBytes = cacheBytes - table0.GetMemoryUsage();
       table1.SetSize(tableSize, remainingCacheBytes);
     }
-    stash.SetSize(16);
+    stash.SetSize(32);
   }
 
   /**
