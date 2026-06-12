@@ -303,6 +303,59 @@ void testReplaceCount() {
   // }
 }
 
+template <ObliviousLevel isOblivious>
+void testReplaceCountLargeKV() {
+  // test replace count distribution
+  int mapSize = 1000000;
+  int round = 50000;
+  int outerRound = 20;
+
+  int windowSize = 1;
+
+  using PosMapType = OPosMap<int, int, false>;
+  using UidType = typename PosMapType::UidType;
+  using HExtra = typename PosMapType::HExtra;
+
+  std::vector<uint64_t> stashLoads(30, 0);
+  for (int rr = 0; rr < outerRound; ++rr) {
+    PosMapType map(mapSize, MAX_CACHE_SIZE);
+    map.Init();
+    const auto& stash = map.GetStash();
+    UidType uid;
+    HExtra extraHash;
+    int pos = 0;
+    for (int i = 0; i < mapSize - round; ++i) {
+      map.Insert(rand(), pos, uid, extraHash);
+    }
+    for (int r = 0; r < round; ++r) {
+      int key = rand();
+      if constexpr (isOblivious) {
+        map.OInsert(key, pos, uid, extraHash);
+        // map.OErase(key);
+      } else {
+        map.Insert(key, pos, uid, extraHash);
+        // map.Erase(key);
+      }
+      if (r % windowSize == 0) {
+        int load = 0;
+        for (int k = 0; k < stash.size(); ++k) {
+          if (stash[k].entry.valid()) {
+            ++load;
+          }
+        }
+        stashLoads[load]++;
+      }
+    }
+  }
+  for (int i = 0; i < stashLoads.size(); ++i) {
+    printf("%d %lu\n", i, stashLoads[i]);
+  }
+  // for (int i = 10; i < stashLoads.size(); ++i) {
+  //   // stash load should be less than 10 with high probability
+  //   ASSERT_EQ(stashLoads[i], 0);
+  // }
+}
+
 void testOMapEraseSimple() {
   int mapSize = 10;
   OMap<int, int> map(mapSize);
@@ -598,6 +651,10 @@ TEST(Cuckoo, ReplaceCountDistriNonOblivious) {
 
 TEST(Cuckoo, ReplaceCountDistriOblivious) {
   testReplaceCount<FULL_OBLIVIOUS>();
+}
+
+TEST(Cuckoo, ReplaceCountDistriLargeKV) {
+  testReplaceCountLargeKV<FULL_OBLIVIOUS>();
 }
 
 TEST(Cuckoo, OHashMapPushInit) { testPushInit<false>(); }
