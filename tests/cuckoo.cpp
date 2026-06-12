@@ -261,17 +261,17 @@ template <ObliviousLevel isOblivious>
 void testReplaceCount() {
   // test replace count distribution
   int mapSize = 1000000;
-  int round = 100000;
-  int outerRound = 100;
+  int round = 50000;
+  int outerRound = 2000;
 
   int windowSize = 1;
 
   std::vector<uint64_t> stashLoads(30, 0);
   for (int rr = 0; rr < outerRound; ++rr) {
-    OHashMap<int, int, NON_OBLIVIOUS> map(mapSize + round / 2, MAX_CACHE_SIZE);
+    OHashMap<int, int, NON_OBLIVIOUS> map(mapSize, MAX_CACHE_SIZE);
     map.Init();
     const auto& stash = map.GetStash();
-    for (int i = 0; i < mapSize; ++i) {
+    for (int i = 0; i < mapSize - round; ++i) {
       map.Insert(rand(), 0);
     }
     for (int r = 0; r < round; ++r) {

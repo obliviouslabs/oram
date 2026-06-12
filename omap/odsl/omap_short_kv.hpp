@@ -81,6 +81,8 @@ struct OHashMapIndexer {
   }
 };
 
+typedef uint8_t crowd_t;
+static constexpr crowd_t CROWD_MAX = UINT8_MAX;
 /**
  * @brief A single entry (slot) in the hash map. It contains a key and a value,
  * and two flags.
@@ -111,7 +113,7 @@ struct OHashMapEntry {
   // to swap out when both buckets are full. Also, for a new entry, if both
   // tables' buckets have empty slots, we will insert the entry to the bucket
   // whose neighbor(s) are less crowded.
-  uint16_t crowdedness = 0;
+  crowd_t crowdedness = 0;
   K key;
   V value;
 #ifndef ENCLAVE_MODE
@@ -333,7 +335,8 @@ struct OHashMap {
   // number of slots in each bucket
   static constexpr short bucketSize = 2;
   // maximum number of elements in the stash
-  static constexpr int stash_max_size = 10;
+  // corresponding to a failure probability of around 2^-64
+  static constexpr int stash_max_size = 21;
   // the capcity of the hash map
   PositionType _size = 0;
   // the number of elements in the hash map
@@ -672,27 +675,27 @@ struct OHashMap {
         exist |= replaceSucceed;
         entryToInsert.valid &= !replaceSucceed;
 
-        uint16_t min_crowd0 = UINT16_MAX;
+        crowd_t min_crowd0 = CROWD_MAX;
         int min_idx0 = 0;
         for (int i = 0; i < bucketSize; ++i) {
-          uint16_t c = 0;
+          crowd_t c = 0;
           obliMove(bucket0.entries[i].valid, c, bucket0.entries[i].crowdedness);
           bool isMin = c < min_crowd0;
           obliMove(isMin, min_crowd0, c);
           obliMove(isMin, min_idx0, i);
         }
 
-        uint16_t min_crowd1 = UINT16_MAX;
+        crowd_t min_crowd1 = CROWD_MAX;
         int min_idx1 = 0;
         for (int i = 0; i < bucketSize; ++i) {
-          uint16_t c = 0;
+          crowd_t c = 0;
           obliMove(bucket1.entries[i].valid, c, bucket1.entries[i].crowdedness);
           bool isMin = c < min_crowd1;
           obliMove(isMin, min_crowd1, c);
           obliMove(isMin, min_idx1, i);
         }
 
-        uint16_t max_crowd = std::max(min_crowd0, min_crowd1);
+        crowd_t max_crowd = std::max(min_crowd0, min_crowd1);
         bool t0LessCrowded = min_crowd0 <= min_crowd1;
         int firstTable = !t0LessCrowded;
         entryToInsert.crowdedness = max_crowd + 1;
@@ -726,12 +729,12 @@ struct OHashMap {
    * swapped out if no slot is available.
    * @param maxRetry the maximum number of retries, default to 1
    */
-  void insertEntryObliviousRetry(KVEntry& entryToInsert, int maxRetry = 1) {
+  void insertEntryObliviousRetry(KVEntry& entryToInsert, int maxRetry = 3) {
     auto swapUpdateFunc = [&](BucketType& bucket, uint8_t nextTableIdx) {
-      uint16_t min_crowd = UINT16_MAX;
+      crowd_t min_crowd = CROWD_MAX;
       int offset = 0;
       for (int i = 0; i < bucketSize; ++i) {
-        uint16_t c = 0;
+        crowd_t c = 0;
         obliMove(bucket.entries[i].valid, c, bucket.entries[i].crowdedness);
         bool isMin = c < min_crowd;
         obliMove(isMin, min_crowd, c);
@@ -744,9 +747,9 @@ struct OHashMap {
       // The swapped-out entry should go to nextTableIdx
       entryToInsert.nextTable = nextTableIdx;
       // compute the new min crowdedness of the bucket after the swap
-      uint16_t new_min_crowd = UINT16_MAX;
+      crowd_t new_min_crowd = CROWD_MAX;
       for (int i = 0; i < bucketSize; ++i) {
-        uint16_t c = 0;
+        crowd_t c = 0;
         obliMove(bucket.entries[i].valid, c, bucket.entries[i].crowdedness);
         new_min_crowd = std::min(new_min_crowd, c);
       }
@@ -760,24 +763,12 @@ struct OHashMap {
         updateHelper(idx1, table1, [&](BucketType& b) {
           swapUpdateFunc(b, 0);
         });  // evictee goes to table0
-
-        stash.OPopOldest(entryToInsert, 0);
-        PositionType idx0 = indexer.getHashIdx0(entryToInsert.key);
-        updateHelper(idx0, table0, [&](BucketType& b) {
-          swapUpdateFunc(b, 1);
-        });  // evictee goes to table1
       } else {
         stash.OPopOldest(entryToInsert, 0);
         PositionType idx0 = indexer.getHashIdx0(entryToInsert.key);
         updateHelper(idx0, table0, [&](BucketType& b) {
           swapUpdateFunc(b, 1);
         });  // evictee goes to table1
-
-        stash.OPopOldest(entryToInsert, 1);
-        PositionType idx1 = indexer.getHashIdx1(entryToInsert.key);
-        updateHelper(idx1, table1, [&](BucketType& b) {
-          swapUpdateFunc(b, 0);
-        });  // evictee goes to table0
       }
     }
   }
@@ -832,7 +823,7 @@ struct OHashMap {
       // equally divide the cache between the two tables
       table0.SetSize(tableSize, cacheBytes / 2);
       table1.SetSize(tableSize, cacheBytes / 2);
-      stash.SetSize(16);
+      stash.SetSize(stash_max_size);
     } else {
       // first give table0 all the cache, and give table1 the rest
       // because table0 is more likely to be accessed
@@ -1159,10 +1150,10 @@ struct OHashMap {
           // found in stash
         }
 
-        uint16_t min_crowd0 = UINT16_MAX;
+        crowd_t min_crowd0 = CROWD_MAX;
         int min_idx0 = 0;
         for (int i = 0; i < bucketSize; ++i) {
-          uint16_t c =
+          crowd_t c =
               bucket0.entries[i].valid ? bucket0.entries[i].crowdedness : 0;
           if (c < min_crowd0) {
             min_crowd0 = c;
@@ -1170,10 +1161,10 @@ struct OHashMap {
           }
         }
 
-        uint16_t min_crowd1 = UINT16_MAX;
+        crowd_t min_crowd1 = CROWD_MAX;
         int min_idx1 = 0;
         for (int i = 0; i < bucketSize; ++i) {
-          uint16_t c =
+          crowd_t c =
               bucket1.entries[i].valid ? bucket1.entries[i].crowdedness : 0;
           if (c < min_crowd1) {
             min_crowd1 = c;
@@ -1213,11 +1204,10 @@ struct OHashMap {
     // the offset of the entry we intend to swap
     int offset;
     auto swapUpdateFunc = [&](BucketType& bucket) {
-      uint16_t min_crowd = UINT16_MAX;
+      crowd_t min_crowd = CROWD_MAX;
       offset = 0;
       for (int i = 0; i < bucketSize; ++i) {
-        uint16_t c =
-            bucket.entries[i].valid ? bucket.entries[i].crowdedness : 0;
+        crowd_t c = bucket.entries[i].valid ? bucket.entries[i].crowdedness : 0;
         if (c < min_crowd) {
           min_crowd = c;
           offset = i;
@@ -1275,7 +1265,7 @@ struct OHashMap {
     entryToInsert.valid = false;
     entryToInsert.nextTable = UniformRandom32() % 2;
     stash.OPopOldest(entryToInsert, entryToInsert.nextTable);
-    insertEntryObliviousRetry(entryToInsert, 1);
+    insertEntryObliviousRetry(entryToInsert, 3);
     stash.OInsert(entryToInsert);
 
     return exist;

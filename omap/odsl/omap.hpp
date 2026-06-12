@@ -894,9 +894,13 @@ struct OPosMap {
                                                    other.GetTable1().end());
     if constexpr (parallel_init) {
 #pragma omp task
-      { table0.InitFromReader(reader0); }
+      {
+        table0.InitFromReader(reader0);
+      }
 
-      { table1.InitFromReader(reader1); }
+      {
+        table1.InitFromReader(reader1);
+      }
 #pragma omp taskwait
     } else {
       table0.InitFromReader(reader0);
@@ -923,9 +927,13 @@ struct OPosMap {
     if constexpr (isOblivious) {
       if constexpr (parallel_init) {
 #pragma omp task
-        { table0.InitDefault(BucketType()); }
+        {
+          table0.InitDefault(BucketType());
+        }
 
-        { table1.InitDefault(BucketType()); }
+        {
+          table1.InitDefault(BucketType());
+        }
 #pragma omp taskwait
       } else {
         table0.InitDefault(BucketType());
@@ -995,20 +1003,22 @@ struct OPosMap {
     entryToInsert.setInvalid(isDummy);
     bool exist = insertEntryOblivious(entryToInsert, idx0);
     obliMove(exist, value, entryToInsert.value);
-    
+
     const bool isSwappedDummy = !entryToInsert.valid();
     if constexpr (!isOblivious) {
       // the underlying ram is not oblivious, generate a random access
       // position
-      obliMove(isSwappedDummy, idx0, (PositionType)UniformRandom(tableSize - 1));
+      obliMove(isSwappedDummy, idx0,
+               (PositionType)UniformRandom(tableSize - 1));
       obliMove(isSwappedDummy, entryToInsert.otherIdx,
-                (PositionType)UniformRandom(tableSize - 1));
+               (PositionType)UniformRandom(tableSize - 1));
     }
     // try one round of insertion
     insertEntryObliviousRetry(entryToInsert, idx0, 1);
-    // if the insertion fails, insert the entry to the stash. Or perform a dummy insert.
+    // if the insertion fails, insert the entry to the stash. Or perform a dummy
+    // insert.
     stash.OInsert(entryToInsert, idx0);
-    
+
     return exist;
   }
 
@@ -1255,7 +1265,7 @@ struct OMap {
   // info in position map but has different keys
 
   // TODO: freshness check if swap is needed
-  CircuitORAM::ORAM<ORAMEntry, 2, 20, PositionType, UidType, 4096, false> oram;
+  CircuitORAM::ORAM<ORAMEntry, 2, 33, PositionType, UidType, 4096, false> oram;
 
   OMap() {}
   OMap(PositionType size) { SetSize(size); }
