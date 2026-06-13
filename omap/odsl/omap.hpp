@@ -242,7 +242,7 @@ struct OPosMap {
    * @tparam V the value type
    * @tparam stash_size the default stash size for oblivious insertion
    */
-  template <const uint64_t stash_size = 21>
+  template <const uint64_t stash_size = 28>
   struct LRUStash {
     struct StashEntry {
       // the entry for table 0
@@ -271,9 +271,9 @@ struct OPosMap {
     void SetSize(size_t capacity) { stash.resize(capacity); }
 
     /**
-     * @brief Obliviously insert an entry into the stash and record its timestamp.
-     * If entry.valid is false, the insertion is dummy. If the stash overflows,
-     * the method will enlarge the stash, which is not oblivious.
+     * @brief Obliviously insert an entry into the stash and record its
+     * timestamp. If entry.valid is false, the insertion is dummy. If the stash
+     * overflows, the method will enlarge the stash, which is not oblivious.
      *
      * @param entry the entry to insert
      */
@@ -450,7 +450,7 @@ struct OPosMap {
   // number of slots in each bucket
   static constexpr short bucketSize = 4;
   // maximum number of elements in the stash
-  static constexpr int stash_max_size = 21;
+  static constexpr int stash_max_size = 28;
   // the capacity of the hash map
   PositionType _size = 0;
   // the number of elements in the hash map
@@ -665,10 +665,10 @@ struct OPosMap {
   /**
    * @brief Insert into either candidate bucket without oblivious padding.
    *
-   * If the key already exists in either table or the stash, replace the existing
-   * value. If both candidate buckets are full, evict an entry from the bucket
-   * whose alternate neighbors are less crowded. On success, entryToInsert is
-   * marked invalid.
+   * If the key already exists in either table or the stash, replace the
+   * existing value. If both candidate buckets are full, evict an entry from the
+   * bucket whose alternate neighbors are less crowded. On success,
+   * entryToInsert is marked invalid.
    *
    * @param entryToInsert the entry to insert, and will be modified to the entry
    * swapped out if no slot is available.
@@ -746,10 +746,11 @@ struct OPosMap {
   /**
    * @brief Obliviously insert into either candidate bucket.
    *
-   * If the key already exists in either table or the stash, replace the existing
-   * value. If both candidate buckets are full, evict an entry from the bucket
-   * whose alternate neighbors are less crowded. On success, entryToInsert is
-   * marked invalid and dummy operations preserve obliviousness.
+   * If the key already exists in either table or the stash, replace the
+   * existing value. If both candidate buckets are full, evict an entry from the
+   * bucket whose alternate neighbors are less crowded. On success,
+   * entryToInsert is marked invalid and dummy operations preserve
+   * obliviousness.
    *
    * @param entryToInsert the entry to insert, and will be modified to the entry
    * swapped out if no slot is available.
@@ -1180,8 +1181,8 @@ struct OPosMap {
     for (size_t i = 0; i < stash.size(); ++i) {
       auto& stashEntry = stash[i];
       auto& entry = stashEntry.entry;
-      bool match = entry.sameKeyHash(entryToFind) &
-                   (entry.otherIdx == idx1) & stashEntry.idx0 == idx0;
+      bool match = entry.sameKeyHash(entryToFind) & (entry.otherIdx == idx1) &
+                   stashEntry.idx0 == idx0;
       obliSwap(match, value, entry.value);
       found |= match;
     }
@@ -1230,8 +1231,8 @@ struct OPosMap {
       auto eraseTable1Func = [&](BucketType& bucket1) {
         for (int i = 0; i < bucketSize; ++i) {
           OPosMapEntry& entry = bucket1.entries[i];
-          bool matchFlag = entry.sameKeyHash(entryToErase) &&
-                           (entry.otherIdx == idx0);
+          bool matchFlag =
+              entry.sameKeyHash(entryToErase) && (entry.otherIdx == idx0);
           if (matchFlag) {
             std::swap(entry.value, entryToErasePos);
             erased = mainMapErase(entryToErasePos, uid, extraHash);
@@ -1307,8 +1308,8 @@ struct OPosMap {
         int eraseTable1Idx = -1;
         for (int i = 0; i < bucketSize; ++i) {
           OPosMapEntry& entry = bucket1.entries[i];
-          bool matchFlag = entry.sameKeyHash(entryToErase) &
-                           (entry.otherIdx == idx0);
+          bool matchFlag =
+              entry.sameKeyHash(entryToErase) & (entry.otherIdx == idx0);
           obliSwap(matchFlag, entryToErasePos, entry.value);
           obliMove(matchFlag, eraseTable1Idx, i);
         }
@@ -1512,7 +1513,8 @@ struct OMap {
    *  initContext->Finalize();
    *  delete initContext;
    *
-   * @param additionalCacheBytes additional cache available during initialization
+   * @param additionalCacheBytes additional cache available during
+   * initialization
    * @return InitContext
    */
   InitContext* NewInitContext(uint64_t additionalCacheBytes = 0) {
