@@ -1,20 +1,20 @@
 #pragma once
 #include "recursive_oram.hpp"
 
-/// @brief This file implements an oblivious unordered map. The position map is
-/// implemented with a cuckoo hash table on top of a recursive ORAM. The values
-/// are stored separatedly in a circuit oram. Separating the values to a
-/// separate oram reduces storage overhead and speeds up the query, insertion,
-/// and erasure especially when keys and values are moderately large (> 32
-/// bytes).
+/// @brief Oblivious unordered map with a compact position map.
+///
+/// The position map is a cuckoo hash table backed by recursive ORAM. Values are
+/// stored separately in a circuit ORAM. Keeping values outside the position map
+/// reduces storage overhead and speeds up queries, insertions, and erasures,
+/// especially when keys and values are moderately large (> 32 bytes).
 namespace ODSL {
 /**
  * @brief Hash the key to two positions and use remaining hash bits to
  * distinguish entries.
  * @tparam K the key type
  * @tparam H the type of the hash value stored in the position map
- * @tparam HExtra the type of the extra hash value stored in the main oram
- * @tparam PositionType the type of the position,
+ * @tparam HExtra the type of the extra hash value stored in the main ORAM
+ * @tparam PositionType the type of the position
  *
  */
 template <typename K, typename H, typename HExtra, typename PositionType>
@@ -62,22 +62,21 @@ struct OPosMapIndexer {
     HashIndices hashIndices;
     secure_hash_with_salt(key, salts, (uint8_t*)&hashIndices,
                           sizeof(hashIndices));
-    // position in table 0
+    // Position in table 0.
     pos0 = (PositionType)(hashIndices.h0 % _size);
-    // position in table 1
+    // Position in table 1.
     pos1 = (PositionType)(hashIndices.h1 % _size);
-    // keyHash is used to distinguish entries that have the same positions in
-    // both tables. Set the least significant bit to 1 to indicate a valid
-    // entry. In the position map, uid = (pos0 || pos1 || keyHash) must be
-    // unique. If a newly inserted key-value pair has the same uid as an
-    // existing entry, we will insert it to the stash.
+    // keyHash distinguishes entries that have the same positions in both
+    // tables. The least significant bit marks a valid entry; the next bit is
+    // reserved for per-entry routing metadata. In the position map,
+    // uid = (pos0 || pos1 || keyHash) must be unique. If a newly inserted pair
+    // has the same uid as an existing entry, we insert it into the stash.
     keyHash = hashIndices.keyHash | (H)1;
-    // extraHash is used to further distinguish entries that shares the same
-    // uid. It is stored in the main oram, so that we can check the
-    // existence of an element with very high confidence.
+    // extraHash further distinguishes entries that share the same uid. It is
+    // stored in the main ORAM so that we can check element existence with very
+    // high confidence.
     extraHash = hashIndices.extraHash;
-    // generate a unique identifier that includes the key hash and the
-    // positions, and with additional bits to distinguish elements
+    // Generate a unique identifier from the two table positions and key hash.
     std::memset(uid.data, 0, sizeof(UidType));
     int sizeMaxLen = GetLogBaseTwo(_size - 1) / 8 + 1;
     Assert(2 * sizeMaxLen + sizeof(H) <= uid_length);
@@ -93,19 +92,18 @@ struct OPosMapIndexer {
 };
 
 /**
- * @brief A single entry (slot) in the position map. To compress the size of the
- * position map, we do not store the key, but store 1) the index of the
- * key in the other table, which provides some entropy to distinguish entries in
- * the same slot, and moreover, allows us to swap the entry with the other table
- * when the entry is evicted 2) an extra hash value "keyHash" to further
- * distinguish the entries that maps to same same slots in both tables. The
- * least significant bit of keyHash is used to indicate whether the entry is
- * valid, and the second least significant bit stores the next table to try
- * when the entry is evicted. In case both the indices and the keyHash collide,
- * we store the entry in a stash.
+ * @brief A single position-map slot.
+ *
+ * To keep the position map compact, entries do not store the original key.
+ * Instead, each entry stores the key's index in the other table plus keyHash.
+ * The other-table index distinguishes entries in the same bucket and lets an
+ * evicted entry continue in the alternate table. keyHash distinguishes entries
+ * that map to the same pair of buckets. The least significant bit of keyHash is
+ * the validity bit, and the second least significant bit stores the next table
+ * to try after eviction. Entries that still collide are stored in the stash.
  *
  * @tparam K the key type
- * @tparam V the value type, which is the position of the value in the oram
+ * @tparam V the value type, which is the position of the value in the ORAM
  */
 template <typename K, typename V, typename H, typename PositionType>
 struct GenericOPosMapEntry {
@@ -116,7 +114,7 @@ struct GenericOPosMapEntry {
   H keyHash = 0;
   PositionType otherIdx = 0;  // the index in the other table
   V value = {};  // the value of the entry, i.e., the position of the entry in
-                 // the oram that stores the value
+                 // the ORAM that stores the value
 
   GenericOPosMapEntry() = default;
 
@@ -128,23 +126,23 @@ struct GenericOPosMapEntry {
         value(value) {}
 
   /**
-   * @brief Returns whether the entry is valid
+   * @brief Return whether this slot contains a valid entry.
    */
   bool valid() const { return keyHash & validMask; }
   /**
-   * @brief Set the entry to valid if real is true
+   * @brief Set the validity bit if real is true.
    */
   void setValid(bool real) { keyHash |= (H)real; }
   /**
-   * @brief Set the entry to invalid if real is true
+   * @brief Clear the validity bit if real is true.
    */
   void setInvalid(bool real) { keyHash &= ~((H)real); }
   /**
-   * @brief Return the hash bits used for comparing keys.
+   * @brief Return keyHash with routing metadata masked out.
    */
   H comparableKeyHash() const { return keyHash & ~nextTableMask; }
   /**
-   * @brief Return whether two entries have the same key hash, ignoring routing.
+   * @brief Return whether two entries have the same comparable key hash.
    */
   bool sameKeyHash(const GenericOPosMapEntry& other) const {
     return comparableKeyHash() == other.comparableKeyHash();
@@ -210,7 +208,7 @@ struct OPosMapBucket {
 };
 
 /**
- * @brief An cuckoo hash map built on top of either recursive ORAM or a standard
+ * @brief A cuckoo hash map built on top of either recursive ORAM or a standard
  * vector. It contains two hash tables, and a stash for elements that cannot be
  * stored in the tables.
  *
@@ -225,11 +223,11 @@ template <typename K, typename PositionType = uint64_t,
 struct OPosMap {
   using V = PositionType;   // value type is the position
   using H = uint32_t;       // additional hash bits to distinguish elements
-  using HExtra = uint64_t;  // extra hash bits stored in the main oram to check
+  using HExtra = uint64_t;  // extra hash bits stored in the main ORAM to check
                             // for the existence of an element
   using Indexer = OPosMapIndexer<K, H, HExtra, PositionType>;
 
-  // assume that the oram size < 2^48
+  // assume that the ORAM size < 2^48
   using UidType = typename Indexer::UidType;  // type of the unique identifier
   using OPosMapEntry = GenericOPosMapEntry<K, V, H, PositionType>;
   static constexpr bool isObliviousPosMap = isOblivious;
@@ -237,7 +235,7 @@ struct OPosMap {
    * @brief A stash storing position map entries that cannot be stored in the
    * hash tables because both buckets are full. The stash works as a queue and
    * helps deamortize the cost of oblivious insertion. Notice that this stash is
-   * different from the stash in the main oram. The latter is used to store
+   * different from the stash in the main ORAM. The latter is used to store
    * indistinguishable keys.
    *
    * @tparam K the key type
@@ -257,7 +255,7 @@ struct OPosMap {
     using StashVec = std::vector<StashEntry>;
     StashVec stash;     // the stash data
     uint64_t currTime;  // the current timestamp
-    // as long as one oblivious insert occur, we cannot reveal the state of the
+    // Once an oblivious insert occurs, we can no longer reveal the state of the
     // stash
     bool oInserted = false;  // whether an oblivious insert has occurred
 
@@ -273,7 +271,7 @@ struct OPosMap {
     void SetSize(size_t capacity) { stash.resize(capacity); }
 
     /**
-     * @brief Obliviously insert an entry to the stash and record the timestamp.
+     * @brief Obliviously insert an entry into the stash and record its timestamp.
      * If entry.valid is false, the insertion is dummy. If the stash overflows,
      * the method will enlarge the stash, which is not oblivious.
      *
@@ -308,9 +306,9 @@ struct OPosMap {
     }
 
     /**
-     * @brief Obliviously insert an entry to the stash and record the timestamp.
+     * @brief Insert an entry into the stash and record its timestamp.
      * If entry.valid is false, the insertion is dummy. If the stash overflows,
-     * the method will enlarge the stash, which is not oblivious.
+     * the method will enlarge the stash.
      *
      * @tparam highPriority whether the entry should be populated first
      * @param entry the entry to insert
@@ -453,7 +451,7 @@ struct OPosMap {
   static constexpr short bucketSize = 4;
   // maximum number of elements in the stash
   static constexpr int stash_max_size = 21;
-  // the capcity of the hash map
+  // the capacity of the hash map
   PositionType _size = 0;
   // the number of elements in the hash map
   PositionType load;
@@ -665,12 +663,12 @@ struct OPosMap {
   }
 
   /**
-   * @brief Try to insert entry into either table0 or table1 obliviously without
-   * swapping existing elements. If the element already exists either in table
-   * 0, table 1, or the stash, replace the existing element. If there's no
-   * available slot, swap entryToInsert with a random element from the bucket in
-   * table 0. If the insertion is successful, entryToInsert.valid will be set to
-   * false, and dummy operations will be performed to ensure oblivousness.
+   * @brief Insert into either candidate bucket without oblivious padding.
+   *
+   * If the key already exists in either table or the stash, replace the existing
+   * value. If both candidate buckets are full, evict an entry from the bucket
+   * whose alternate neighbors are less crowded. On success, entryToInsert is
+   * marked invalid.
    *
    * @param entryToInsert the entry to insert, and will be modified to the entry
    * swapped out if no slot is available.
@@ -746,12 +744,12 @@ struct OPosMap {
   }
 
   /**
-   * @brief Try to insert entry into either table0 or table1 obliviously without
-   * swapping existing elements. If the element already exists either in table
-   * 0, table 1, or the stash, replace the existing element. If there's no
-   * available slot, swap entryToInsert with a random element from the bucket in
-   * table 0. If the insertion is successful, entryToInsert.valid will be set to
-   * false, and dummy operations will be performed to ensure oblivousness.
+   * @brief Obliviously insert into either candidate bucket.
+   *
+   * If the key already exists in either table or the stash, replace the existing
+   * value. If both candidate buckets are full, evict an entry from the bucket
+   * whose alternate neighbors are less crowded. On success, entryToInsert is
+   * marked invalid and dummy operations preserve obliviousness.
    *
    * @param entryToInsert the entry to insert, and will be modified to the entry
    * swapped out if no slot is available.
@@ -813,13 +811,11 @@ struct OPosMap {
   }
 
   /**
-   * @brief Try to insert entry into table 1, if table 1 is
-   * occupied, swap a random element out of the bucket in table 1 and try to
-   * insert this element into table 0. If table 0 is also occupied, swap a
-   * random element out of the bucket in table 0 and save it in entryToInsert.
-   * If either of the insertion succeeds, entryToInsert.valid will become false,
-   * and dummy operations will be performed to ensure oblivoiusness. The method
-   * may retry multiple times.
+   * @brief Retry inserting an entry evicted from an earlier round.
+   *
+   * Each retry accesses the entry's next candidate bucket and evicts the
+   * least-crowded slot if needed. If an insertion succeeds, entryToInsert.valid
+   * becomes false.
    *
    * @param entryToInsert the entry to insert, and will be modified to the entry
    * swapped out if no slot is available.
@@ -859,13 +855,11 @@ struct OPosMap {
   }
 
   /**
-   * @brief Try to insert entry into table 1 obliviously, if table 1 is
-   * occupied, swap a random element out of the bucket in table 1 and try to
-   * insert this element into table 0. If table 0 is also occupied, swap a
-   * random element out of the bucket in table 0 and save it in entryToInsert.
-   * If either of the insertion succeeds, entryToInsert.valid will become false,
-   * and dummy operations will be performed to ensure oblivoiusness. The method
-   * may retry multiple times.
+   * @brief Obliviously retry inserting an entry evicted from an earlier round.
+   *
+   * Each retry accesses the entry's next candidate bucket and evicts the
+   * least-crowded slot if needed. If an insertion succeeds, entryToInsert.valid
+   * becomes false; dummy operations preserve obliviousness.
    *
    * @param entryToInsert the entry to insert, and will be modified to the entry
    * swapped out if no slot is available.
@@ -1067,8 +1061,7 @@ struct OPosMap {
   }
 
   /**
-   * @brief Insert obliviously. Hide the number of replacement and whether the
-   * insertion is dummy
+   * @brief Insert without oblivious padding.
    *
    * @param key the key to insert
    * @param value the value to insert
@@ -1083,11 +1076,11 @@ struct OPosMap {
     OPosMapEntry entryToInsert = {keyHash, idx1, 0, value};
     bool exist = insertEntry(entryToInsert, idx0);
     obliMove(exist, value, entryToInsert.value);
-    // the element just swapped out is more likely to get inserted to somewhere
+    // The element just swapped out is more likely to get inserted somewhere
     // else
     stash.template Insert<true>(entryToInsert, idx0);
     for (int i = 0; i < 10; ++i) {
-      // use FIFO order so that we won't get stuck by loops in the random graph
+      // Use FIFO order so we do not get stuck in loops in the random graph
       // of cuckoo hashing
       stash.PopOldest(entryToInsert, idx0);
       if (!entryToInsert.valid()) {
@@ -1100,8 +1093,8 @@ struct OPosMap {
   }
 
   /**
-   * @brief Insert obliviously. Hide the number of replacement and whether the
-   * insertion is dummy
+   * @brief Insert obliviously. Hide the number of replacements and whether the
+   * insertion is dummy.
    *
    * @param key the key to insert
    * @param value the value to insert
@@ -1115,8 +1108,8 @@ struct OPosMap {
     PositionType idx0, idx1;
     H keyHash;
     K keyToHash = key;
-    // if the underlying ram is not oblivious, generate a random key for dummy
-    // entry
+    // If the underlying RAM is not oblivious, generate a random key for dummy
+    // entries.
     if constexpr (!isOblivious) {
       K randKey;
       read_rand((uint8_t*)&randKey, sizeof(K));
@@ -1200,12 +1193,12 @@ struct OPosMap {
    * @brief Erase a key from the position map. The function is not oblivious.
    * Note that there's chance that the key is not actually present even though
    * the indices and key hash match. We need to check the extra hash in the main
-   * oram before erasing the entry from the position map.
+   * ORAM before erasing the entry from the position map.
    *
    * @param key the key to erase
    * @param value the new value for the entry in case the key is mismatched in
    * the position map
-   * @param mainMapErase the function to erase the key in the main oram, should
+   * @param mainMapErase the function to erase the key in the main ORAM; should
    * return true if the key is found
    * @param isDummy whether the erase is dummy operation
    * @return true if there is an entry in the position map that matches the key,
@@ -1272,12 +1265,12 @@ struct OPosMap {
    * @brief Erase a key from the position map. The function is oblivious. Note
    * that there's chance that the key is not actually present even though the
    * indices and key hash match. We need to check the extra hash in the main
-   * oram before erasing the entry from the position map.
+   * ORAM before erasing the entry from the position map.
    *
    * @param key the key to erase
    * @param value the new value for the entry in case the key is mismatched in
    * the position map
-   * @param mainMapErase the function to erase the key in the main oram, should
+   * @param mainMapErase the function to erase the key in the main ORAM; should
    * return true if the key is found
    * @param isDummy whether the erase is dummy operation
    * @return true if there is an entry in the position map that matches the key,
@@ -1332,7 +1325,7 @@ struct OPosMap {
         bool notFoundFlag = (eraseTable0Idx == -1) & (eraseTable1Idx == -1) &
                             (eraseStashIdx == -1);
         obliMove(notFoundFlag | isDummy, uid, DUMMY<UidType>());
-        // we check the main oram to ensure that the element is actually present
+        // We check the main ORAM to ensure that the element is actually present
         // (rather than a false positive) before erasing it
         erased = mainMapErase(entryToErasePos, uid, extraHash);
         for (int i = 0; i < bucketSize; ++i) {
@@ -1418,9 +1411,7 @@ struct OMap {
   PositionType size() const { return keyPosMap.size(); }
 
   /**
-   * @brief An object that stores the curret state of initialization.
-   Faciliates
-   * initialization in a streaming fashion.
+   * @brief Stores the current state of streaming initialization.
    *
    */
   struct InitContext {
@@ -1435,8 +1426,7 @@ struct OMap {
      * @brief Construct a new InitContext object
      *
      * @param omap The parent map
-     * @param additionalCacheBytes the size of additional available cache
-     for
+     * @param additionalCacheBytes the size of additional cache for
      * initialization
      */
     explicit InitContext(OMap& map, uint64_t additionalCacheBytes = 0)
@@ -1467,13 +1457,11 @@ struct OMap {
     InitContext(const InitContext& other) = delete;
 
     /**
-     * @brief Insert a new key value pair for initialization. The method
-     will
-     * reveal whether the key has been inserted before. But if all the keys
-     are
-     * distinct, the operation is oblivious. The method will throw an
-     exception
-     * if too many keys are inserted.
+     * @brief Insert a key-value pair during initialization.
+     *
+     * This reveals whether the key has already been inserted, but the operation
+     * is oblivious if all inserted keys are distinct. Throws if too many keys
+     * are inserted.
      *
      * @param key
      * @param value
@@ -1498,8 +1486,7 @@ struct OMap {
     }
 
     /**
-     * @brief Finalize the initialization. The method will copy the data
-     from
+     * @brief Finalize initialization by copying data from
      * the non-oblivious hash map to the oblivious hash map.
      *
      */
@@ -1512,22 +1499,22 @@ struct OMap {
   };
 
   /**
- * @brief Obtain a new context to initialize this map. The initialization
- data
- * can be either private or public (the initialization and subsequent
- accesses
- * are oblivious).
- * Example:
- *  auto* initContext = oMap.NewInitContext(1UL << 28);
-    for (auto it = kvMap.begin(); it != kvMap.end(); ++it;) {
-      initContext->Insert(it->first, it->second);
-    }
-    initContext->Finalize();
-    delete initContext;
- *
- * @param additionalCacheBytes
- * @return InitContext
- */
+   * @brief Obtain a context for streaming initialization.
+   *
+   * The initialization data may be private or public; initialization and later
+   * accesses remain oblivious when the input keys are distinct.
+   *
+   * Example:
+   *  auto* initContext = oMap.NewInitContext(1UL << 28);
+   *  for (auto it = kvMap.begin(); it != kvMap.end(); ++it) {
+   *    initContext->Insert(it->first, it->second);
+   *  }
+   *  initContext->Finalize();
+   *  delete initContext;
+   *
+   * @param additionalCacheBytes additional cache available during initialization
+   * @return InitContext
+   */
   InitContext* NewInitContext(uint64_t additionalCacheBytes = 0) {
     return new InitContext(*this, additionalCacheBytes);
   }
@@ -1609,7 +1596,7 @@ struct OMap {
   }
 
   /**
-   * @brief Insert a key value pair into the map, return true if the key is
+   * @brief Insert a key-value pair into the map, return true if the key is
    * already in the map, in which case the value is updated. The function is
    * not oblivious and reveals whether the key exists. It is faster than
    * OInsert, and should be used when the database is public.
