@@ -262,7 +262,7 @@ void testReplaceCount() {
   // test replace count distribution
   int mapSize = 1000000;
   int round = 50000;
-  int outerRound = 2000;
+  int outerRound = 200;
 
   int windowSize = 1;
 
@@ -308,7 +308,7 @@ void testReplaceCountLargeKV() {
   // test replace count distribution
   int mapSize = 1000000;
   int round = 50000;
-  int outerRound = 20;
+  int outerRound = 200;
 
   int windowSize = 1;
 

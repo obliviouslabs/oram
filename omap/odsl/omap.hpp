@@ -100,33 +100,74 @@ struct OPosMapIndexer {
  * when the entry is evicted 2) an extra hash value "keyHash" to further
  * distinguish the entries that maps to same same slots in both tables. The
  * least significant bit of keyHash is used to indicate whether the entry is
- * valid. In case both the indices and the keyHash collides, we store the entry
- * in a stash.
+ * valid, and the second least significant bit stores the next table to try
+ * when the entry is evicted. In case both the indices and the keyHash collide,
+ * we store the entry in a stash.
  *
  * @tparam K the key type
  * @tparam V the value type, which is the position of the value in the oram
  */
 template <typename K, typename V, typename H, typename PositionType>
 struct GenericOPosMapEntry {
+  static constexpr H validMask = (H)1;
+  static constexpr H nextTableMask = (H)2;
+
+  uint8_t crowdedness = 0;
   H keyHash = 0;
   PositionType otherIdx = 0;  // the index in the other table
-  uint8_t nextTable = 0;
-  uint8_t crowdedness = 0;
   V value = {};  // the value of the entry, i.e., the position of the entry in
                  // the oram that stores the value
+
+  GenericOPosMapEntry() = default;
+
+  GenericOPosMapEntry(H keyHash, PositionType otherIdx, uint8_t crowdedness,
+                      V value)
+      : crowdedness(crowdedness),
+        keyHash(keyHash),
+        otherIdx(otherIdx),
+        value(value) {}
 
   /**
    * @brief Returns whether the entry is valid
    */
-  bool valid() const { return keyHash & 0x1; }
+  bool valid() const { return keyHash & validMask; }
   /**
    * @brief Set the entry to valid if real is true
    */
-  void setValid(bool real) { keyHash |= real; }
+  void setValid(bool real) { keyHash |= (H)real; }
   /**
    * @brief Set the entry to invalid if real is true
    */
   void setInvalid(bool real) { keyHash &= ~((H)real); }
+  /**
+   * @brief Return the hash bits used for comparing keys.
+   */
+  H comparableKeyHash() const { return keyHash & ~nextTableMask; }
+  /**
+   * @brief Return whether two entries have the same key hash, ignoring routing.
+   */
+  bool sameKeyHash(const GenericOPosMapEntry& other) const {
+    return comparableKeyHash() == other.comparableKeyHash();
+  }
+  /**
+   * @brief Return the next table to try after this entry is evicted.
+   */
+  uint8_t nextTable() const { return (keyHash & nextTableMask) != 0; }
+  /**
+   * @brief Store the next table to try after this entry is evicted.
+   */
+  void setNextTable(uint8_t tableIdx) {
+    H nextTableBit = (H)(tableIdx & 0x1) << 1;
+    keyHash = (keyHash & ~nextTableMask) | nextTableBit;
+  }
+  /**
+   * @brief Obliviously store the next table if real is true.
+   */
+  void setNextTable(bool real, uint8_t tableIdx) {
+    H nextTableBit = (H)(tableIdx & 0x1) << 1;
+    H updatedKeyHash = (keyHash & ~nextTableMask) | nextTableBit;
+    obliMove(real, keyHash, updatedKeyHash);
+  }
 #ifndef ENCLAVE_MODE
   // cout
   friend std::ostream& operator<<(std::ostream& os,
@@ -324,7 +365,7 @@ struct OPosMap {
       size_t oldestIdx = stash.size();
       for (size_t i = 0; i < stash.size(); ++i) {
         bool isValidMatch =
-            stash[i].entry.valid() & (stash[i].entry.nextTable == tableIdx);
+            stash[i].entry.valid() & (stash[i].entry.nextTable() == tableIdx);
         bool isOldest = (stash[i].timestamp < oldestTime) & isValidMatch;
         obliMove(isOldest, oldestTime, stash[i].timestamp);
         obliMove(isOldest, oldestEntry, stash[i]);
@@ -522,7 +563,7 @@ struct OPosMap {
     for (short i = 0; i < bucketSize; ++i) {
       OPosMapEntry& entry = bucket.entries[i];
       bool matchFlag = (entry.otherIdx == entryToInsert.otherIdx) &&
-                       (entry.keyHash == entryToInsert.keyHash) && (!updated);
+                       entry.sameKeyHash(entryToInsert) && (!updated);
       if (matchFlag) {
         std::swap(entry, entryToInsert);
         return true;
@@ -545,7 +586,7 @@ struct OPosMap {
     for (short i = 0; i < bucketSize; ++i) {
       OPosMapEntry& entry = bucket.entries[i];
       bool matchFlag = (entry.otherIdx == entryToInsert.otherIdx) &
-                       (entry.keyHash == entryToInsert.keyHash) & (!updated);
+                       entry.sameKeyHash(entryToInsert) & (!updated);
       obliSwap(matchFlag, entry, entryToInsert);
       updated |= matchFlag;
     }
@@ -567,7 +608,7 @@ struct OPosMap {
       auto& entry = stash[i].entry;
       bool matchFlag = (entry.otherIdx == entryToInsert.otherIdx) &&
                        (stash[i].idx0 == idx0) &&
-                       (entry.keyHash == entryToInsert.keyHash) && (!updated);
+                       entry.sameKeyHash(entryToInsert) && (!updated);
       if (matchFlag) {
         std::swap(entry, entryToInsert);
         return true;
@@ -592,7 +633,7 @@ struct OPosMap {
       auto& entry = stash[i].entry;
       bool matchFlag = (entry.otherIdx == entryToInsert.otherIdx) &
                        (stash[i].idx0 == idx0) &
-                       (entry.keyHash == entryToInsert.keyHash) & (!updated);
+                       entry.sameKeyHash(entryToInsert) & (!updated);
       obliSwap(matchFlag, entry, entryToInsert);
       updated |= matchFlag;
     }
@@ -688,13 +729,13 @@ struct OPosMap {
           entryToInsert = entryForTable0;
           std::swap(entryToInsert, bucket0.entries[minIdx0]);
           idx0 = table0Idx;
-          entryToInsert.nextTable = 1;
+          entryToInsert.setNextTable(1);
         } else {
           std::swap(entryForTable1, bucket1.entries[minIdx1]);
           entryToInsert = entryForTable1;
           idx0 = entryToInsert.otherIdx;
           entryToInsert.otherIdx = table1Idx;
-          entryToInsert.nextTable = 0;
+          entryToInsert.setNextTable(0);
         }
       };
       updateHelper(idx0, table1, table1UpdateFunc);
@@ -760,8 +801,8 @@ struct OPosMap {
         obliMove(insertTable0, entryToInsert, entryForTable0);
         obliMove(insertTable1, entryToInsert, evictedFromTable1);
         obliMove(insertTable1, idx0, evictedIdx0);
-        obliMove(t0LessCrowded, entryToInsert.nextTable, (uint8_t)1);
-        obliMove(!t0LessCrowded, entryToInsert.nextTable, (uint8_t)0);
+        entryToInsert.setNextTable(t0LessCrowded, 1);
+        entryToInsert.setNextTable(!t0LessCrowded, 0);
       };
       updateHelper(idx0, table1, table1UpdateFunc);
     };
@@ -790,7 +831,7 @@ struct OPosMap {
       if (!entryToInsert.valid()) {
         break;
       }
-      if (entryToInsert.nextTable == 1) {
+      if (entryToInsert.nextTable() == 1) {
         PositionType table0Idx = idx0;
         PositionType table1Idx = entryToInsert.otherIdx;
         OPosMapEntry entryForTable1 = entryToInsert;
@@ -804,7 +845,7 @@ struct OPosMap {
         }
         idx0 = entryToInsert.otherIdx;
         entryToInsert.otherIdx = table1Idx;
-        entryToInsert.nextTable = 0;
+        entryToInsert.setNextTable(0);
       } else {
         updateHelper(idx0, table0, [&](BucketType& bucket) {
           swapWithLeastCrowded(bucket, entryToInsert);
@@ -812,7 +853,7 @@ struct OPosMap {
         if (!entryToInsert.valid()) {
           break;
         }
-        entryToInsert.nextTable = 1;
+        entryToInsert.setNextTable(1);
       }
     }
   }
@@ -833,7 +874,7 @@ struct OPosMap {
   void insertEntryObliviousRetry(OPosMapEntry& entryToInsert,
                                  PositionType& idx0, int maxRetry = 1) {
     for (int r = 0; r < maxRetry; ++r) {
-      if (entryToInsert.nextTable == 1) {
+      if (entryToInsert.nextTable() == 1) {
         PositionType table0Idx = idx0;
         PositionType table1Idx = entryToInsert.otherIdx;
         OPosMapEntry entryForTable1 = entryToInsert;
@@ -847,12 +888,12 @@ struct OPosMap {
         obliMove(entryForTable1.valid(), entryToInsert, evicted);
         obliMove(entryForTable1.valid(), idx0, evictedIdx0);
         entryToInsert.setInvalid(!entryForTable1.valid());
-        entryToInsert.nextTable = 0;
+        entryToInsert.setNextTable(0);
       } else {
         updateHelper(idx0, table0, [&](BucketType& bucket) {
           swapWithLeastCrowdedOblivious(bucket, entryToInsert);
         });
-        entryToInsert.nextTable = 1;
+        entryToInsert.setNextTable(1);
       }
     }
   }
@@ -1039,7 +1080,7 @@ struct OPosMap {
     PositionType idx0, idx1;
     H keyHash;
     indexer.getHashIndices(key, idx0, idx1, keyHash, uid, extraHash);
-    OPosMapEntry entryToInsert = {keyHash, idx1, 0, 0, value};
+    OPosMapEntry entryToInsert = {keyHash, idx1, 0, value};
     bool exist = insertEntry(entryToInsert, idx0);
     obliMove(exist, value, entryToInsert.value);
     // the element just swapped out is more likely to get inserted to somewhere
@@ -1082,15 +1123,15 @@ struct OPosMap {
       obliMove(isDummy, keyToHash, randKey);
     }
     indexer.getHashIndices(keyToHash, idx0, idx1, keyHash, uid, extraHash);
-    OPosMapEntry entryToInsert = {keyHash, idx1, 0, 0, value};
+    OPosMapEntry entryToInsert = {keyHash, idx1, 0, value};
     entryToInsert.setInvalid(isDummy);
     bool exist = insertEntryOblivious(entryToInsert, idx0);
     obliMove(exist, value, entryToInsert.value);
 
     stash.OInsert(entryToInsert, idx0);
     entryToInsert.setInvalid(true);
-    entryToInsert.nextTable = UniformRandom32() % 2;
-    stash.OPopOldest(entryToInsert, idx0, entryToInsert.nextTable);
+    entryToInsert.setNextTable(UniformRandom32() % 2);
+    stash.OPopOldest(entryToInsert, idx0, entryToInsert.nextTable());
     if constexpr (!isOblivious) {
       bool retryDummy = !entryToInsert.valid();
       obliMove(retryDummy, idx0, (PositionType)UniformRandom(tableSize - 1));
@@ -1128,13 +1169,13 @@ struct OPosMap {
       obliMove(isDummy, keyToHash, randKey);
     }
     indexer.getHashIndices(keyToHash, idx0, idx1, keyHash, uid, extraHash);
-    OPosMapEntry entryToFind = {keyHash, idx1, 0, 0, value};
+    OPosMapEntry entryToFind = {keyHash, idx1, 0, value};
     entryToFind.setInvalid(isDummy);
     auto bucketAccessor = [&](BucketType& bucket) {
       for (int i = 0; i < bucketSize; ++i) {
         auto& entry = bucket.entries[i];
         bool matchFlag =
-            (entry.keyHash == entryToFind.keyHash) & (entry.otherIdx == idx1);
+            entry.sameKeyHash(entryToFind) & (entry.otherIdx == idx1);
         found |= matchFlag;
         obliSwap(matchFlag, entry.value, value);
       }
@@ -1146,7 +1187,7 @@ struct OPosMap {
     for (size_t i = 0; i < stash.size(); ++i) {
       auto& stashEntry = stash[i];
       auto& entry = stashEntry.entry;
-      bool match = (entry.keyHash == entryToFind.keyHash) &
+      bool match = entry.sameKeyHash(entryToFind) &
                    (entry.otherIdx == idx1) & stashEntry.idx0 == idx0;
       obliSwap(match, value, entry.value);
       found |= match;
@@ -1179,13 +1220,13 @@ struct OPosMap {
     H keyHash;
     indexer.getHashIndices(key, idx0, idx1, keyHash, uid, extraHash);
     bool erased = false;
-    OPosMapEntry entryToErase = {keyHash, idx1, 0, 0, DUMMY<V>()};
+    OPosMapEntry entryToErase = {keyHash, idx1, 0, DUMMY<V>()};
     auto eraseTable0Func = [&](BucketType& bucket0) {
       PositionType entryToErasePos = value;
       for (int i = 0; i < bucketSize; ++i) {
         OPosMapEntry& entry = bucket0.entries[i];
         bool matchFlag =
-            (entry.keyHash == entryToErase.keyHash) && (entry.otherIdx == idx1);
+            entry.sameKeyHash(entryToErase) && (entry.otherIdx == idx1);
         if (matchFlag) {
           std::swap(entry.value, entryToErasePos);
           erased = mainMapErase(entryToErasePos, uid, extraHash);
@@ -1196,7 +1237,7 @@ struct OPosMap {
       auto eraseTable1Func = [&](BucketType& bucket1) {
         for (int i = 0; i < bucketSize; ++i) {
           OPosMapEntry& entry = bucket1.entries[i];
-          bool matchFlag = (entry.keyHash == entryToErase.keyHash) &&
+          bool matchFlag = entry.sameKeyHash(entryToErase) &&
                            (entry.otherIdx == idx0);
           if (matchFlag) {
             std::swap(entry.value, entryToErasePos);
@@ -1209,7 +1250,7 @@ struct OPosMap {
         for (size_t i = 0; i < stash.size(); ++i) {
           auto& stashEntry = stash[i];
           OPosMapEntry& entry = stashEntry.entry;
-          bool match = (entry.keyHash == entryToErase.keyHash) &&
+          bool match = entry.sameKeyHash(entryToErase) &&
                        (entry.otherIdx == idx1) && (stashEntry.idx0 == idx0);
           if (match) {
             std::swap(entry.value, entryToErasePos);
@@ -1257,7 +1298,7 @@ struct OPosMap {
     }
     indexer.getHashIndices(keyToHash, idx0, idx1, keyHash, uid, extraHash);
     bool erased = false;
-    OPosMapEntry entryToErase = {keyHash, idx1, 0, 0, DUMMY<V>()};
+    OPosMapEntry entryToErase = {keyHash, idx1, 0, DUMMY<V>()};
     entryToErase.setInvalid(isDummy);
     auto eraseTable0Func = [&](BucketType& bucket0) {
       PositionType entryToErasePos = value;
@@ -1265,7 +1306,7 @@ struct OPosMap {
       for (int i = 0; i < bucketSize; ++i) {
         OPosMapEntry& entry = bucket0.entries[i];
         bool matchFlag =
-            (entry.keyHash == entryToErase.keyHash) & (entry.otherIdx == idx1);
+            entry.sameKeyHash(entryToErase) & (entry.otherIdx == idx1);
         obliSwap(matchFlag, entryToErasePos, entry.value);
         obliMove(matchFlag, eraseTable0Idx, i);
       }
@@ -1273,7 +1314,7 @@ struct OPosMap {
         int eraseTable1Idx = -1;
         for (int i = 0; i < bucketSize; ++i) {
           OPosMapEntry& entry = bucket1.entries[i];
-          bool matchFlag = (entry.keyHash == entryToErase.keyHash) &
+          bool matchFlag = entry.sameKeyHash(entryToErase) &
                            (entry.otherIdx == idx0);
           obliSwap(matchFlag, entryToErasePos, entry.value);
           obliMove(matchFlag, eraseTable1Idx, i);
@@ -1283,7 +1324,7 @@ struct OPosMap {
         for (size_t i = 0; i < stash.size(); ++i) {
           auto& stashEntry = stash[i];
           OPosMapEntry& entry = stashEntry.entry;
-          bool match = (entry.keyHash == entryToErase.keyHash) &
+          bool match = entry.sameKeyHash(entryToErase) &
                        (entry.otherIdx == idx1) & (stashEntry.idx0 == idx0);
           obliSwap(match, entryToErasePos, entry.value);
           obliMove(match, eraseStashIdx, i);
