@@ -380,8 +380,9 @@ struct OHashMap {
   // maximum number of elements in the stash
   // corresponding to a failure probability of around 2^-64
   static constexpr int stash_max_size = 21;
-  // Choose the least-crowded matching stash entry during oblivious retries.
-  static constexpr bool popLeastCrowdedFromStash = true;
+  // Choose the least-crowded matching stash entry during oblivious retries when
+  // crowdedness metadata is available.
+  static constexpr bool popLeastCrowdedFromStash = false;  // useCrowdedness;
   // the capacity of the hash map
   PositionType _size = 0;
   // the number of elements in the hash map

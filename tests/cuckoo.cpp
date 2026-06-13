@@ -1,4 +1,8 @@
 #include <gtest/gtest.h>
+#include <omp.h>
+
+#include <algorithm>
+#include <random>
 
 #include "odsl/omap.hpp"
 #include "odsl/omap_short_kv.hpp"
@@ -267,7 +271,14 @@ void testReplaceCount(int outerRound = 20) {
   int windowSize = 1;
 
   std::vector<uint64_t> stashLoads(30, 0);
+  int numThreads = std::min(16, omp_get_max_threads());
+  std::vector<std::vector<uint64_t>> threadStashLoads(
+      numThreads, std::vector<uint64_t>(stashLoads.size(), 0));
+#pragma omp parallel for num_threads(numThreads) schedule(dynamic)
   for (int rr = 0; rr < outerRound; ++rr) {
+    int tid = omp_get_thread_num();
+    auto& localStashLoads = threadStashLoads[tid];
+    std::mt19937 rng(rr + 1);
     // the NON_OBLIVIOUS OPosMap replaces the underlying ORAM with a
     // non-oblivious vector, but the load distribution of the cuckoo hash table
     // remains the same
@@ -277,10 +288,10 @@ void testReplaceCount(int outerRound = 20) {
     map.Init();
     const auto& stash = map.GetStash();
     for (int i = 0; i < mapSize - round; ++i) {
-      map.Insert(rand(), 0);
+      map.Insert(rng(), 0);
     }
     for (int r = 0; r < round; ++r) {
-      int key = rand();
+      int key = rng();
       if constexpr (isOblivious != NON_OBLIVIOUS) {
         map.OInsert(key, 0);
         // map.OErase(key);
@@ -295,8 +306,13 @@ void testReplaceCount(int outerRound = 20) {
             ++load;
           }
         }
-        stashLoads[load]++;
+        localStashLoads[load]++;
       }
+    }
+  }
+  for (const auto& localStashLoads : threadStashLoads) {
+    for (int i = 0; i < stashLoads.size(); ++i) {
+      stashLoads[i] += localStashLoads[i];
     }
   }
   for (int i = 0; i < stashLoads.size(); ++i) {
