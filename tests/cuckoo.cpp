@@ -257,18 +257,23 @@ void testOHashMapFindBatch() {
   }
 }
 
-template <ObliviousLevel isOblivious>
-void testReplaceCount() {
+// the isOblivious only affects whether the oblivious insert is used
+template <ObliviousLevel isOblivious, const bool useCrowdedness = true>
+void testReplaceCount(int outerRound = 20) {
   // test replace count distribution
   int mapSize = 1000000;
   int round = 50000;
-  int outerRound = 200;
 
   int windowSize = 1;
 
   std::vector<uint64_t> stashLoads(30, 0);
   for (int rr = 0; rr < outerRound; ++rr) {
-    OHashMap<int, int, NON_OBLIVIOUS> map(mapSize, MAX_CACHE_SIZE);
+    // the NON_OBLIVIOUS OPosMap replaces the underlying ORAM with a
+    // non-oblivious vector, but the load distribution of the cuckoo hash table
+    // remains the same
+    using MapType =
+        OHashMap<int, int, NON_OBLIVIOUS, uint64_t, true, useCrowdedness>;
+    MapType map(mapSize, MAX_CACHE_SIZE);
     map.Init();
     const auto& stash = map.GetStash();
     for (int i = 0; i < mapSize - round; ++i) {
@@ -276,7 +281,7 @@ void testReplaceCount() {
     }
     for (int r = 0; r < round; ++r) {
       int key = rand();
-      if constexpr (isOblivious) {
+      if constexpr (isOblivious != NON_OBLIVIOUS) {
         map.OInsert(key, 0);
         // map.OErase(key);
       } else {
@@ -304,11 +309,10 @@ void testReplaceCount() {
 }
 
 template <ObliviousLevel isOblivious>
-void testReplaceCountLargeKV() {
+void testReplaceCountLargeKV(int outerRound = 20) {
   // test replace count distribution
   int mapSize = 1000000;
   int round = 50000;
-  int outerRound = 200;
 
   int windowSize = 1;
 
@@ -649,8 +653,20 @@ TEST(Cuckoo, ReplaceCountDistriNonOblivious) {
   testReplaceCount<NON_OBLIVIOUS>();
 }
 
-TEST(Cuckoo, ReplaceCountDistriOblivious) {
-  testReplaceCount<FULL_OBLIVIOUS>();
+TEST(Cuckoo, ReplaceCountDistriObliviousRandomEviction) {
+  testReplaceCount<FULL_OBLIVIOUS, false>();
+}
+
+TEST(Cuckoo, ReplaceCountDistriObliviousCrowdedness) {
+  testReplaceCount<FULL_OBLIVIOUS, true>();
+}
+
+TEST(Cuckoo, ReplaceCountDistriObliviousRandomEvictionAccurate) {
+  testReplaceCount<FULL_OBLIVIOUS, false>(2000);
+}
+
+TEST(Cuckoo, ReplaceCountDistriObliviousCrowdednessAccurate) {
+  testReplaceCount<FULL_OBLIVIOUS, true>(2000);
 }
 
 TEST(Cuckoo, ReplaceCountDistriLargeKV) {

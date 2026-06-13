@@ -1124,7 +1124,7 @@ struct OPosMap {
 
     stash.OInsert(entryToInsert, idx0);
     entryToInsert.setInvalid(true);
-    entryToInsert.setNextTable(UniformRandom32() % 2);
+    entryToInsert.setNextTable(UniformRandomBit());
     stash.OPopOldest(entryToInsert, idx0, entryToInsert.nextTable());
     if constexpr (!isOblivious) {
       bool retryDummy = !entryToInsert.valid();
