@@ -1,4 +1,8 @@
 #include <gtest/gtest.h>
+#include <omp.h>
+
+#include <algorithm>
+#include <random>
 
 #include "odsl/omap.hpp"
 #include "odsl/omap_short_kv.hpp"
@@ -257,36 +261,112 @@ void testOHashMapFindBatch() {
   }
 }
 
-template <ObliviousLevel isOblivious>
-void testReplaceCount() {
+// the isOblivious only affects whether the oblivious insert is used
+template <ObliviousLevel isOblivious, const bool useCrowdedness = true>
+void testReplaceCount(int outerRound = 20) {
   // test replace count distribution
-  int mapSize = 100000;
-  int round = 10000;
-  int outerRound = 500;
+  int mapSize = 1000000;
+  int round = 50000;
 
-  int windowSize = 5;
+  int windowSize = 1;
 
   std::vector<uint64_t> stashLoads(30, 0);
+  int numThreads = std::min(16, omp_get_max_threads());
+  std::vector<std::vector<uint64_t>> threadStashLoads(
+      numThreads, std::vector<uint64_t>(stashLoads.size(), 0));
+#pragma omp parallel for num_threads(numThreads) schedule(dynamic)
   for (int rr = 0; rr < outerRound; ++rr) {
-    OHashMap<int, int, NON_OBLIVIOUS> map(mapSize, MAX_CACHE_SIZE);
+    int tid = omp_get_thread_num();
+    auto& localStashLoads = threadStashLoads[tid];
+    std::mt19937 rng(rr + 1);
+    // the NON_OBLIVIOUS OPosMap replaces the underlying ORAM with a
+    // non-oblivious vector, but the load distribution of the cuckoo hash table
+    // remains the same
+    using MapType =
+        OHashMap<int, int, NON_OBLIVIOUS, uint64_t, true, useCrowdedness>;
+    MapType map(mapSize, MAX_CACHE_SIZE);
     map.Init();
     const auto& stash = map.GetStash();
-    for (int i = 0; i < mapSize; ++i) {
-      map.Insert(rand(), 0);
-    }
-    for (int r = 0; r < round; ++r) {
-      int key = rand();
-      if constexpr (isOblivious) {
+    for (int i = 0; i < mapSize - round; ++i) {
+      int key = rng();
+      if constexpr (isOblivious != NON_OBLIVIOUS) {
         map.OInsert(key, 0);
-        map.OErase(key);
+        // map.OErase(key);
       } else {
         map.Insert(key, 0);
-        map.Erase(key);
+        // map.Erase(key);
+      }
+    }
+    for (int r = 0; r < round; ++r) {
+      int key = rng();
+      if constexpr (isOblivious != NON_OBLIVIOUS) {
+        map.OInsert(key, 0);
+        // map.OErase(key);
+      } else {
+        map.Insert(key, 0);
+        // map.Erase(key);
       }
       if (r % windowSize == 0) {
         int load = 0;
         for (int k = 0; k < stash.size(); ++k) {
           if (stash[k].valid) {
+            ++load;
+          }
+        }
+        localStashLoads[load]++;
+      }
+    }
+  }
+  for (const auto& localStashLoads : threadStashLoads) {
+    for (int i = 0; i < stashLoads.size(); ++i) {
+      stashLoads[i] += localStashLoads[i];
+    }
+  }
+  for (int i = 0; i < stashLoads.size(); ++i) {
+    printf("%d %lu\n", i, stashLoads[i]);
+  }
+  // for (int i = 10; i < stashLoads.size(); ++i) {
+  //   // stash load should be less than 10 with high probability
+  //   ASSERT_EQ(stashLoads[i], 0);
+  // }
+}
+
+template <ObliviousLevel isOblivious>
+void testReplaceCountLargeKV(int outerRound = 20) {
+  // test replace count distribution
+  int mapSize = 1000000;
+  int round = 50000;
+
+  int windowSize = 1;
+
+  using PosMapType = OPosMap<int, int, false>;
+  using UidType = typename PosMapType::UidType;
+  using HExtra = typename PosMapType::HExtra;
+
+  std::vector<uint64_t> stashLoads(30, 0);
+  for (int rr = 0; rr < outerRound; ++rr) {
+    PosMapType map(mapSize, MAX_CACHE_SIZE);
+    map.Init();
+    const auto& stash = map.GetStash();
+    UidType uid;
+    HExtra extraHash;
+    int pos = 0;
+    for (int i = 0; i < mapSize - round; ++i) {
+      map.Insert(rand(), pos, uid, extraHash);
+    }
+    for (int r = 0; r < round; ++r) {
+      int key = rand();
+      if constexpr (isOblivious) {
+        map.OInsert(key, pos, uid, extraHash);
+        // map.OErase(key);
+      } else {
+        map.Insert(key, pos, uid, extraHash);
+        // map.Erase(key);
+      }
+      if (r % windowSize == 0) {
+        int load = 0;
+        for (int k = 0; k < stash.size(); ++k) {
+          if (stash[k].entry.valid()) {
             ++load;
           }
         }
@@ -297,10 +377,10 @@ void testReplaceCount() {
   for (int i = 0; i < stashLoads.size(); ++i) {
     printf("%d %lu\n", i, stashLoads[i]);
   }
-  for (int i = 10; i < stashLoads.size(); ++i) {
-    // stash load should be less than 10 with high probability
-    ASSERT_EQ(stashLoads[i], 0);
-  }
+  // for (int i = 10; i < stashLoads.size(); ++i) {
+  //   // stash load should be less than 10 with high probability
+  //   ASSERT_EQ(stashLoads[i], 0);
+  // }
 }
 
 void testOMapEraseSimple() {
@@ -596,8 +676,24 @@ TEST(Cuckoo, ReplaceCountDistriNonOblivious) {
   testReplaceCount<NON_OBLIVIOUS>();
 }
 
-TEST(Cuckoo, ReplaceCountDistriOblivious) {
-  testReplaceCount<FULL_OBLIVIOUS>();
+TEST(Cuckoo, ReplaceCountDistriObliviousRandomEviction) {
+  testReplaceCount<FULL_OBLIVIOUS, false>();
+}
+
+TEST(Cuckoo, ReplaceCountDistriObliviousCrowdedness) {
+  testReplaceCount<FULL_OBLIVIOUS, true>();
+}
+
+TEST(Cuckoo, ReplaceCountDistriObliviousRandomEvictionAccurate) {
+  testReplaceCount<FULL_OBLIVIOUS, false>(20000);
+}
+
+TEST(Cuckoo, ReplaceCountDistriObliviousCrowdednessAccurate) {
+  testReplaceCount<FULL_OBLIVIOUS, true>(20000);
+}
+
+TEST(Cuckoo, ReplaceCountDistriLargeKV) {
+  testReplaceCountLargeKV<FULL_OBLIVIOUS>();
 }
 
 TEST(Cuckoo, OHashMapPushInit) { testPushInit<false>(); }

@@ -1,20 +1,20 @@
 #pragma once
 #include "recursive_oram.hpp"
 
-/// @brief This file implements an oblivious unordered map. The position map is
-/// implemented with a cuckoo hash table on top of a recursive ORAM. The values
-/// are stored separatedly in a circuit oram. Separating the values to a
-/// separate oram reduces storage overhead and speeds up the query, insertion,
-/// and erasure especially when keys and values are moderately large (> 32
-/// bytes).
+/// @brief Oblivious unordered map with a compact position map.
+///
+/// The position map is a cuckoo hash table backed by recursive ORAM. Values are
+/// stored separately in a circuit ORAM. Keeping values outside the position map
+/// reduces storage overhead and speeds up queries, insertions, and erasures,
+/// especially when keys and values are moderately large (> 32 bytes).
 namespace ODSL {
 /**
  * @brief Hash the key to two positions and use remaining hash bits to
  * distinguish entries.
  * @tparam K the key type
  * @tparam H the type of the hash value stored in the position map
- * @tparam HExtra the type of the extra hash value stored in the main oram
- * @tparam PositionType the type of the position,
+ * @tparam HExtra the type of the extra hash value stored in the main ORAM
+ * @tparam PositionType the type of the position
  *
  */
 template <typename K, typename H, typename HExtra, typename PositionType>
@@ -62,22 +62,21 @@ struct OPosMapIndexer {
     HashIndices hashIndices;
     secure_hash_with_salt(key, salts, (uint8_t*)&hashIndices,
                           sizeof(hashIndices));
-    // position in table 0
+    // Position in table 0.
     pos0 = (PositionType)(hashIndices.h0 % _size);
-    // position in table 1
+    // Position in table 1.
     pos1 = (PositionType)(hashIndices.h1 % _size);
-    // keyHash is used to distinguish entries that have the same positions in
-    // both tables. Set the least significant bit to 1 to indicate a valid
-    // entry. In the position map, uid = (pos0 || pos1 || keyHash) must be
-    // unique. If a newly inserted key-value pair has the same uid as an
-    // existing entry, we will insert it to the stash.
+    // keyHash distinguishes entries that have the same positions in both
+    // tables. The least significant bit marks a valid entry; the next bit is
+    // reserved for per-entry routing metadata. In the position map,
+    // uid = (pos0 || pos1 || keyHash) must be unique. If a newly inserted pair
+    // has the same uid as an existing entry, we insert it into the stash.
     keyHash = hashIndices.keyHash | (H)1;
-    // extraHash is used to further distinguish entries that shares the same
-    // uid. It is stored in the main oram, so that we can check the
-    // existence of an element with very high confidence.
+    // extraHash further distinguishes entries that share the same uid. It is
+    // stored in the main ORAM so that we can check element existence with very
+    // high confidence.
     extraHash = hashIndices.extraHash;
-    // generate a unique identifier that includes the key hash and the
-    // positions, and with additional bits to distinguish elements
+    // Generate a unique identifier from the two table positions and key hash.
     std::memset(uid.data, 0, sizeof(UidType));
     int sizeMaxLen = GetLogBaseTwo(_size - 1) / 8 + 1;
     Assert(2 * sizeMaxLen + sizeof(H) <= uid_length);
@@ -93,38 +92,80 @@ struct OPosMapIndexer {
 };
 
 /**
- * @brief A single entry (slot) in the position map. To compress the size of the
- * position map, we do not store the key, but store 1) the index of the
- * key in the other table, which provides some entropy to distinguish entries in
- * the same slot, and moreover, allows us to swap the entry with the other table
- * when the entry is evicted 2) an extra hash value "keyHash" to further
- * distinguish the entries that maps to same same slots in both tables. The
- * least significant bit of keyHash is used to indicate whether the entry is
- * valid. In case both the indices and the keyHash collides, we store the entry
- * in a stash.
+ * @brief A single position-map slot.
+ *
+ * To keep the position map compact, entries do not store the original key.
+ * Instead, each entry stores the key's index in the other table plus keyHash.
+ * The other-table index distinguishes entries in the same bucket and lets an
+ * evicted entry continue in the alternate table. keyHash distinguishes entries
+ * that map to the same pair of buckets. The least significant bit of keyHash is
+ * the validity bit, and the second least significant bit stores the next table
+ * to try after eviction. Entries that still collide are stored in the stash.
  *
  * @tparam K the key type
- * @tparam V the value type, which is the position of the value in the oram
+ * @tparam V the value type, which is the position of the value in the ORAM
  */
 template <typename K, typename V, typename H, typename PositionType>
 struct GenericOPosMapEntry {
+  static constexpr H validMask = (H)1;
+  static constexpr H nextTableMask = (H)2;
+
+  uint8_t crowdedness = 0;
   H keyHash = 0;
-  PositionType otherIdx;  // the index in the other table
-  V value;  // the value of the entry, i.e., the position of the entry in the
-            // oram that stores the value
+  PositionType otherIdx = 0;  // the index in the other table
+  V value = {};  // the value of the entry, i.e., the position of the entry in
+                 // the ORAM that stores the value
+
+  GenericOPosMapEntry() = default;
+
+  GenericOPosMapEntry(H keyHash, PositionType otherIdx, uint8_t crowdedness,
+                      V value)
+      : crowdedness(crowdedness),
+        keyHash(keyHash),
+        otherIdx(otherIdx),
+        value(value) {}
 
   /**
-   * @brief Returns whether the entry is valid
+   * @brief Return whether this slot contains a valid entry.
    */
-  bool valid() const { return keyHash & 0x1; }
+  bool valid() const { return keyHash & validMask; }
   /**
-   * @brief Set the entry to valid if real is true
+   * @brief Set the validity bit if real is true.
    */
-  void setValid(bool real) { keyHash |= real; }
+  void setValid(bool real) { keyHash |= (H)real; }
   /**
-   * @brief Set the entry to invalid if real is true
+   * @brief Clear the validity bit if real is true.
    */
   void setInvalid(bool real) { keyHash &= ~((H)real); }
+  /**
+   * @brief Return keyHash with routing metadata masked out.
+   */
+  H comparableKeyHash() const { return keyHash & ~nextTableMask; }
+  /**
+   * @brief Return whether two entries have the same comparable key hash.
+   */
+  bool sameKeyHash(const GenericOPosMapEntry& other) const {
+    return comparableKeyHash() == other.comparableKeyHash();
+  }
+  /**
+   * @brief Return the next table to try after this entry is evicted.
+   */
+  uint8_t nextTable() const { return (keyHash & nextTableMask) != 0; }
+  /**
+   * @brief Store the next table to try after this entry is evicted.
+   */
+  void setNextTable(uint8_t tableIdx) {
+    H nextTableBit = (H)(tableIdx & 0x1) << 1;
+    keyHash = (keyHash & ~nextTableMask) | nextTableBit;
+  }
+  /**
+   * @brief Obliviously store the next table if real is true.
+   */
+  void setNextTable(bool real, uint8_t tableIdx) {
+    H nextTableBit = (H)(tableIdx & 0x1) << 1;
+    H updatedKeyHash = (keyHash & ~nextTableMask) | nextTableBit;
+    obliMove(real, keyHash, updatedKeyHash);
+  }
 #ifndef ENCLAVE_MODE
   // cout
   friend std::ostream& operator<<(std::ostream& os,
@@ -167,7 +208,7 @@ struct OPosMapBucket {
 };
 
 /**
- * @brief An cuckoo hash map built on top of either recursive ORAM or a standard
+ * @brief A cuckoo hash map built on top of either recursive ORAM or a standard
  * vector. It contains two hash tables, and a stash for elements that cannot be
  * stored in the tables.
  *
@@ -182,11 +223,11 @@ template <typename K, typename PositionType = uint64_t,
 struct OPosMap {
   using V = PositionType;   // value type is the position
   using H = uint32_t;       // additional hash bits to distinguish elements
-  using HExtra = uint64_t;  // extra hash bits stored in the main oram to check
+  using HExtra = uint64_t;  // extra hash bits stored in the main ORAM to check
                             // for the existence of an element
   using Indexer = OPosMapIndexer<K, H, HExtra, PositionType>;
 
-  // assume that the oram size < 2^48
+  // assume that the ORAM size < 2^48
   using UidType = typename Indexer::UidType;  // type of the unique identifier
   using OPosMapEntry = GenericOPosMapEntry<K, V, H, PositionType>;
   static constexpr bool isObliviousPosMap = isOblivious;
@@ -194,14 +235,14 @@ struct OPosMap {
    * @brief A stash storing position map entries that cannot be stored in the
    * hash tables because both buckets are full. The stash works as a queue and
    * helps deamortize the cost of oblivious insertion. Notice that this stash is
-   * different from the stash in the main oram. The latter is used to store
+   * different from the stash in the main ORAM. The latter is used to store
    * indistinguishable keys.
    *
    * @tparam K the key type
    * @tparam V the value type
    * @tparam stash_size the default stash size for oblivious insertion
    */
-  template <const uint64_t stash_size = 16>
+  template <const uint64_t stash_size = 28>
   struct LRUStash {
     struct StashEntry {
       // the entry for table 0
@@ -214,7 +255,7 @@ struct OPosMap {
     using StashVec = std::vector<StashEntry>;
     StashVec stash;     // the stash data
     uint64_t currTime;  // the current timestamp
-    // as long as one oblivious insert occur, we cannot reveal the state of the
+    // Once an oblivious insert occurs, we can no longer reveal the state of the
     // stash
     bool oInserted = false;  // whether an oblivious insert has occurred
 
@@ -230,21 +271,19 @@ struct OPosMap {
     void SetSize(size_t capacity) { stash.resize(capacity); }
 
     /**
-     * @brief Obliviously insert an entry to the stash and record the timestamp.
-     * If entry.valid is false, the insertion is dummy. If the stash overflows,
-     * the method will enlarge the stash, which is not oblivious.
+     * @brief Obliviously insert an entry into the stash and record its
+     * timestamp. If entry.valid is false, the insertion is dummy. If the stash
+     * overflows, the method will enlarge the stash, which is not oblivious.
      *
-     * @tparam highPriority whether the entry should be populated first
      * @param entry the entry to insert
      */
-    template <const bool highPriority = false>
     void OInsert(const OPosMapEntry& entry, PositionType idx0) {
       oInserted = true;
       if (stash.size() < stash_size) {
         stash.resize(stash_size);
       }
       bool inserted = !entry.valid();
-      uint64_t time = highPriority ? 0 : currTime;
+      uint64_t time = currTime;
       for (size_t i = 0; i < stash.size(); ++i) {
         bool isEmpty = !stash[i].entry.valid();
         bool insertFlag = isEmpty & (!inserted);
@@ -267,9 +306,9 @@ struct OPosMap {
     }
 
     /**
-     * @brief Obliviously insert an entry to the stash and record the timestamp.
+     * @brief Insert an entry into the stash and record its timestamp.
      * If entry.valid is false, the insertion is dummy. If the stash overflows,
-     * the method will enlarge the stash, which is not oblivious.
+     * the method will enlarge the stash.
      *
      * @tparam highPriority whether the entry should be populated first
      * @param entry the entry to insert
@@ -317,24 +356,25 @@ struct OPosMap {
      *
      * @param entry the oldest entry
      */
-    void OPopOldest(OPosMapEntry& entry, PositionType& idx0) {
+    void OPopOldest(OPosMapEntry& entry, PositionType& idx0, uint8_t tableIdx) {
       StashEntry oldestEntry;
-      idx0 = 0;
-      oldestEntry.idx0 = 0;
-      uint64_t oldestTime = currTime;
+      uint64_t oldestTime = UINT64_MAX;
+      obliMove(entry.valid(), oldestTime, 0UL);
       size_t oldestIdx = stash.size();
       for (size_t i = 0; i < stash.size(); ++i) {
-        bool isOldest =
-            (stash[i].timestamp <= oldestTime) & stash[i].entry.valid();
+        bool isValidMatch =
+            stash[i].entry.valid() & (stash[i].entry.nextTable() == tableIdx);
+        bool isOldest = (stash[i].timestamp < oldestTime) & isValidMatch;
+        obliMove(isOldest, oldestTime, stash[i].timestamp);
         obliMove(isOldest, oldestEntry, stash[i]);
         obliMove(isOldest, oldestIdx, i);
       }
       for (size_t i = 0; i < stash.size(); ++i) {
         stash[i].entry.setInvalid(i == oldestIdx);
       }
-      entry = oldestEntry.entry;
-      idx0 = oldestEntry.idx0;
-      entry.setInvalid(oldestIdx == stash.size());
+      bool found = oldestIdx != stash.size();
+      obliMove(found, entry, oldestEntry.entry);
+      obliMove(found, idx0, oldestEntry.idx0);
     }
 
     /**
@@ -353,6 +393,7 @@ struct OPosMap {
         bool isOldest =
             (stash[i].timestamp <= oldestTime) && stash[i].entry.valid();
         if (isOldest) {
+          oldestTime = stash[i].timestamp;
           oldestIdx = i;
         }
       }
@@ -405,17 +446,18 @@ struct OPosMap {
  private:
   // the ratio between the capacity and the total number of slots in
   // the hash tables
-  static constexpr double loadFactor = 0.8;
+  static constexpr double loadFactor = 0.75;
   // number of slots in each bucket
   static constexpr short bucketSize = 4;
   // maximum number of elements in the stash
-  static constexpr int stash_max_size = 10;
-  // the capcity of the hash map
+  static constexpr int stash_max_size = 28;
+  // the capacity of the hash map
   PositionType _size = 0;
   // the number of elements in the hash map
   PositionType load;
   // the size of each hash table
   PositionType tableSize;
+  static constexpr uint8_t crowdMax = UINT8_MAX;
   using BucketType = OPosMapBucket<bucketSize, K, V, H, PositionType>;
   // for oblivious hash map, we use recursive ORAM
   using ObliviousTableType = RecursiveORAM<BucketType, PositionType>;
@@ -432,7 +474,7 @@ struct OPosMap {
   // the indexer to hash the key
   Indexer indexer;
 
-  using StashType = LRUStash<16>;
+  using StashType = LRUStash<stash_max_size>;
   // the stash for elements that cannot be stored in the hash tables due to
   // bucket size limitation
   StashType stash;
@@ -453,13 +495,57 @@ struct OPosMap {
     }
   }
 
-  /**
-   * @brief Return a random bucket offset to replace
-   *
-   * @return int
-   */
-  static int getRandBucketOffset() {
-    return (int)(UniformRandom32() % bucketSize);
+  static void findLeastCrowded(BucketType& bucket, uint8_t& minCrowd,
+                               int& minIdx) {
+    minCrowd = crowdMax;
+    minIdx = 0;
+    for (int i = 0; i < bucketSize; ++i) {
+      uint8_t crowd =
+          bucket.entries[i].valid() ? bucket.entries[i].crowdedness : 0;
+      if (crowd < minCrowd) {
+        minCrowd = crowd;
+        minIdx = i;
+      }
+    }
+  }
+
+  static void findLeastCrowdedOblivious(BucketType& bucket, uint8_t& minCrowd,
+                                        int& minIdx) {
+    minCrowd = crowdMax;
+    minIdx = 0;
+    for (int i = 0; i < bucketSize; ++i) {
+      uint8_t crowd = 0;
+      obliMove(bucket.entries[i].valid(), crowd, bucket.entries[i].crowdedness);
+      bool isMin = crowd < minCrowd;
+      obliMove(isMin, minCrowd, crowd);
+      obliMove(isMin, minIdx, i);
+    }
+  }
+
+  static void swapWithLeastCrowded(BucketType& bucket,
+                                   OPosMapEntry& entryToInsert) {
+    uint8_t minCrowd;
+    int offset;
+    findLeastCrowded(bucket, minCrowd, offset);
+    std::swap(entryToInsert, bucket.entries[offset]);
+    if (entryToInsert.valid()) {
+      findLeastCrowded(bucket, minCrowd, offset);
+      entryToInsert.crowdedness = minCrowd + 1;
+    }
+  }
+
+  static void swapWithLeastCrowdedOblivious(BucketType& bucket,
+                                            OPosMapEntry& entryToInsert) {
+    uint8_t minCrowd;
+    int offset;
+    findLeastCrowdedOblivious(bucket, minCrowd, offset);
+    for (int i = 0; i < bucketSize; ++i) {
+      bool swapFlag = (i == offset) & entryToInsert.valid();
+      obliSwap(swapFlag, entryToInsert, bucket.entries[i]);
+    }
+    findLeastCrowdedOblivious(bucket, minCrowd, offset);
+    obliMove(entryToInsert.valid(), entryToInsert.crowdedness,
+             (uint8_t)(minCrowd + 1));
   }
 
   /**
@@ -475,7 +561,7 @@ struct OPosMap {
     for (short i = 0; i < bucketSize; ++i) {
       OPosMapEntry& entry = bucket.entries[i];
       bool matchFlag = (entry.otherIdx == entryToInsert.otherIdx) &&
-                       (entry.keyHash == entryToInsert.keyHash) && (!updated);
+                       entry.sameKeyHash(entryToInsert) && (!updated);
       if (matchFlag) {
         std::swap(entry, entryToInsert);
         return true;
@@ -498,7 +584,7 @@ struct OPosMap {
     for (short i = 0; i < bucketSize; ++i) {
       OPosMapEntry& entry = bucket.entries[i];
       bool matchFlag = (entry.otherIdx == entryToInsert.otherIdx) &
-                       (entry.keyHash == entryToInsert.keyHash) & (!updated);
+                       entry.sameKeyHash(entryToInsert) & (!updated);
       obliSwap(matchFlag, entry, entryToInsert);
       updated |= matchFlag;
     }
@@ -520,7 +606,7 @@ struct OPosMap {
       auto& entry = stash[i].entry;
       bool matchFlag = (entry.otherIdx == entryToInsert.otherIdx) &&
                        (stash[i].idx0 == idx0) &&
-                       (entry.keyHash == entryToInsert.keyHash) && (!updated);
+                       entry.sameKeyHash(entryToInsert) && (!updated);
       if (matchFlag) {
         std::swap(entry, entryToInsert);
         return true;
@@ -545,7 +631,7 @@ struct OPosMap {
       auto& entry = stash[i].entry;
       bool matchFlag = (entry.otherIdx == entryToInsert.otherIdx) &
                        (stash[i].idx0 == idx0) &
-                       (entry.keyHash == entryToInsert.keyHash) & (!updated);
+                       entry.sameKeyHash(entryToInsert) & (!updated);
       obliSwap(matchFlag, entry, entryToInsert);
       updated |= matchFlag;
     }
@@ -577,33 +663,12 @@ struct OPosMap {
   }
 
   /**
-   * @brief A helper function that inserts an entry to a bucket if a slot is
-   * empty. The function is oblivious.
+   * @brief Insert into either candidate bucket without oblivious padding.
    *
-   * @param bucket the bucket to perform insert
-   * @param entryToInsert the entry to insert
-   * @return true if the entry is inserted, false otherwise
-   */
-  static bool insertIfEmptyOblivious(BucketType& bucket,
-                                     const OPosMapEntry& entryToInsert) {
-    bool updated = !entryToInsert.valid();
-    for (int i = 0; i < bucketSize; ++i) {
-      auto& entry = bucket.entries[i];
-      bool isEmpty = !entry.valid();
-      bool insertFlag = isEmpty & (!updated);
-      obliMove(insertFlag, entry, entryToInsert);
-      updated |= insertFlag;
-    }
-    return updated;
-  }
-
-  /**
-   * @brief Try to insert entry into either table0 or table1 obliviously without
-   * swapping existing elements. If the element already exists either in table
-   * 0, table 1, or the stash, replace the existing element. If there's no
-   * available slot, swap entryToInsert with a random element from the bucket in
-   * table 0. If the insertion is successful, entryToInsert.valid will be set to
-   * false, and dummy operations will be performed to ensure oblivousness.
+   * If the key already exists in either table or the stash, replace the
+   * existing value. If both candidate buckets are full, evict an entry from the
+   * bucket whose alternate neighbors are less crowded. On success,
+   * entryToInsert is marked invalid.
    *
    * @param entryToInsert the entry to insert, and will be modified to the entry
    * swapped out if no slot is available.
@@ -639,20 +704,37 @@ struct OPosMap {
         }
         ++load;
 
-        bool insertSucceed = insertIfEmptyOblivious(bucket0, entryToInsert);
-        if (insertSucceed) {
+        PositionType table0Idx = idx0;
+        PositionType table1Idx = entryToInsert.otherIdx;
+        uint8_t minCrowd0;
+        uint8_t minCrowd1;
+        int minIdx0;
+        int minIdx1;
+        findLeastCrowded(bucket0, minCrowd0, minIdx0);
+        findLeastCrowded(bucket1, minCrowd1, minIdx1);
+
+        OPosMapEntry entryForTable0 = entryToInsert;
+        entryForTable0.crowdedness = minCrowd1 + 1;
+        OPosMapEntry entryForTable1 = entryToInsert;
+        entryForTable1.otherIdx = table0Idx;
+        entryForTable1.crowdedness = minCrowd0 + 1;
+
+        if (insertIfEmpty(bucket0, entryForTable0)) {
           entryToInsert.setInvalid(true);
-          return;
-        }
-        std::swap(entryToInsert.otherIdx, idx0);
-        insertSucceed = insertIfEmptyOblivious(bucket1, entryToInsert);
-        if (insertSucceed) {
+        } else if (insertIfEmpty(bucket1, entryForTable1)) {
           entryToInsert.setInvalid(true);
-          return;
+        } else if (minCrowd0 <= minCrowd1) {
+          entryToInsert = entryForTable0;
+          std::swap(entryToInsert, bucket0.entries[minIdx0]);
+          idx0 = table0Idx;
+          entryToInsert.setNextTable(1);
+        } else {
+          std::swap(entryForTable1, bucket1.entries[minIdx1]);
+          entryToInsert = entryForTable1;
+          idx0 = entryToInsert.otherIdx;
+          entryToInsert.otherIdx = table1Idx;
+          entryToInsert.setNextTable(0);
         }
-        int offset = getRandBucketOffset();
-        std::swap(bucket1.entries[offset], entryToInsert);
-        std::swap(entryToInsert.otherIdx, idx0);
       };
       updateHelper(idx0, table1, table1UpdateFunc);
     };
@@ -662,12 +744,13 @@ struct OPosMap {
   }
 
   /**
-   * @brief Try to insert entry into either table0 or table1 obliviously without
-   * swapping existing elements. If the element already exists either in table
-   * 0, table 1, or the stash, replace the existing element. If there's no
-   * available slot, swap entryToInsert with a random element from the bucket in
-   * table 0. If the insertion is successful, entryToInsert.valid will be set to
-   * false, and dummy operations will be performed to ensure oblivousness.
+   * @brief Obliviously insert into either candidate bucket.
+   *
+   * If the key already exists in either table or the stash, replace the
+   * existing value. If both candidate buckets are full, evict an entry from the
+   * bucket whose alternate neighbors are less crowded. On success,
+   * entryToInsert is marked invalid and dummy operations preserve
+   * obliviousness.
    *
    * @param entryToInsert the entry to insert, and will be modified to the entry
    * swapped out if no slot is available.
@@ -690,14 +773,35 @@ struct OPosMap {
         exist |= replaceSucceed;
         entryToInsert.setInvalid(replaceSucceed);
 
-        bool insertSucceed = insertIfEmptyOblivious(bucket0, entryToInsert);
-        entryToInsert.setInvalid(insertSucceed);
-        obliSwap(entryToInsert.valid(), entryToInsert.otherIdx, idx0);
-        insertSucceed = insertIfEmptyOblivious(bucket1, entryToInsert);
-        entryToInsert.setInvalid(insertSucceed);
-        int offset = getRandBucketOffset();
-        obliSwap(entryToInsert.valid(), bucket1.entries[offset], entryToInsert);
-        obliSwap(entryToInsert.valid(), entryToInsert.otherIdx, idx0);
+        PositionType table0Idx = idx0;
+        PositionType table1Idx = entryToInsert.otherIdx;
+        uint8_t minCrowd0;
+        uint8_t minCrowd1;
+        int minIdx0;
+        int minIdx1;
+        findLeastCrowdedOblivious(bucket0, minCrowd0, minIdx0);
+        findLeastCrowdedOblivious(bucket1, minCrowd1, minIdx1);
+
+        bool t0LessCrowded = minCrowd0 <= minCrowd1;
+        OPosMapEntry entryForTable0 = entryToInsert;
+        entryForTable0.crowdedness = minCrowd1 + 1;
+        OPosMapEntry entryForTable1 = entryToInsert;
+        entryForTable1.otherIdx = table0Idx;
+        entryForTable1.crowdedness = minCrowd0 + 1;
+
+        bool insertTable0 = entryToInsert.valid() & t0LessCrowded;
+        bool insertTable1 = entryToInsert.valid() & !t0LessCrowded;
+        obliSwap(insertTable0, bucket0.entries[minIdx0], entryForTable0);
+        obliSwap(insertTable1, bucket1.entries[minIdx1], entryForTable1);
+
+        OPosMapEntry evictedFromTable1 = entryForTable1;
+        PositionType evictedIdx0 = evictedFromTable1.otherIdx;
+        evictedFromTable1.otherIdx = table1Idx;
+        obliMove(insertTable0, entryToInsert, entryForTable0);
+        obliMove(insertTable1, entryToInsert, evictedFromTable1);
+        obliMove(insertTable1, idx0, evictedIdx0);
+        entryToInsert.setNextTable(t0LessCrowded, 1);
+        entryToInsert.setNextTable(!t0LessCrowded, 0);
       };
       updateHelper(idx0, table1, table1UpdateFunc);
     };
@@ -708,13 +812,11 @@ struct OPosMap {
   }
 
   /**
-   * @brief Try to insert entry into table 1, if table 1 is
-   * occupied, swap a random element out of the bucket in table 1 and try to
-   * insert this element into table 0. If table 0 is also occupied, swap a
-   * random element out of the bucket in table 0 and save it in entryToInsert.
-   * If either of the insertion succeeds, entryToInsert.valid will become false,
-   * and dummy operations will be performed to ensure oblivoiusness. The method
-   * may retry multiple times.
+   * @brief Retry inserting an entry evicted from an earlier round.
+   *
+   * Each retry accesses the entry's next candidate bucket and evicts the
+   * least-crowded slot if needed. If an insertion succeeds, entryToInsert.valid
+   * becomes false.
    *
    * @param entryToInsert the entry to insert, and will be modified to the entry
    * swapped out if no slot is available.
@@ -722,38 +824,43 @@ struct OPosMap {
    */
   void insertEntryRetry(OPosMapEntry& entryToInsert, PositionType& idx0,
                         int maxRetry = 1) {
-    auto swapUpdateFunc = [&](BucketType& bucket) {
-      int offset = getRandBucketOffset();
-      bool insertSucceed = insertIfEmptyOblivious(bucket, entryToInsert);
-      entryToInsert.setInvalid(insertSucceed);
-      if (entryToInsert.valid()) {
-        std::swap(entryToInsert, bucket.entries[offset]);
-        std::swap(entryToInsert.otherIdx, idx0);
-      }
-    };
     for (int r = 0; r < maxRetry; ++r) {
-      updateHelper(idx0, table0, swapUpdateFunc);
-
       if (!entryToInsert.valid()) {
         break;
       }
-
-      updateHelper(idx0, table1, swapUpdateFunc);  // modifies entryToInsert
-
-      if (!entryToInsert.valid()) {
-        break;
+      if (entryToInsert.nextTable() == 1) {
+        PositionType table0Idx = idx0;
+        PositionType table1Idx = entryToInsert.otherIdx;
+        OPosMapEntry entryForTable1 = entryToInsert;
+        entryForTable1.otherIdx = table0Idx;
+        updateHelper(table1Idx, table1, [&](BucketType& bucket) {
+          swapWithLeastCrowded(bucket, entryForTable1);
+        });
+        entryToInsert = entryForTable1;
+        if (!entryToInsert.valid()) {
+          break;
+        }
+        idx0 = entryToInsert.otherIdx;
+        entryToInsert.otherIdx = table1Idx;
+        entryToInsert.setNextTable(0);
+      } else {
+        updateHelper(idx0, table0, [&](BucketType& bucket) {
+          swapWithLeastCrowded(bucket, entryToInsert);
+        });
+        if (!entryToInsert.valid()) {
+          break;
+        }
+        entryToInsert.setNextTable(1);
       }
     }
   }
 
   /**
-   * @brief Try to insert entry into table 1 obliviously, if table 1 is
-   * occupied, swap a random element out of the bucket in table 1 and try to
-   * insert this element into table 0. If table 0 is also occupied, swap a
-   * random element out of the bucket in table 0 and save it in entryToInsert.
-   * If either of the insertion succeeds, entryToInsert.valid will become false,
-   * and dummy operations will be performed to ensure oblivoiusness. The method
-   * may retry multiple times.
+   * @brief Obliviously retry inserting an entry evicted from an earlier round.
+   *
+   * Each retry accesses the entry's next candidate bucket and evicts the
+   * least-crowded slot if needed. If an insertion succeeds, entryToInsert.valid
+   * becomes false; dummy operations preserve obliviousness.
    *
    * @param entryToInsert the entry to insert, and will be modified to the entry
    * swapped out if no slot is available.
@@ -761,16 +868,28 @@ struct OPosMap {
    */
   void insertEntryObliviousRetry(OPosMapEntry& entryToInsert,
                                  PositionType& idx0, int maxRetry = 1) {
-    auto swapUpdateFunc = [&](BucketType& bucket) {
-      int offset = getRandBucketOffset();
-      bool insertSucceed = insertIfEmptyOblivious(bucket, entryToInsert);
-      entryToInsert.setInvalid(insertSucceed);
-      obliSwap(entryToInsert.valid(), entryToInsert, bucket.entries[offset]);
-      obliSwap(entryToInsert.valid(), entryToInsert.otherIdx, idx0);
-    };
     for (int r = 0; r < maxRetry; ++r) {
-      updateHelper(idx0, table0, swapUpdateFunc);
-      updateHelper(idx0, table1, swapUpdateFunc);  // modifies entryToInsert
+      if (entryToInsert.nextTable() == 1) {
+        PositionType table0Idx = idx0;
+        PositionType table1Idx = entryToInsert.otherIdx;
+        OPosMapEntry entryForTable1 = entryToInsert;
+        entryForTable1.otherIdx = table0Idx;
+        updateHelper(table1Idx, table1, [&](BucketType& bucket) {
+          swapWithLeastCrowdedOblivious(bucket, entryForTable1);
+        });
+        OPosMapEntry evicted = entryForTable1;
+        PositionType evictedIdx0 = evicted.otherIdx;
+        evicted.otherIdx = table1Idx;
+        obliMove(entryForTable1.valid(), entryToInsert, evicted);
+        obliMove(entryForTable1.valid(), idx0, evictedIdx0);
+        entryToInsert.setInvalid(!entryForTable1.valid());
+        entryToInsert.setNextTable(0);
+      } else {
+        updateHelper(idx0, table0, [&](BucketType& bucket) {
+          swapWithLeastCrowdedOblivious(bucket, entryToInsert);
+        });
+        entryToInsert.setNextTable(1);
+      }
     }
   }
 
@@ -836,7 +955,7 @@ struct OPosMap {
       uint64_t remainingCacheBytes = cacheBytes - table0.GetMemoryUsage();
       table1.SetSize(tableSize, remainingCacheBytes);
     }
-    stash.SetSize(16);
+    stash.SetSize(32);
   }
 
   /**
@@ -894,9 +1013,13 @@ struct OPosMap {
                                                    other.GetTable1().end());
     if constexpr (parallel_init) {
 #pragma omp task
-      { table0.InitFromReader(reader0); }
+      {
+        table0.InitFromReader(reader0);
+      }
 
-      { table1.InitFromReader(reader1); }
+      {
+        table1.InitFromReader(reader1);
+      }
 #pragma omp taskwait
     } else {
       table0.InitFromReader(reader0);
@@ -923,9 +1046,13 @@ struct OPosMap {
     if constexpr (isOblivious) {
       if constexpr (parallel_init) {
 #pragma omp task
-        { table0.InitDefault(BucketType()); }
+        {
+          table0.InitDefault(BucketType());
+        }
 
-        { table1.InitDefault(BucketType()); }
+        {
+          table1.InitDefault(BucketType());
+        }
 #pragma omp taskwait
       } else {
         table0.InitDefault(BucketType());
@@ -935,8 +1062,7 @@ struct OPosMap {
   }
 
   /**
-   * @brief Insert obliviously. Hide the number of replacement and whether the
-   * insertion is dummy
+   * @brief Insert without oblivious padding.
    *
    * @param key the key to insert
    * @param value the value to insert
@@ -948,28 +1074,28 @@ struct OPosMap {
     PositionType idx0, idx1;
     H keyHash;
     indexer.getHashIndices(key, idx0, idx1, keyHash, uid, extraHash);
-    OPosMapEntry entryToInsert = {keyHash, idx1, value};
+    OPosMapEntry entryToInsert = {keyHash, idx1, 0, value};
     bool exist = insertEntry(entryToInsert, idx0);
     obliMove(exist, value, entryToInsert.value);
-    // the element just swapped out is more likely to get inserted to somewhere
+    // The element just swapped out is more likely to get inserted somewhere
     // else
     stash.template Insert<true>(entryToInsert, idx0);
     for (int i = 0; i < 10; ++i) {
-      // use FIFO order so that we won't get stuck by loops in the random graph
+      // Use FIFO order so we do not get stuck in loops in the random graph
       // of cuckoo hashing
       stash.PopOldest(entryToInsert, idx0);
       if (!entryToInsert.valid()) {
         break;
       }
-      insertEntryRetry(entryToInsert, idx0, 1);
+      insertEntryRetry(entryToInsert, idx0, 3);
       stash.Insert(entryToInsert, idx0);
     }
     return exist;
   }
 
   /**
-   * @brief Insert obliviously. Hide the number of replacement and whether the
-   * insertion is dummy
+   * @brief Insert obliviously. Hide the number of replacements and whether the
+   * insertion is dummy.
    *
    * @param key the key to insert
    * @param value the value to insert
@@ -983,36 +1109,32 @@ struct OPosMap {
     PositionType idx0, idx1;
     H keyHash;
     K keyToHash = key;
-    // if the underlying ram is not oblivious, generate a random key for dummy
-    // entry
+    // If the underlying RAM is not oblivious, generate a random key for dummy
+    // entries.
     if constexpr (!isOblivious) {
       K randKey;
       read_rand((uint8_t*)&randKey, sizeof(K));
       obliMove(isDummy, keyToHash, randKey);
     }
     indexer.getHashIndices(keyToHash, idx0, idx1, keyHash, uid, extraHash);
-    OPosMapEntry entryToInsert = {keyHash, idx1, value};
+    OPosMapEntry entryToInsert = {keyHash, idx1, 0, value};
     entryToInsert.setInvalid(isDummy);
     bool exist = insertEntryOblivious(entryToInsert, idx0);
     obliMove(exist, value, entryToInsert.value);
-    // the element just swapped out is more likely to get inserted to somewhere
-    // else
-    stash.template OInsert<true>(entryToInsert, idx0);
-    for (int i = 0; i < 2; ++i) {
-      // use FIFO order so that we won't get stuck by loops in the random graph
-      // of cuckoo hashing
-      stash.OPopOldest(entryToInsert, idx0);
-      const bool isDummy = !entryToInsert.valid();
-      if constexpr (!isOblivious) {
-        // the underlying ram is not oblivious, generate a random access
-        // position
-        obliMove(isDummy, idx0, (PositionType)UniformRandom(tableSize - 1));
-        obliMove(isDummy, entryToInsert.otherIdx,
-                 (PositionType)UniformRandom(tableSize - 1));
-      }
-      insertEntryObliviousRetry(entryToInsert, idx0, 1);
-      stash.OInsert(entryToInsert, idx0);
+
+    stash.OInsert(entryToInsert, idx0);
+    entryToInsert.setInvalid(true);
+    entryToInsert.setNextTable(UniformRandomBit());
+    stash.OPopOldest(entryToInsert, idx0, entryToInsert.nextTable());
+    if constexpr (!isOblivious) {
+      bool retryDummy = !entryToInsert.valid();
+      obliMove(retryDummy, idx0, (PositionType)UniformRandom(tableSize - 1));
+      obliMove(retryDummy, entryToInsert.otherIdx,
+               (PositionType)UniformRandom(tableSize - 1));
     }
+    insertEntryObliviousRetry(entryToInsert, idx0, 3);
+    stash.OInsert(entryToInsert, idx0);
+
     return exist;
   }
 
@@ -1041,13 +1163,13 @@ struct OPosMap {
       obliMove(isDummy, keyToHash, randKey);
     }
     indexer.getHashIndices(keyToHash, idx0, idx1, keyHash, uid, extraHash);
-    OPosMapEntry entryToFind = {keyHash, idx1, value};
+    OPosMapEntry entryToFind = {keyHash, idx1, 0, value};
     entryToFind.setInvalid(isDummy);
     auto bucketAccessor = [&](BucketType& bucket) {
       for (int i = 0; i < bucketSize; ++i) {
         auto& entry = bucket.entries[i];
         bool matchFlag =
-            (entry.keyHash == entryToFind.keyHash) & (entry.otherIdx == idx1);
+            entry.sameKeyHash(entryToFind) & (entry.otherIdx == idx1);
         found |= matchFlag;
         obliSwap(matchFlag, entry.value, value);
       }
@@ -1059,8 +1181,8 @@ struct OPosMap {
     for (size_t i = 0; i < stash.size(); ++i) {
       auto& stashEntry = stash[i];
       auto& entry = stashEntry.entry;
-      bool match = (entry.keyHash == entryToFind.keyHash) &
-                   (entry.otherIdx == idx1) & stashEntry.idx0 == idx0;
+      bool match = entry.sameKeyHash(entryToFind) & (entry.otherIdx == idx1) &
+                   stashEntry.idx0 == idx0;
       obliSwap(match, value, entry.value);
       found |= match;
     }
@@ -1072,12 +1194,12 @@ struct OPosMap {
    * @brief Erase a key from the position map. The function is not oblivious.
    * Note that there's chance that the key is not actually present even though
    * the indices and key hash match. We need to check the extra hash in the main
-   * oram before erasing the entry from the position map.
+   * ORAM before erasing the entry from the position map.
    *
    * @param key the key to erase
    * @param value the new value for the entry in case the key is mismatched in
    * the position map
-   * @param mainMapErase the function to erase the key in the main oram, should
+   * @param mainMapErase the function to erase the key in the main ORAM; should
    * return true if the key is found
    * @param isDummy whether the erase is dummy operation
    * @return true if there is an entry in the position map that matches the key,
@@ -1092,13 +1214,13 @@ struct OPosMap {
     H keyHash;
     indexer.getHashIndices(key, idx0, idx1, keyHash, uid, extraHash);
     bool erased = false;
-    OPosMapEntry entryToErase = {keyHash, idx1, DUMMY<V>()};
+    OPosMapEntry entryToErase = {keyHash, idx1, 0, DUMMY<V>()};
     auto eraseTable0Func = [&](BucketType& bucket0) {
       PositionType entryToErasePos = value;
       for (int i = 0; i < bucketSize; ++i) {
         OPosMapEntry& entry = bucket0.entries[i];
         bool matchFlag =
-            (entry.keyHash == entryToErase.keyHash) && (entry.otherIdx == idx1);
+            entry.sameKeyHash(entryToErase) && (entry.otherIdx == idx1);
         if (matchFlag) {
           std::swap(entry.value, entryToErasePos);
           erased = mainMapErase(entryToErasePos, uid, extraHash);
@@ -1109,8 +1231,8 @@ struct OPosMap {
       auto eraseTable1Func = [&](BucketType& bucket1) {
         for (int i = 0; i < bucketSize; ++i) {
           OPosMapEntry& entry = bucket1.entries[i];
-          bool matchFlag = (entry.keyHash == entryToErase.keyHash) &&
-                           (entry.otherIdx == idx0);
+          bool matchFlag =
+              entry.sameKeyHash(entryToErase) && (entry.otherIdx == idx0);
           if (matchFlag) {
             std::swap(entry.value, entryToErasePos);
             erased = mainMapErase(entryToErasePos, uid, extraHash);
@@ -1122,7 +1244,7 @@ struct OPosMap {
         for (size_t i = 0; i < stash.size(); ++i) {
           auto& stashEntry = stash[i];
           OPosMapEntry& entry = stashEntry.entry;
-          bool match = (entry.keyHash == entryToErase.keyHash) &&
+          bool match = entry.sameKeyHash(entryToErase) &&
                        (entry.otherIdx == idx1) && (stashEntry.idx0 == idx0);
           if (match) {
             std::swap(entry.value, entryToErasePos);
@@ -1144,12 +1266,12 @@ struct OPosMap {
    * @brief Erase a key from the position map. The function is oblivious. Note
    * that there's chance that the key is not actually present even though the
    * indices and key hash match. We need to check the extra hash in the main
-   * oram before erasing the entry from the position map.
+   * ORAM before erasing the entry from the position map.
    *
    * @param key the key to erase
    * @param value the new value for the entry in case the key is mismatched in
    * the position map
-   * @param mainMapErase the function to erase the key in the main oram, should
+   * @param mainMapErase the function to erase the key in the main ORAM; should
    * return true if the key is found
    * @param isDummy whether the erase is dummy operation
    * @return true if there is an entry in the position map that matches the key,
@@ -1170,7 +1292,7 @@ struct OPosMap {
     }
     indexer.getHashIndices(keyToHash, idx0, idx1, keyHash, uid, extraHash);
     bool erased = false;
-    OPosMapEntry entryToErase = {keyHash, idx1, DUMMY<V>()};
+    OPosMapEntry entryToErase = {keyHash, idx1, 0, DUMMY<V>()};
     entryToErase.setInvalid(isDummy);
     auto eraseTable0Func = [&](BucketType& bucket0) {
       PositionType entryToErasePos = value;
@@ -1178,7 +1300,7 @@ struct OPosMap {
       for (int i = 0; i < bucketSize; ++i) {
         OPosMapEntry& entry = bucket0.entries[i];
         bool matchFlag =
-            (entry.keyHash == entryToErase.keyHash) & (entry.otherIdx == idx1);
+            entry.sameKeyHash(entryToErase) & (entry.otherIdx == idx1);
         obliSwap(matchFlag, entryToErasePos, entry.value);
         obliMove(matchFlag, eraseTable0Idx, i);
       }
@@ -1186,8 +1308,8 @@ struct OPosMap {
         int eraseTable1Idx = -1;
         for (int i = 0; i < bucketSize; ++i) {
           OPosMapEntry& entry = bucket1.entries[i];
-          bool matchFlag = (entry.keyHash == entryToErase.keyHash) &
-                           (entry.otherIdx == idx0);
+          bool matchFlag =
+              entry.sameKeyHash(entryToErase) & (entry.otherIdx == idx0);
           obliSwap(matchFlag, entryToErasePos, entry.value);
           obliMove(matchFlag, eraseTable1Idx, i);
         }
@@ -1196,7 +1318,7 @@ struct OPosMap {
         for (size_t i = 0; i < stash.size(); ++i) {
           auto& stashEntry = stash[i];
           OPosMapEntry& entry = stashEntry.entry;
-          bool match = (entry.keyHash == entryToErase.keyHash) &
+          bool match = entry.sameKeyHash(entryToErase) &
                        (entry.otherIdx == idx1) & (stashEntry.idx0 == idx0);
           obliSwap(match, entryToErasePos, entry.value);
           obliMove(match, eraseStashIdx, i);
@@ -1204,7 +1326,7 @@ struct OPosMap {
         bool notFoundFlag = (eraseTable0Idx == -1) & (eraseTable1Idx == -1) &
                             (eraseStashIdx == -1);
         obliMove(notFoundFlag | isDummy, uid, DUMMY<UidType>());
-        // we check the main oram to ensure that the element is actually present
+        // We check the main ORAM to ensure that the element is actually present
         // (rather than a false positive) before erasing it
         erased = mainMapErase(entryToErasePos, uid, extraHash);
         for (int i = 0; i < bucketSize; ++i) {
@@ -1259,7 +1381,7 @@ struct OMap {
   // info in position map but has different keys
 
   // TODO: freshness check if swap is needed
-  CircuitORAM::ORAM<ORAMEntry, 2, 20, PositionType, UidType, 4096, false> oram;
+  CircuitORAM::ORAM<ORAMEntry, 2, 33, PositionType, UidType, 4096, false> oram;
 
   OMap() {}
   OMap(PositionType size) { SetSize(size); }
@@ -1290,9 +1412,7 @@ struct OMap {
   PositionType size() const { return keyPosMap.size(); }
 
   /**
-   * @brief An object that stores the curret state of initialization.
-   Faciliates
-   * initialization in a streaming fashion.
+   * @brief Stores the current state of streaming initialization.
    *
    */
   struct InitContext {
@@ -1307,8 +1427,7 @@ struct OMap {
      * @brief Construct a new InitContext object
      *
      * @param omap The parent map
-     * @param additionalCacheBytes the size of additional available cache
-     for
+     * @param additionalCacheBytes the size of additional cache for
      * initialization
      */
     explicit InitContext(OMap& map, uint64_t additionalCacheBytes = 0)
@@ -1339,13 +1458,11 @@ struct OMap {
     InitContext(const InitContext& other) = delete;
 
     /**
-     * @brief Insert a new key value pair for initialization. The method
-     will
-     * reveal whether the key has been inserted before. But if all the keys
-     are
-     * distinct, the operation is oblivious. The method will throw an
-     exception
-     * if too many keys are inserted.
+     * @brief Insert a key-value pair during initialization.
+     *
+     * This reveals whether the key has already been inserted, but the operation
+     * is oblivious if all inserted keys are distinct. Throws if too many keys
+     * are inserted.
      *
      * @param key
      * @param value
@@ -1370,8 +1487,7 @@ struct OMap {
     }
 
     /**
-     * @brief Finalize the initialization. The method will copy the data
-     from
+     * @brief Finalize initialization by copying data from
      * the non-oblivious hash map to the oblivious hash map.
      *
      */
@@ -1384,22 +1500,23 @@ struct OMap {
   };
 
   /**
- * @brief Obtain a new context to initialize this map. The initialization
- data
- * can be either private or public (the initialization and subsequent
- accesses
- * are oblivious).
- * Example:
- *  auto* initContext = oMap.NewInitContext(1UL << 28);
-    for (auto it = kvMap.begin(); it != kvMap.end(); ++it;) {
-      initContext->Insert(it->first, it->second);
-    }
-    initContext->Finalize();
-    delete initContext;
- *
- * @param additionalCacheBytes
- * @return InitContext
- */
+   * @brief Obtain a context for streaming initialization.
+   *
+   * The initialization data may be private or public; initialization and later
+   * accesses remain oblivious when the input keys are distinct.
+   *
+   * Example:
+   *  auto* initContext = oMap.NewInitContext(1UL << 28);
+   *  for (auto it = kvMap.begin(); it != kvMap.end(); ++it) {
+   *    initContext->Insert(it->first, it->second);
+   *  }
+   *  initContext->Finalize();
+   *  delete initContext;
+   *
+   * @param additionalCacheBytes additional cache available during
+   * initialization
+   * @return InitContext
+   */
   InitContext* NewInitContext(uint64_t additionalCacheBytes = 0) {
     return new InitContext(*this, additionalCacheBytes);
   }
@@ -1481,7 +1598,7 @@ struct OMap {
   }
 
   /**
-   * @brief Insert a key value pair into the map, return true if the key is
+   * @brief Insert a key-value pair into the map, return true if the key is
    * already in the map, in which case the value is updated. The function is
    * not oblivious and reveals whether the key exists. It is faster than
    * OInsert, and should be used when the database is public.
