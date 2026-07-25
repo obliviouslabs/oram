@@ -377,8 +377,8 @@ struct OHashMap {
   static constexpr double loadFactor = 0.7;
   // number of slots in each bucket
   static constexpr short bucketSize = 2;
-  // maximum number of elements in the stash
-  // corresponding to a failure probability of around 2^-64
+  // Maximum number of elements in the stash. The measured tail fit gives 21
+  // entries for the one-third per-request budget of 2^-64 / 3.
   static constexpr int stash_max_size = 21;
   // Choose the least-crowded matching stash entry during oblivious retries when
   // crowdedness metadata is available.

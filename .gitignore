@@ -43,6 +43,7 @@ codebuild/
 */.ipynb_checkpoints/
 */*.synctex
 */*.synctex(busy)
+*.pdf
 
 # vscode stuff
 .vscode/
