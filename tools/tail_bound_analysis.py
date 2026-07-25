@@ -41,20 +41,12 @@ def tail_points(counts):
     return k_vals, log_probs
 
 
-def distribution_points(counts):
-    total_samples = sum(counts.values())
-    if total_samples == 0:
-        return [], []
-
-    k_vals = list(range(max(counts.keys()) + 1))
-    log_probs = []
-    for k in k_vals:
-        freq = counts.get(k, 0)
-        log_probs.append(np.log2(freq / total_samples) if freq > 0 else np.nan)
-    return k_vals, log_probs
-
-
 def label_for(log_file):
+    stem = Path(log_file).stem.lower()
+    if "random_eviction" in stem:
+        return "Random"
+    if "crowdedness" in stem:
+        return "Crowdedness"
     return Path(log_file).stem.replace("_", " ")
 
 
@@ -101,12 +93,9 @@ def analyze_tail_bound(log_files, output_pdf):
         slope, intercept, r_value, _, _ = linregress(k_tail, log_tail)
         print_regression(log_file, slope, intercept, r_value)
 
-        k_dist, log_dist = distribution_points(counts)
         datasets.append(
             {
                 "label": label_for(log_file),
-                "k_dist": np.array(k_dist),
-                "log_dist": np.array(log_dist),
                 "k_tail": np.array(k_tail),
                 "log_tail": np.array(log_tail),
                 "slope": slope,
@@ -117,55 +106,43 @@ def analyze_tail_bound(log_files, output_pdf):
     if not datasets:
         raise RuntimeError("No plottable data found.")
 
-    fig, (dist_ax, tail_ax) = plt.subplots(2, 1, figsize=(9, 10), sharex=True)
+    fig, tail_ax = plt.subplots(figsize=(5, 4))
 
     for dataset in datasets:
         label = dataset["label"]
-        dist_ax.plot(
-            dataset["k_dist"],
-            dataset["log_dist"],
-            marker="o",
-            linestyle="-",
-            alpha=0.8,
-            label=label,
+        fit_label = (
+            f"{label}: ${dataset['slope']:.2f}s "
+            f"{dataset['intercept']:+.2f}$"
         )
-
+        fitted_line = dataset["slope"] * dataset["k_tail"] + dataset["intercept"]
+        (line,) = tail_ax.plot(
+            dataset["k_tail"],
+            fitted_line,
+            linestyle="-",
+            label=fit_label,
+        )
         tail_ax.plot(
             dataset["k_tail"],
             dataset["log_tail"],
             marker="o",
             linestyle="",
+            color=line.get_color(),
             alpha=0.7,
-            label=f"{label} data",
         )
 
-        fitted_line = dataset["slope"] * dataset["k_tail"] + dataset["intercept"]
-        tail_ax.plot(
-            dataset["k_tail"],
-            fitted_line,
-            linestyle="-",
-            label=f"{label} fit ({dataset['slope']:.2f}k {dataset['intercept']:+.2f})",
-        )
-
-    dist_ax.set_ylabel("$\\log_2(P(X = k))$")
-    dist_ax.set_title("Stash Load Distribution")
-    dist_ax.legend()
-    dist_ax.grid(True)
-
-    tail_ax.set_xlabel("Stash Size (k)")
-    tail_ax.set_ylabel("$\\log_2(P(X \\geq k))$")
-    tail_ax.set_title("Tail Bound Analysis")
+    tail_ax.set_xlabel("Stash size $s$")
+    tail_ax.set_ylabel("$\\log_2(\\Pr[X \\geq s])$")
     tail_ax.legend()
     tail_ax.grid(True)
 
     fig.tight_layout()
-    fig.savefig(output_pdf)
+    fig.savefig(output_pdf, bbox_inches="tight")
     print(f"Graph saved to {output_pdf}")
 
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Plot stash-load distributions and tail bounds from logs."
+        description="Plot tail bounds from one or more stash-load logs."
     )
     parser.add_argument("log_files", nargs="+", help="log files to analyze")
     parser.add_argument(

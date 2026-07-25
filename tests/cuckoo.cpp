@@ -288,7 +288,14 @@ void testReplaceCount(int outerRound = 20) {
     map.Init();
     const auto& stash = map.GetStash();
     for (int i = 0; i < mapSize - round; ++i) {
-      map.Insert(rng(), 0);
+      int key = rng();
+      if constexpr (isOblivious != NON_OBLIVIOUS) {
+        map.OInsert(key, 0);
+        // map.OErase(key);
+      } else {
+        map.Insert(key, 0);
+        // map.Erase(key);
+      }
     }
     for (int r = 0; r < round; ++r) {
       int key = rng();
@@ -678,11 +685,11 @@ TEST(Cuckoo, ReplaceCountDistriObliviousCrowdedness) {
 }
 
 TEST(Cuckoo, ReplaceCountDistriObliviousRandomEvictionAccurate) {
-  testReplaceCount<FULL_OBLIVIOUS, false>(2000);
+  testReplaceCount<FULL_OBLIVIOUS, false>(20000);
 }
 
 TEST(Cuckoo, ReplaceCountDistriObliviousCrowdednessAccurate) {
-  testReplaceCount<FULL_OBLIVIOUS, true>(2000);
+  testReplaceCount<FULL_OBLIVIOUS, true>(20000);
 }
 
 TEST(Cuckoo, ReplaceCountDistriLargeKV) {
