@@ -17,6 +17,8 @@ struct ORAM {
   using LinearORAM_ = LinearORAM::ORAM<T, UidType>;
   // cached oram means the entire oram is cached in the enclave, so we don't
   // need to add checks for freshness
+  // The measured Circuit ORAM tail requires 32 entries after accounting for
+  // all recursive position-map levels. Keep 33 as a one-entry safety margin.
   using CachedORAM_ =
       CircuitORAM::ORAM<T, 2, 33, PositionType, UidType, 4096, false>;
   using ORAM_ = CircuitORAM::ORAM<T, 2, 33, PositionType, UidType, 4096, true>;

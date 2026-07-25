@@ -82,6 +82,11 @@ struct ParOMap {
   // whether the map is initialized
   bool inited = false;
 
+  // The failure budget is split equally between Circuit ORAM overflow, the
+  // cuckoo insertion stash, and load balancing.
+  static constexpr double requestFailureLog2 = -64.0;
+  static constexpr double failureSourceCount = 3.0;
+
   /**
    * @brief translate a hash to a shard index
    *
@@ -103,14 +108,40 @@ struct ParOMap {
    * take
    */
   static uint64_t maxQueryPerShard(uint64_t batchSize, uint64_t shardCount,
-                                   double logFailProb = -40) {
+                                   double logFailProb) {
+    if (batchSize == 0) {
+      return 0;
+    }
     auto satisfy = [&](uint64_t n) {
+      // Allow the cap to exceed the number of real requests. This is needed
+      // for small batches, where padding the entire batch makes the overflow
+      // probability zero.
+      if (n > batchSize) {
+        return true;
+      }
       double logSf =
           Algorithm::binomLogSf(n, batchSize, 1.0 / (double)shardCount);
       return logSf < logFailProb;
     };
-    return Algorithm::lowerBound(divRoundUp(batchSize, shardCount), batchSize,
-                                 satisfy);
+    return Algorithm::lowerBound(divRoundUp(batchSize, shardCount),
+                                 batchSize + 1, satisfy);
+  }
+
+  /**
+   * @brief Calculate an upper bound using the per-request failure target.
+   *
+   * The load-balancing failure is a batch event. With batchSize requests, a
+   * union bound permits batchSize * 2^-64 / 3 for this failure source. The
+   * bound is split evenly across the shardCount binomial tails.
+   */
+  static uint64_t maxQueryPerShard(uint64_t batchSize,
+                                   uint64_t shardCount) {
+    if (batchSize == 0) {
+      return 0;
+    }
+    double logFailProb = std::log2((double)batchSize) + requestFailureLog2 -
+                         std::log2(failureSourceCount * (double)shardCount);
+    return maxQueryPerShard(batchSize, shardCount, logFailProb);
   }
 
   /**

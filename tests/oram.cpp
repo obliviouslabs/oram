@@ -1,6 +1,10 @@
 #include <gtest/gtest.h>
 
+#include <cstdlib>
+#include <random>
 #include <unordered_map>
+
+#include <omp.h>
 
 #include "algorithm/element.hpp"
 #include "odsl/adaptive_oram.hpp"
@@ -343,44 +347,65 @@ TEST(CircuitORAM, OverflowHandling) {
 }
 
 TEST(CircuitORAM, StashLoad) {
-  // GTEST_SKIP();
   size_t memSize = 1UL << 16;
   static constexpr int Z = 2;
   static constexpr int stashSize = 50;
-  ODSL::CircuitORAM::ORAM<int, Z, stashSize, uint32_t, uint32_t, 4096, false>
-      oram(memSize);
-  size_t warmupWindowCount = 1e5;
-  size_t windowCount = 1e6;
-  size_t windowSize = 10;
-  double overloadFactor = 1.1;
+  static constexpr int numOrams = 32;
+  auto getWindowCount = [](const char* name, size_t defaultValue) {
+    const char* value = std::getenv(name);
+    return value == nullptr ? defaultValue
+                            : static_cast<size_t>(std::strtoull(value, nullptr, 10));
+  };
+  size_t warmupWindowCount = getWindowCount("STASH_LOAD_WARMUP_WINDOWS", 1e5);
+  size_t windowCount = getWindowCount("STASH_LOAD_WINDOWS", 1e8);
+  size_t windowSize = 1;
+  double overloadFactor = 1.0;
   size_t elementCount = memSize * overloadFactor;
-  std::vector<uint32_t> posMap(elementCount);
-  for (int i = 0; i < elementCount; ++i) {
-    posMap[i] = oram.Write(i, 0);
-  }
-  std::vector<uint64_t> elementDistribute(60);
-  for (int i = 0; i < warmupWindowCount + windowCount; ++i) {
-    int windowMaxStashLoad = 0;
-    for (int j = 0; j < windowSize; ++j) {
-      int val;
-      uint32_t idx = UniformRandom32(memSize - 1);
-      uint32_t oldpos = posMap[idx];
-      uint32_t pos = oram.Read(oldpos, idx, val);
-      posMap[idx] = pos;
+  std::vector<std::vector<uint64_t>> oramElementDistribute(
+      numOrams, std::vector<uint64_t>(stashSize + 1));
 
-      int stashLoad = 0;
-      for (int k = 0; k < stashSize; ++k) {
-        if (!oram.GetStash().blocks[k].IsDummy()) {
-          ++stashLoad;
-        }
-      }
-      windowMaxStashLoad = std::max(windowMaxStashLoad, stashLoad);
+#pragma omp parallel for num_threads(numOrams) schedule(static)
+  for (int oramIndex = 0; oramIndex < numOrams; ++oramIndex) {
+    ODSL::CircuitORAM::ORAM<int, Z, stashSize, uint32_t, uint32_t, 4096, false>
+        oramForThread(memSize);
+    std::mt19937 rng(oramIndex + 1);
+    std::uniform_int_distribution<uint32_t> randomPosition(0, memSize / Z - 1);
+    std::vector<uint32_t> posMap(elementCount);
+    for (uint32_t i = 0; i < elementCount; ++i) {
+      posMap[i] = oramForThread.Write(i, 0, randomPosition(rng));
     }
-    if (i >= warmupWindowCount) {
-      ++elementDistribute[windowMaxStashLoad];
+
+    auto& elementDistribute = oramElementDistribute[oramIndex];
+    for (size_t i = 0; i < warmupWindowCount + windowCount; ++i) {
+      int windowMaxStashLoad = 0;
+      for (size_t j = 0; j < windowSize; ++j) {
+        int val;
+        uint32_t idx = rng() % memSize;
+        uint32_t oldpos = posMap[idx];
+        uint32_t pos = oramForThread.Read(oldpos, idx, val, randomPosition(rng));
+        posMap[idx] = pos;
+
+        int stashLoad = 0;
+        for (int k = 0; k < stashSize; ++k) {
+          if (!oramForThread.GetStash().blocks[k].IsDummy()) {
+            ++stashLoad;
+          }
+        }
+        windowMaxStashLoad = std::max(windowMaxStashLoad, stashLoad);
+      }
+      if (i >= warmupWindowCount) {
+        ++elementDistribute[windowMaxStashLoad];
+      }
     }
   }
-  for (int i = 0; i < 50; ++i) {
+
+  std::vector<uint64_t> elementDistribute(stashSize + 1);
+  for (const auto& oramDistribution : oramElementDistribute) {
+    for (size_t load = 0; load < elementDistribute.size(); ++load) {
+      elementDistribute[load] += oramDistribution[load];
+    }
+  }
+  for (int i = 0; i <= stashSize; ++i) {
     printf("%d %lu\n", i, elementDistribute[i]);
   }
 }
