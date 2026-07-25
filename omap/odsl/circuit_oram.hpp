@@ -26,7 +26,7 @@ namespace ODSL::CircuitORAM {
 /// @tparam evict_group The number of evictions to perform for each position.
 /// Experiment shows that performing two evictions on one path is not much worse
 /// than performing two evictions on two paths.
-template <typename T, const int Z = 2, const int stashSize = 33,
+template <typename T, const int Z = 2, const int stashSize = 20,
           typename PositionType = uint64_t, typename UidType = uint64_t,
           const uint64_t page_size = 4096, const bool check_freshness = true,
           int evict_freq = 2, int evict_group = 2>

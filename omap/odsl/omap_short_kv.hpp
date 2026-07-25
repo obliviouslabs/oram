@@ -2,17 +2,17 @@
 #include "page_oram.hpp"
 #include "recursive_oram.hpp"
 
-/// @brief Cuckoo hash map backed by recursive ORAM tables.
-///
-/// The map stores each key in one of two hash tables. Each table position is a
-/// small fully-associative bucket, so an element may live in any slot of either
-/// of its two candidate buckets. Entries that cannot be placed in the tables
-/// are kept in a stash.
+/// @brief This file implements a cuckoo hash map built on top of the
+/// recursive ORAM. Specifically, it contains two hash tables implemented with
+/// recursive oram. Each key is hashed to two positions, one for each table, and
+/// at each position of a table is a bucket with two slots, the element can be
+/// stored in any of these four slots. In addition, there is a stash for
+/// elements that cannot be stored in the tables.
 
 namespace ODSL {
 
 /**
- * @brief Hashes a key to one position in each table.
+ * @brief Used to hash the key to two positions
  *
  */
 template <typename K, typename PositionType = uint64_t>
@@ -81,51 +81,29 @@ struct OHashMapIndexer {
   }
 };
 
-typedef uint8_t crowd_t;
-static constexpr crowd_t CROWD_MAX = UINT8_MAX;
-
-struct EmptyCrowdedness {
-  constexpr EmptyCrowdedness() = default;
-  constexpr EmptyCrowdedness(crowd_t) {}
-  constexpr operator crowd_t() const { return 0; }
-  constexpr EmptyCrowdedness& operator=(crowd_t) { return *this; }
-};
-
 /**
- * @brief A single hash-map slot.
+ * @brief A single entry (slot) in the hash map. It contains a key and a value,
+ * and two flags.
  *
  * @tparam K the key type
  * @tparam V the value type
- * @tparam useCrowdedness whether to store and update crowdedness metadata
  */
-template <typename K, typename V, const bool useCrowdedness>
+template <typename K, typename V>
 struct OHashMapEntry {
-  using CrowdednessType =
-      std::conditional_t<useCrowdedness, crowd_t, EmptyCrowdedness>;
-
-  // An invalid entry is an empty slot.
+  // whether the entry is valid. An invalid entry is an empty slot.
   bool valid = false;
-  // Dummy entries let non-ORAM maps hide whether an insertion is real.
+  // whether the entry is a dummy. A dummy entry is used when the hash map is
+  // not built on an ORAM, but we still want to hide whether an insert is real
+  // or dummy. In this case, we set valid flag to true, but the dummy flag to
+  // true.
   bool dummy = false;
-  // Hash table to try next after this entry is evicted.
-  uint8_t nextTable = 0;
-  // One plus the minimum crowdedness of the entries in the candidate bucket in
-  // the other table. Empty slots contribute 0, so an entry with an alternate
-  // bucket that has an empty slot gets crowdedness 1.
-  //
-  // This value may be stale. It is refreshed when a new entry is inserted or
-  // when an entry is evicted from the current bucket. The insertion path uses
-  // it to choose an eviction victim when both candidate buckets are full, and
-  // to prefer the bucket whose alternate neighbors are less crowded.
-  [[no_unique_address]] CrowdednessType crowdedness = 0;
   K key;
   V value;
 #ifndef ENCLAVE_MODE
   // cout
   friend std::ostream& operator<<(std::ostream& os,
                                   const OHashMapEntry& entry) {
-    os << "(" << entry.valid << ", " << (int)entry.nextTable << ", "
-       << entry.key << ", " << entry.value << ")";
+    os << "(" << entry.valid << ", " << entry.key << ", " << entry.value << ")";
     return os;
   }
 #endif
@@ -138,16 +116,14 @@ struct OHashMapEntry {
  * @tparam K the key type
  * @tparam V the value type
  * @tparam stash_size the default stash size for oblivious insertion
- * @tparam useCrowdedness whether entries store crowdedness metadata
  */
-template <typename K, typename V, const uint64_t stash_size = 16,
-          const bool useCrowdedness = true>
+template <typename K, typename V, const uint64_t stash_size = 16>
 struct LRUStash {
-  using KVEntry = OHashMapEntry<K, V, useCrowdedness>;
+  using KVEntry = OHashMapEntry<K, V>;
   std::vector<KVEntry> stash;        // the stash data
   std::vector<uint64_t> timestamps;  // the timestamp each entry is inserted
   uint64_t currTime;                 // the current timestamp
-  // Once an oblivious insert occurs, we can no longer reveal the state of the
+  // as long as one oblivious insert occur, we cannot reveal the state of the
   // stash
   bool oInserted = false;  // whether an oblivious insert has occurred
 
@@ -166,12 +142,14 @@ struct LRUStash {
   }
 
   /**
-   * @brief Obliviously insert an entry into the stash and record its timestamp.
+   * @brief Obliviously insert an entry to the stash and record the timestamp.
    * If entry.valid is false, the insertion is dummy. If the stash overflows,
    * the method will enlarge the stash, which is not oblivious.
    *
+   * @tparam highPriority whether the entry should be populated first
    * @param entry the entry to insert
    */
+  template <const bool highPriority = false>
   void OInsert(const KVEntry& entry) {
     oInserted = true;
     if (stash.size() < stash_size) {
@@ -179,7 +157,7 @@ struct LRUStash {
       timestamps.resize(stash_size);
     }
     bool inserted = !entry.valid;
-    uint64_t time = currTime;
+    uint64_t time = highPriority ? 0 : currTime;
     for (size_t i = 0; i < stash.size(); ++i) {
       bool isEmpty = !stash[i].valid;
       bool insertFlag = isEmpty & (!inserted);
@@ -201,7 +179,7 @@ struct LRUStash {
   }
 
   /**
-   * @brief Insert an entry into the stash and record its timestamp.
+   * @brief Insert an entry to the stash and record the timestamp.
    * If previously an oblivious insert has occurred, the method will insert
    * obliviously. Otherwise, it will directly push the entry to the stash.
    *
@@ -213,21 +191,16 @@ struct LRUStash {
   }
 
   /**
-   * @brief If the input entry is valid, do nothing. Otherwise,
-   * read the oldest entry in the stash whose nextTable matches tableIdx, and
-   * remove it. If no such entry is found (or the input was valid), entry.valid
-   * will be set to false.
+   * @brief Read the oldest entry in the stash and remove it. If the stash is
+   * empty, entry.valid will be set to false.
    *
    * @param entry the oldest entry
-   * @param tableIdx the expected next hash table index
    */
-  void OPopOldest(KVEntry& entry, uint8_t tableIdx) {
-    uint64_t oldestTime = UINT64_MAX;
-    obliMove(entry.valid, oldestTime, 0UL);
+  void OPopOldest(KVEntry& entry) {
+    uint64_t oldestTime = currTime;
     size_t oldestIdx = stash.size();
     for (size_t i = 0; i < stash.size(); ++i) {
-      bool isValidMatch = stash[i].valid & (stash[i].nextTable == tableIdx);
-      bool isOldest = (timestamps[i] < oldestTime) & isValidMatch;
+      bool isOldest = (timestamps[i] <= oldestTime) & stash[i].valid;
       obliMove(isOldest, oldestTime, timestamps[i]);
       obliMove(isOldest, entry, stash[i]);
       obliMove(isOldest, oldestIdx, i);
@@ -235,37 +208,7 @@ struct LRUStash {
     for (size_t i = 0; i < stash.size(); ++i) {
       stash[i].valid &= (i != oldestIdx);
     }
-  }
-
-  /**
-   * @brief If the input entry is valid, do nothing. Otherwise, read the least
-   * crowded entry in the stash whose nextTable matches tableIdx, and remove it.
-   * Ties are broken by choosing the oldest matching entry. If no such entry is
-   * found, entry.valid will be set to false.
-   *
-   * @param entry the selected entry
-   * @param tableIdx the expected next hash table index
-   */
-  void OPopLeastCrowded(KVEntry& entry, uint8_t tableIdx) {
-    crowd_t minCrowd = CROWD_MAX;
-    uint64_t oldestTime = UINT64_MAX;
-    obliMove(entry.valid, minCrowd, (crowd_t)0);
-    obliMove(entry.valid, oldestTime, 0UL);
-    size_t selectedIdx = stash.size();
-    for (size_t i = 0; i < stash.size(); ++i) {
-      bool isValidMatch = stash[i].valid & (stash[i].nextTable == tableIdx);
-      crowd_t crowd = stash[i].crowdedness;
-      bool lessCrowded = crowd < minCrowd;
-      bool sameCrowdOlder = (crowd == minCrowd) & (timestamps[i] < oldestTime);
-      bool isSelected = isValidMatch & (lessCrowded | sameCrowdOlder);
-      obliMove(isSelected, minCrowd, crowd);
-      obliMove(isSelected, oldestTime, timestamps[i]);
-      obliMove(isSelected, entry, stash[i]);
-      obliMove(isSelected, selectedIdx, i);
-    }
-    for (size_t i = 0; i < stash.size(); ++i) {
-      stash[i].valid &= (i != selectedIdx);
-    }
+    entry.valid &= (oldestIdx != stash.size());
   }
 
   using Iter = typename std::vector<KVEntry>::iterator;
@@ -326,12 +269,10 @@ struct LRUStash {
  * @tparam K the key type
  * @tparam V the value type
  * @tparam bucketSize the number of slots in the bucket
- * @tparam useCrowdedness whether entries store crowdedness metadata
  */
-template <typename K, typename V, const short bucketSize,
-          const bool useCrowdedness>
+template <typename K, typename V, const short bucketSize>
 struct OHashMapBucket {
-  OHashMapEntry<K, V, useCrowdedness> entries[bucketSize];
+  OHashMapEntry<K, V> entries[bucketSize];
 #ifndef ENCLAVE_MODE
   // cout
   friend std::ostream& operator<<(std::ostream& os,
@@ -352,7 +293,7 @@ struct OHashMapBucket {
 enum ObliviousLevel { NON_OBLIVIOUS, PAGE_OBLIVIOUS, FULL_OBLIVIOUS };
 
 /**
- * @brief A cuckoo hash map built on top of either recursive ORAM or a standard
+ * @brief An cuckoo hash map built on top of either recursive ORAM or a standard
  * vector. It contains two hash tables, and a stash for elements that cannot be
  * stored in the tables.
  *
@@ -361,16 +302,11 @@ enum ObliviousLevel { NON_OBLIVIOUS, PAGE_OBLIVIOUS, FULL_OBLIVIOUS };
  * @tparam isOblivious whether the hash map is built on an ORAM
  * @tparam PositionType the type of the position
  * @tparam parallel_init whether to initialize the two hash tables in parallel
- * @tparam use_crowdedness whether to use crowdedness metadata for eviction
- * instead of random eviction
  */
 template <typename K, typename V,
           const ObliviousLevel isOblivious = FULL_OBLIVIOUS,
-          typename PositionType = uint64_t, const bool parallel_init = true,
-          const bool use_crowdedness = true>
+          typename PositionType = uint64_t, const bool parallel_init = true>
 struct OHashMap {
-  static constexpr bool useCrowdedness = use_crowdedness;
-
  private:
   // the ratio between the capacity and the total number of slots in
   // the hash tables
@@ -378,19 +314,14 @@ struct OHashMap {
   // number of slots in each bucket
   static constexpr short bucketSize = 2;
   // maximum number of elements in the stash
-  // corresponding to a failure probability of around 2^-64
-  static constexpr int stash_max_size = 21;
-  // Choose the least-crowded matching stash entry during oblivious retries when
-  // crowdedness metadata is available.
-  static constexpr bool popLeastCrowdedFromStash = false;  // useCrowdedness;
-  // the capacity of the hash map
+  static constexpr int stash_max_size = 10;
+  // the capcity of the hash map
   PositionType _size = 0;
   // the number of elements in the hash map
   PositionType load;
   // the size of each hash table
   PositionType tableSize;
-  uint64_t numInsert = 0;  // the number of insertions since the last resize
-  using BucketType = OHashMapBucket<K, V, bucketSize, useCrowdedness>;
+  using BucketType = OHashMapBucket<K, V, bucketSize>;
   // for oblivious hash map, we use recursive ORAM
   using ObliviousTableType =
       std::conditional_t<isOblivious == FULL_OBLIVIOUS,
@@ -402,13 +333,12 @@ struct OHashMap {
   using NonObliviousTableType = EM::CacheFrontVector::Vector<
       BucketType, sizeof(BucketType),
       EM::CacheFrontVector::EncryptType::ENCRYPT_AND_AUTH_FRESH, 1024>;
-  using TableType =
-      std::conditional_t<isOblivious != NON_OBLIVIOUS, ObliviousTableType,
-                         NonObliviousTableType>;
+  using TableType = std::conditional_t<isOblivious != NON_OBLIVIOUS, ObliviousTableType,
+                                       NonObliviousTableType>;
   TableType table0, table1;
   OHashMapIndexer<K, PositionType> indexer;
-  using KVEntry = OHashMapEntry<K, V, useCrowdedness>;
-  using StashType = LRUStash<K, V, stash_max_size, useCrowdedness>;
+  using KVEntry = OHashMapEntry<K, V>;
+  using StashType = LRUStash<K, V>;
   StashType stash;
   bool inited = false;
 
@@ -442,85 +372,6 @@ struct OHashMap {
     } else {
       outputBucket = table[addr];
     }
-  }
-
-  static crowd_t getCrowdedness(const KVEntry& entry) {
-    if constexpr (useCrowdedness) {
-      return entry.crowdedness;
-    } else {
-      return 0;
-    }
-  }
-
-  static void setCrowdedness(KVEntry& entry, crowd_t crowdedness) {
-    if constexpr (useCrowdedness) {
-      entry.crowdedness = crowdedness;
-    }
-  }
-
-  void OPopFromStash(KVEntry& entry, uint8_t tableIdx) {
-    if constexpr (popLeastCrowdedFromStash) {
-      stash.OPopLeastCrowded(entry, tableIdx);
-    } else {
-      stash.OPopOldest(entry, tableIdx);
-    }
-  }
-
-  static bool chooseEvictionCandidate(BucketType& bucket, crowd_t& minCrowd,
-                                      int& offset) {
-    bool hasEmpty = false;
-    if constexpr (useCrowdedness) {
-      minCrowd = CROWD_MAX;
-      offset = 0;
-      for (int i = 0; i < bucketSize; ++i) {
-        crowd_t crowd =
-            bucket.entries[i].valid ? getCrowdedness(bucket.entries[i]) : 0;
-        hasEmpty |= !bucket.entries[i].valid;
-        if (crowd < minCrowd) {
-          minCrowd = crowd;
-          offset = i;
-        }
-      }
-    } else {
-      minCrowd = 0;
-      offset = (int)UniformRandom(bucketSize - 1);
-      for (int i = 0; i < bucketSize; ++i) {
-        if (!bucket.entries[i].valid) {
-          hasEmpty = true;
-          offset = i;
-          break;
-        }
-      }
-    }
-    return hasEmpty;
-  }
-
-  static bool chooseEvictionCandidateOblivious(BucketType& bucket,
-                                               crowd_t& minCrowd, int& offset) {
-    bool hasEmpty = false;
-    if constexpr (useCrowdedness) {
-      minCrowd = CROWD_MAX;
-      offset = 0;
-      for (int i = 0; i < bucketSize; ++i) {
-        crowd_t crowd = 0;
-        bool isValid = bucket.entries[i].valid;
-        obliMove(isValid, crowd, getCrowdedness(bucket.entries[i]));
-        bool isMin = crowd < minCrowd;
-        obliMove(isMin, minCrowd, crowd);
-        obliMove(isMin, offset, i);
-        hasEmpty |= !isValid;
-      }
-    } else {
-      minCrowd = 0;
-      offset = (int)UniformRandom(bucketSize - 1);
-      for (int i = 0; i < bucketSize; ++i) {
-        bool isEmpty = !bucket.entries[i].valid;
-        bool useEmptySlot = isEmpty & !hasEmpty;
-        obliMove(useEmptySlot, offset, i);
-        hasEmpty |= isEmpty;
-      }
-    }
-    return hasEmpty;
   }
 
   /**
@@ -690,6 +541,27 @@ struct OHashMap {
   }
 
   /**
+   * @brief A helper function that inserts an entry to a bucket if a slot is
+   * empty. The function is oblivious.
+   *
+   * @param bucket the bucket to perform insert
+   * @param entryToInsert the entry to insert
+   * @return true if the entry is inserted, false otherwise
+   */
+  static bool insertIfEmptyOblivious(BucketType& bucket,
+                                     const KVEntry& entryToInsert) {
+    bool updated = !entryToInsert.valid;
+    for (int i = 0; i < bucketSize; ++i) {
+      auto& entry = bucket.entries[i];
+      bool isEmpty = !entry.valid;
+      bool insertFlag = isEmpty & (!updated);
+      obliMove(insertFlag, entry, entryToInsert);
+      updated |= insertFlag;
+    }
+    return updated;
+  }
+
+  /**
    * @brief Helper function that searches a bucket for a key. Depending on
    * whether the hash map is oblivious, the function may reveal the number of
    * comparisons
@@ -769,13 +641,12 @@ struct OHashMap {
   }
 
   /**
-   * @brief Obliviously insert into either candidate bucket.
-   *
-   * If the key already exists in either table or the stash, replace the
-   * existing value. If both candidate buckets are full, evict according to the
-   * compile-time policy: crowdedness-guided when useCrowdedness is true, or a
-   * random table entry when it is false. On success, entryToInsert.valid is set
-   * to false and dummy operations preserve obliviousness.
+   * @brief Try to insert entry into either table0 or table1 obliviously without
+   * swapping existing elements. If the element already exists either in table
+   * 0, table 1, or the stash, replace the existing element. If there's no
+   * available slot, swap entryToInsert with a random element from the bucket in
+   * table 0. If the insertion is successful, entryToInsert.valid will be set to
+   * false, and dummy operations will be performed to ensure oblivousness.
    *
    * @param entryToInsert the entry to insert, and will be modified to the entry
    * swapped out if no slot is available.
@@ -788,7 +659,6 @@ struct OHashMap {
     obliMove(!entryToInsert.valid, idx0, UniformRandom(tableSize - 1));
     obliMove(!entryToInsert.valid, idx1, UniformRandom(tableSize - 1));
     bool exist = false;
-
     auto table0UpdateFunc = [&](BucketType& bucket0) {
       bool replaceSucceed = replaceIfExistOblivious(bucket0, entryToInsert);
       exist |= replaceSucceed;
@@ -800,34 +670,12 @@ struct OHashMap {
         replaceSucceed = replaceIfExistOblivious(stash, entryToInsert);
         exist |= replaceSucceed;
         entryToInsert.valid &= !replaceSucceed;
-
-        crowd_t min_crowd0;
-        crowd_t min_crowd1;
-        int min_idx0;
-        int min_idx1;
-        bool hasEmpty0 =
-            chooseEvictionCandidateOblivious(bucket0, min_crowd0, min_idx0);
-        bool hasEmpty1 =
-            chooseEvictionCandidateOblivious(bucket1, min_crowd1, min_idx1);
-
-        bool t0LessCrowded;
-        if constexpr (useCrowdedness) {
-          crowd_t max_crowd = std::max(min_crowd0, min_crowd1);
-          t0LessCrowded = min_crowd0 <= min_crowd1;
-          setCrowdedness(entryToInsert, max_crowd + 1);
-        } else {
-          bool randomTable = UniformRandomBit();
-          t0LessCrowded = (hasEmpty0 & !hasEmpty1) |
-                          ((hasEmpty0 == hasEmpty1) & randomTable);
-        }
-
-        obliSwap(entryToInsert.valid & t0LessCrowded, bucket0.entries[min_idx0],
-                 entryToInsert);
-        obliSwap(entryToInsert.valid & !t0LessCrowded,
-                 bucket1.entries[min_idx1], entryToInsert);
-
-        obliMove(t0LessCrowded, entryToInsert.nextTable, (uint8_t)1);
-        obliMove(!t0LessCrowded, entryToInsert.nextTable, (uint8_t)0);
+        bool insertSucceed = insertIfEmptyOblivious(bucket0, entryToInsert);
+        entryToInsert.valid &= !insertSucceed;
+        insertSucceed = insertIfEmptyOblivious(bucket1, entryToInsert);
+        entryToInsert.valid &= !insertSucceed;
+        int offset = (int)(UniformRandom32() % bucketSize);
+        obliSwap(entryToInsert.valid, bucket0.entries[offset], entryToInsert);
       };
       updateHelper(idx1, table1, table1UpdateFunc);
     };
@@ -838,51 +686,31 @@ struct OHashMap {
   }
 
   /**
-   * @brief Obliviously retry inserting entries evicted from earlier rounds.
-   *
-   * Each retry pops an entry for the requested table from the stash, accesses
-   * the corresponding bucket, and evicts the least-crowded slot if needed. If
-   * an insertion succeeds, entryToInsert.valid becomes false; dummy operations
-   * preserve obliviousness.
+   * @brief Try to insert entry into table 1 obliviously, if table 1 is
+   * occupied, swap a random element out of the bucket in table 1 and try to
+   * insert this element into table 0. If table 0 is also occupied, swap a
+   * random element out of the bucket in table 0 and save it in entryToInsert.
+   * If either of the insertion succeeds, entryToInsert.valid will become false,
+   * and dummy operations will be performed to ensure oblivoiusness. The method
+   * may retry multiple times.
    *
    * @param entryToInsert the entry to insert, and will be modified to the entry
    * swapped out if no slot is available.
    * @param maxRetry the maximum number of retries, default to 1
    */
-  void insertEntryObliviousRetry(KVEntry& entryToInsert, int maxRetry = 3) {
-    auto swapUpdateFunc = [&](BucketType& bucket, uint8_t nextTableIdx) {
-      crowd_t min_crowd;
-      int offset;
-      chooseEvictionCandidateOblivious(bucket, min_crowd, offset);
-      for (int i = 0; i < bucketSize; ++i) {
-        bool swapFlag = (i == offset) & entryToInsert.valid;
-        obliSwap(swapFlag, entryToInsert, bucket.entries[i]);
-      }
-      // The evicted entry should be retried in nextTableIdx.
-      entryToInsert.nextTable = nextTableIdx;
-      if constexpr (useCrowdedness) {
-        // Compute the new minimum crowdedness of the bucket after the swap.
-        crowd_t new_min_crowd;
-        int new_offset;
-        chooseEvictionCandidateOblivious(bucket, new_min_crowd, new_offset);
-        // Update the evicted entry based on the bucket it just left.
-        setCrowdedness(entryToInsert, new_min_crowd + 1);
-      }
+  void insertEntryObliviousRetry(KVEntry& entryToInsert, int maxRetry = 1) {
+    auto swapUpdateFunc = [&](BucketType& bucket) {
+      int offset = (int)(UniformRandom32() % bucketSize);
+      bool insertSucceed = insertIfEmptyOblivious(bucket, entryToInsert);
+      entryToInsert.valid &= !insertSucceed;
+      obliSwap(entryToInsert.valid, entryToInsert, bucket.entries[offset]);
     };
     for (int r = 0; r < maxRetry; ++r) {
-      if (entryToInsert.nextTable == 1) {
-        OPopFromStash(entryToInsert, 1);
-        PositionType idx1 = indexer.getHashIdx1(entryToInsert.key);
-        updateHelper(idx1, table1, [&](BucketType& b) {
-          swapUpdateFunc(b, 0);
-        });  // evictee goes to table0
-      } else {
-        OPopFromStash(entryToInsert, 0);
-        PositionType idx0 = indexer.getHashIdx0(entryToInsert.key);
-        updateHelper(idx0, table0, [&](BucketType& b) {
-          swapUpdateFunc(b, 1);
-        });  // evictee goes to table1
-      }
+      PositionType idx1 = indexer.getHashIdx1(entryToInsert.key);
+      updateHelper(idx1, table1, swapUpdateFunc);  // modifies entryToInsert
+
+      PositionType idx0 = indexer.getHashIdx0(entryToInsert.key);
+      updateHelper(idx0, table0, swapUpdateFunc);
     }
   }
 
@@ -936,7 +764,7 @@ struct OHashMap {
       // equally divide the cache between the two tables
       table0.SetSize(tableSize, cacheBytes / 2);
       table1.SetSize(tableSize, cacheBytes / 2);
-      stash.SetSize(stash_max_size);
+      stash.SetSize(16);
     } else {
       // first give table0 all the cache, and give table1 the rest
       // because table0 is more likely to be accessed
@@ -1021,13 +849,9 @@ struct OHashMap {
         });
     if constexpr (parallel_init) {
 #pragma omp task
-      {
-        table0.InitFromReader(reader0);
-      }
+      { table0.InitFromReader(reader0); }
 
-      {
-        table1.InitFromReader(reader1);
-      }
+      { table1.InitFromReader(reader1); }
 #pragma omp taskwait
     } else {
       table0.InitFromReader(reader0);
@@ -1045,7 +869,7 @@ struct OHashMap {
   }
 
   /**
-   * @brief Initialize the hash map from a reader of key-value pairs. If all the
+   * @brief Initialize the hash map from a reader of key value pairs. If all the
    * keys are distinct, the operation is oblivious. Otherwise, it reveals
    * information about the data it reads, but does not affect the future
    * queries.
@@ -1081,7 +905,7 @@ struct OHashMap {
   }
 
   /**
-   * @brief Stores the current state of streaming initialization. Facilitates
+   * @brief An object that stores the curret state of initialization. Faciliates
    * initialization in a streaming fashion.
    *
    */
@@ -1124,7 +948,7 @@ struct OHashMap {
     InitContext(const InitContext& other) = delete;
 
     /**
-     * @brief Insert a new key-value pair for initialization. The method will
+     * @brief Insert a new key value pair for initialization. The method will
      * reveal whether the key has been inserted before. But if all the keys are
      * distinct, the operation is oblivious. The method will throw an exception
      * if too many keys are inserted.
@@ -1195,13 +1019,9 @@ struct OHashMap {
     if constexpr (isOblivious) {
       if constexpr (parallel_init) {
 #pragma omp task
-        {
-          table0.InitDefault(BucketType());
-        }
+        { table0.InitDefault(BucketType()); }
 
-        {
-          table1.InitDefault(BucketType());
-        }
+        { table1.InitDefault(BucketType()); }
 #pragma omp taskwait
       } else {
         table0.InitDefault(BucketType());
@@ -1229,7 +1049,7 @@ struct OHashMap {
       }
     }
 
-    KVEntry entryToInsert = {true, isDummy, 0, 0, key, value};
+    KVEntry entryToInsert = {true, isDummy, key, value};
     if constexpr (hideDummy) {
       // generate a random key for dummy entry
       K randKey;
@@ -1262,36 +1082,18 @@ struct OHashMap {
           return;
           // found in stash
         }
-
-        crowd_t min_crowd0;
-        crowd_t min_crowd1;
-        int min_idx0;
-        int min_idx1;
-        chooseEvictionCandidate(bucket0, min_crowd0, min_idx0);
-        chooseEvictionCandidate(bucket1, min_crowd1, min_idx1);
-
-        KVEntry entryToInsert0 = entryToInsert;
-        setCrowdedness(entryToInsert0, min_crowd1 + 1);
-        KVEntry entryToInsert1 = entryToInsert;
-        setCrowdedness(entryToInsert1, min_crowd0 + 1);
-
-        if (insertIfEmpty(bucket0, entryToInsert0)) {
+        if (insertIfEmpty(bucket0, entryToInsert)) {
           inserted = true;
-        } else if (insertIfEmpty(bucket1, entryToInsert1)) {
-          inserted = true;
-        } else {
-          bool evictFromTable0 =
-              useCrowdedness ? (min_crowd0 <= min_crowd1) : UniformRandomBit();
-          if (evictFromTable0) {
-            setCrowdedness(entryToInsert, min_crowd1 + 1);
-            std::swap(entryToInsert, bucket0.entries[min_idx0]);
-            entryToInsert.nextTable = 1;
-          } else {
-            setCrowdedness(entryToInsert, min_crowd0 + 1);
-            std::swap(entryToInsert, bucket1.entries[min_idx1]);
-            entryToInsert.nextTable = 0;
-          }
+          // successfully inserted into table 0
+          return;
         }
+        if (insertIfEmpty(bucket1, entryToInsert)) {
+          // successfully inserted into table 1
+          inserted = true;
+          return;
+        }
+        // replace existing entry
+        std::swap(entryToInsert, bucket0.entries[0]);
       };
       updateHelper(idx1, table1, table1UpdateFunc);
     };
@@ -1304,8 +1106,6 @@ struct OHashMap {
     // the offset of the entry we intend to swap
     int offset;
     auto swapUpdateFunc = [&](BucketType& bucket) {
-      crowd_t min_crowd;
-      chooseEvictionCandidate(bucket, min_crowd, offset);
       if (insertIfEmpty(bucket, entryToInsert)) {
         inserted = true;
         return;
@@ -1313,12 +1113,14 @@ struct OHashMap {
       std::swap(entryToInsert, bucket.entries[offset]);
     };
     for (int r = 0; r < 15; ++r) {
+      offset = UniformRandom32() % bucketSize;
       idx1 = indexer.getHashIdx1(entryToInsert.key);
       updateHelper(idx1, table1, swapUpdateFunc);
       if (inserted) {
         return false;
       }
       idx0 = indexer.getHashIdx0(entryToInsert.key);
+      offset = UniformRandom32() % bucketSize;
       updateHelper(idx0, table0, swapUpdateFunc);
       if (inserted) {
         return false;
@@ -1329,8 +1131,8 @@ struct OHashMap {
   }
 
   /**
-   * @brief Insert obliviously. Hide the number of replacements and whether the
-   * insertion is dummy.
+   * @brief Insert obliviously. Hide the number of replacement and whether the
+   * insertion is dummy
    *
    * @param key the key to insert
    * @param value the value to insert
@@ -1338,28 +1140,19 @@ struct OHashMap {
    * @return true if the key already exists, false otherwise
    */
   bool OInsert(const K& key, const V& value, bool isDummy = false) {
-    ++numInsert;
-    KVEntry entryToInsert = {!isDummy, false, 0, 0, key, value};
+    KVEntry entryToInsert = {!isDummy, false, key, value};
     bool exist = insertEntryOblivious(entryToInsert);
+    // the element just swapped out is more likely to get inserted to somewhere
+    // else
+    stash.template OInsert<true>(entryToInsert);
 
-    // Use FIFO order so we do not get stuck in loops in the random graph
-    // of cuckoo hashing
-    // if the entry to insert is valid, we do not actually pop from the stash
-
-    // according to
-    // https://www.wisdom.weizmann.ac.il/~naor/PAPERS/deamortized_cuckoo.pdf we
-    // should put the new entry at the end of the queue. Here entryToInsert is
-    // already the swapped entry, so we continue the replacement directly.
-    // Empirically, the stash size distribution is similar.
-
-    // The swapped out entry should be pushed into the stash.
-    // Then we should start the retry from a random table.
-    stash.OInsert(entryToInsert);
-    entryToInsert.valid = false;
-    entryToInsert.nextTable = UniformRandomBit();
-    OPopFromStash(entryToInsert, entryToInsert.nextTable);
-    insertEntryObliviousRetry(entryToInsert, 3);
-    stash.OInsert(entryToInsert);
+    for (int i = 0; i < 2; ++i) {
+      // use FIFO order so that we won't get stuck by loops in the random graph
+      // of cuckoo hashing
+      stash.OPopOldest(entryToInsert);
+      insertEntryObliviousRetry(entryToInsert, 1);
+      stash.OInsert(entryToInsert);
+    }
 
     return exist;
   }
@@ -1629,5 +1422,5 @@ struct OHashMap {
     obliMove(valRes1.found, valRes.value, valRes1.value);
   }
 
-};  // struct OHashMap
+};  // namespace ODSL
 }  // namespace ODSL
