@@ -394,7 +394,7 @@ struct OHashMap {
   // for oblivious hash map, we use recursive ORAM
   using ObliviousTableType =
       std::conditional_t<isOblivious == FULL_OBLIVIOUS,
-                         RecursiveORAM<BucketType, PositionType>,
+                         RecursiveORAM<BucketType>,
                          PageORAM<BucketType, PositionType>>;
   // for non-oblivious hash map, we cache the front of the vector, for the
   // remaining data store it encrypted and authenticated in external memory,

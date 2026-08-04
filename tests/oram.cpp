@@ -356,57 +356,87 @@ TEST(CircuitORAM, StashLoad) {
     return value == nullptr ? defaultValue
                             : static_cast<size_t>(std::strtoull(value, nullptr, 10));
   };
-  size_t warmupWindowCount = getWindowCount("STASH_LOAD_WARMUP_WINDOWS", 1e5);
-  size_t windowCount = getWindowCount("STASH_LOAD_WINDOWS", 1e8);
+  size_t warmupWindowCount =
+      getWindowCount("STASH_LOAD_WARMUP_WINDOWS", 100'000ULL);
+  // Calibrated from the three 1e8-window runs: about eight hours total when
+  // all three variants are run sequentially on the 32-thread test setup.
+  size_t windowCount =
+      getWindowCount("STASH_LOAD_WINDOWS", 4'450'000'000ULL);
   size_t windowSize = 1;
   double overloadFactor = 1.0;
   size_t elementCount = memSize * overloadFactor;
-  std::vector<std::vector<uint64_t>> oramElementDistribute(
-      numOrams, std::vector<uint64_t>(stashSize + 1));
+  std::string variant = "current";
+  if (const char* value = std::getenv("CIRCUIT_ORAM_STASH_LOAD_VARIANT")) {
+    variant = value;
+  }
+
+  auto runStashLoad = [&]<typename ORAMType>() {
+    std::vector<std::vector<uint64_t>> oramElementDistribute(
+        numOrams, std::vector<uint64_t>(stashSize + 1));
 
 #pragma omp parallel for num_threads(numOrams) schedule(static)
-  for (int oramIndex = 0; oramIndex < numOrams; ++oramIndex) {
-    ODSL::CircuitORAM::ORAM<int, Z, stashSize, uint32_t, uint32_t, 4096, false>
-        oramForThread(memSize);
-    std::mt19937 rng(oramIndex + 1);
-    std::uniform_int_distribution<uint32_t> randomPosition(0, memSize / Z - 1);
-    std::vector<uint32_t> posMap(elementCount);
-    for (uint32_t i = 0; i < elementCount; ++i) {
-      posMap[i] = oramForThread.Write(i, 0, randomPosition(rng));
-    }
+    for (int oramIndex = 0; oramIndex < numOrams; ++oramIndex) {
+      ORAMType oramForThread(memSize);
+      std::mt19937 rng(oramIndex + 1);
+      std::uniform_int_distribution<uint32_t> randomPosition(0, memSize / Z - 1);
+      std::vector<uint32_t> posMap(elementCount);
+      for (uint32_t i = 0; i < elementCount; ++i) {
+        posMap[i] = oramForThread.Write(i, 0, randomPosition(rng));
+      }
 
-    auto& elementDistribute = oramElementDistribute[oramIndex];
-    for (size_t i = 0; i < warmupWindowCount + windowCount; ++i) {
-      int windowMaxStashLoad = 0;
-      for (size_t j = 0; j < windowSize; ++j) {
-        int val;
-        uint32_t idx = rng() % memSize;
-        uint32_t oldpos = posMap[idx];
-        uint32_t pos = oramForThread.Read(oldpos, idx, val, randomPosition(rng));
-        posMap[idx] = pos;
+      auto& elementDistribute = oramElementDistribute[oramIndex];
+      for (size_t i = 0; i < warmupWindowCount + windowCount; ++i) {
+        int windowMaxStashLoad = 0;
+        for (size_t j = 0; j < windowSize; ++j) {
+          int val;
+          uint32_t idx = rng() % memSize;
+          uint32_t oldpos = posMap[idx];
+          uint32_t pos =
+              oramForThread.Read(oldpos, idx, val, randomPosition(rng));
+          posMap[idx] = pos;
 
-        int stashLoad = 0;
-        for (int k = 0; k < stashSize; ++k) {
-          if (!oramForThread.GetStash().blocks[k].IsDummy()) {
-            ++stashLoad;
+          int stashLoad = 0;
+          for (int k = 0; k < stashSize; ++k) {
+            if (!oramForThread.GetStash().blocks[k].IsDummy()) {
+              ++stashLoad;
+            }
           }
+          windowMaxStashLoad = std::max(windowMaxStashLoad, stashLoad);
         }
-        windowMaxStashLoad = std::max(windowMaxStashLoad, stashLoad);
-      }
-      if (i >= warmupWindowCount) {
-        ++elementDistribute[windowMaxStashLoad];
+        if (i >= warmupWindowCount) {
+          ++elementDistribute[windowMaxStashLoad];
+        }
       }
     }
-  }
 
-  std::vector<uint64_t> elementDistribute(stashSize + 1);
-  for (const auto& oramDistribution : oramElementDistribute) {
-    for (size_t load = 0; load < elementDistribute.size(); ++load) {
-      elementDistribute[load] += oramDistribution[load];
+    std::vector<uint64_t> elementDistribute(stashSize + 1);
+    for (const auto& oramDistribution : oramElementDistribute) {
+      for (size_t load = 0; load < elementDistribute.size(); ++load) {
+        elementDistribute[load] += oramDistribution[load];
+      }
     }
-  }
-  for (int i = 0; i <= stashSize; ++i) {
-    printf("%d %lu\n", i, elementDistribute[i]);
+    for (int i = 0; i <= stashSize; ++i) {
+      printf("%d %lu\n", i, elementDistribute[i]);
+    }
+  };
+
+  using CurrentORAM = ODSL::CircuitORAM::ORAM<
+      int, Z, stashSize, uint32_t, uint32_t, 4096, false, 2, 2, true>;
+  using OriginalORAM = ODSL::CircuitORAM::ORAM<
+      int, Z, stashSize, uint32_t, uint32_t, 4096, false, 2, 1, false>;
+  using PartialTwoPathORAM = ODSL::CircuitORAM::ORAM<
+      int, Z, stashSize, uint32_t, uint32_t, 4096, false, 2, 1, true>;
+
+  if (variant == "current") {
+    runStashLoad.template operator()<CurrentORAM>();
+  } else if (variant == "original") {
+    runStashLoad.template operator()<OriginalORAM>();
+  } else if (variant == "partial_two_paths") {
+    runStashLoad.template operator()<PartialTwoPathORAM>();
+  } else {
+    throw std::runtime_error(
+        "CIRCUIT_ORAM_STASH_LOAD_VARIANT must be current, original, or "
+        "partial_two_paths");
   }
 }
 
@@ -737,7 +767,7 @@ TEST(RecursiveORAM, testMixed) {
 TEST(RecursiveORAM, testBatchAccessDefer) {
   for (uint64_t size = 1000; size < 12345; size = size * 3 / 2) {
     StdVector<uint64_t> ref(size);
-    ODSL::RecursiveORAM<uint64_t, uint64_t> oram(size, MAX_CACHE_SIZE);
+    ODSL::RecursiveORAM<uint64_t> oram(size, MAX_CACHE_SIZE);
     for (uint64_t i = 0; i < size; i++) {
       ref[i] = UniformRandom();
     }
@@ -779,7 +809,7 @@ TEST(RecursiveORAM, testBatchAccessDefer) {
 TEST(RecursiveORAM, testBatchAccessDeferInitDefault) {
   for (uint64_t size = 1234; size < 12345; size = size * 3 / 2) {
     StdVector<uint64_t> ref(size);
-    ODSL::RecursiveORAM<uint64_t, uint64_t> oram(size, MAX_CACHE_SIZE);
+    ODSL::RecursiveORAM<uint64_t> oram(size, MAX_CACHE_SIZE);
     for (uint64_t i = 0; i < size; i++) {
       ref[i] = 54321;
     }
@@ -826,7 +856,7 @@ TEST(RecursiveORAM, testBatchAccessDeferLarge) {
   size_t BackendSize = 2e9;
   EM::Backend::g_DefaultBackend =
       new EM::Backend::MemServerBackend(BackendSize);
-  ODSL::RecursiveORAM<TestElement, uint32_t> oram(size, 1UL << 24);
+  ODSL::RecursiveORAM<TestElement> oram(size, 1UL << 24);
   for (uint32_t i = 0; i < size; i++) {
     ref[i] = UniformRandom();
   }

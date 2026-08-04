@@ -4,7 +4,7 @@
 
 ORAMBinding::ORAMBinding() { oram = nullptr; }
 
-using ORAMType = ODSL::RecursiveORAM<T, uint32_t>;
+using ORAMType = ODSL::RecursiveORAM<T>;
 
 void ORAMBinding::InitORAM(uint32_t size) {
   Assert(oram == nullptr);

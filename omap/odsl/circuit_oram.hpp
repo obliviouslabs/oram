@@ -26,10 +26,13 @@ namespace ODSL::CircuitORAM {
 /// @tparam evict_group The number of evictions to perform for each position.
 /// Experiment shows that performing two evictions on one path is not much worse
 /// than performing two evictions on two paths.
+/// @tparam evict_on_read Whether to perform the partial eviction on the
+/// accessed path after a read/update.
 template <typename T, const int Z = 2, const int stashSize = 33,
           typename PositionType = uint64_t, typename UidType = uint64_t,
           const uint64_t page_size = 4096, const bool check_freshness = true,
-          int evict_freq = 2, int evict_group = 2>
+          int evict_freq = 2, int evict_group = 2,
+          bool evict_on_read = true>
 struct ORAM {
   using Stash = Bucket<T, stashSize, PositionType, UidType>;
   using Block_ = Block<T, PositionType, UidType>;
@@ -195,7 +198,7 @@ struct ORAM {
   void evict(PositionType pos) {
     PositionType nodeIdxArr[64];
     int pathDepth = readPathAndGetNodeIdxArr(pos, nodeIdxArr);
-    for (int i = 0; i < evict_group; ++i) {
+    for (int i = 0; i < _evict_group; ++i) {
       evictPath(pos, pathDepth);
     }
     writeBackPath(pos, pathDepth, nodeIdxArr);
@@ -292,20 +295,24 @@ struct ORAM {
    * only with negligible probability.
    *
    * @tparam _evict_freq Number of evictions to perform
+   * @tparam _evict_on_read Whether to evict the accessed path
    * @param newBlock The new block to write
    * @param pos The position of the path
    * @param pathDepth The depth of the path
    * @param nodeIdxArr The index of the nodes in the path
    * @param retry Maximum number of retries
    */
-  template <const int _evict_freq = evict_freq>
+  template <const int _evict_freq = evict_freq,
+            const bool _evict_on_read = true>
   INLINE void writeBlockWithRetry(const Block_& newBlock, PositionType pos,
                                   int pathDepth, PositionType nodeIdxArr[64],
                                   int retry = 10) {
     while (true) {
       bool success = WriteNewBlockToPath(
           path.begin(), path.begin() + stashSize + Z, newBlock);
-      evictPath(pos, pathDepth);
+      if constexpr (_evict_on_read) {
+        evictPath(pos, pathDepth);
+      }
       writeBackPath(pos, pathDepth, nodeIdxArr);
       evict<_evict_freq>();
       if (success) {
@@ -636,7 +643,8 @@ struct ORAM {
 
     Block_ newBlock(out, newPos, uid);
     obliMove(!findFlag, newBlock.uid, DUMMY<UidType>());
-    writeBlockWithRetry(newBlock, pos, pathDepth, nodeIdxArr);
+    writeBlockWithRetry<evict_freq, evict_on_read>(newBlock, pos, pathDepth,
+                                                   nodeIdxArr);
     return newPos;
   }
 
@@ -817,7 +825,8 @@ struct ORAM {
     UidType newUid = DUMMY<UidType>();
     obliMove(keepFlag, newUid, updatedUid);
     Block_ newBlock(out, newPos, newUid);
-    writeBlockWithRetry(newBlock, pos, pathDepth, nodeIdxArr);
+    writeBlockWithRetry<evict_freq, evict_on_read>(newBlock, pos, pathDepth,
+                                                   nodeIdxArr);
     return newPos;
   }
 

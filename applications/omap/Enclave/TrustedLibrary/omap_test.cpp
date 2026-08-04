@@ -910,7 +910,7 @@ void testRecursiveORAMPerf() {
     ETH_Addr addr;
     ERC20_Balance balance;
   };
-  RecursiveORAM<AddrBalance, uint32_t> roram((uint32_t)mapSize);
+  RecursiveORAM<AddrBalance> roram((uint32_t)mapSize);
 
   std::function<AddrBalance(uint64_t)> readerFunc = [](uint64_t) {
     return AddrBalance();

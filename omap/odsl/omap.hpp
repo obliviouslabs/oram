@@ -460,7 +460,7 @@ struct OPosMap {
   static constexpr uint8_t crowdMax = UINT8_MAX;
   using BucketType = OPosMapBucket<bucketSize, K, V, H, PositionType>;
   // for oblivious hash map, we use recursive ORAM
-  using ObliviousTableType = RecursiveORAM<BucketType, PositionType>;
+  using ObliviousTableType = RecursiveORAM<BucketType>;
   // for non-oblivious hash map, we cache the front of the vector, for the
   // remaining data store it encrypted and authenticated in external memory,
   // check freshness when swapped in.

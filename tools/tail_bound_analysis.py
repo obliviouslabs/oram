@@ -43,6 +43,12 @@ def tail_points(counts):
 
 def label_for(log_file):
     stem = Path(log_file).stem.lower()
+    if "current_partial_read_two_same" in stem:
+        return "Our Implementation"
+    if "original_no_read_two_paths" in stem:
+        return "Original Circuit ORAM"
+    if "partial_read_two_paths" in stem:
+        return "Ours w/o repeating paths"
     if "random_eviction" in stem:
         return "Random"
     if "crowdedness" in stem:
