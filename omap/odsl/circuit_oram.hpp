@@ -1,5 +1,8 @@
 #pragma once
 
+#include <memory>
+
+#include "one_time_stash_hash.hpp"
 #include "oram_common.hpp"
 
 /// @brief This file implements Circuit ORAM (https://eprint.iacr.org/2014/672),
@@ -7,6 +10,36 @@
 /// desired.
 
 namespace ODSL::CircuitORAM {
+
+/** Public selection for the two batch-stash access implementations. */
+enum class BatchStashAccessMode {
+  Automatic,
+  LegacyScan,
+  OneTimeHash,
+};
+
+/**
+ * Compile-time sizing and crossover policy for batch stash hashing.
+ *
+ * The default retains the legacy scan below 1536 requests and for payloads
+ * smaller than 64 bytes. It uses the provisional 4 x 80 + 4 one-candidate
+ * table from the design note otherwise. Callers can force either
+ * implementation per batch for benchmarking.
+ */
+template <size_t minBatchSize = 1536, size_t mainBucketSize = 4,
+          size_t mainBucketCount = 80, size_t overflowBucketSize = 4,
+          size_t candidates = 1, bool enabled = true,
+          size_t minPayloadBytes = 64>
+struct BatchStashHashPolicy {
+  static constexpr size_t MinBatchSize = minBatchSize;
+  static constexpr size_t MainBucketSize = mainBucketSize;
+  static constexpr size_t MainBucketCount = mainBucketCount;
+  static constexpr size_t OverflowBucketSize = overflowBucketSize;
+  static constexpr size_t Candidates = candidates;
+  static constexpr bool Enabled = enabled;
+  static constexpr size_t MinPayloadBytes = minPayloadBytes;
+};
+
 /// @brief Circuit ORAM implementation.
 /// @tparam T   Type of data stored in the ORAM
 /// @tparam PositionType   Type of the position, default to uint64_t. Each
@@ -28,11 +61,14 @@ namespace ODSL::CircuitORAM {
 /// than performing two evictions on two paths.
 /// @tparam evict_on_read Whether to perform the partial eviction on the
 /// accessed path after a read/update.
+/// @tparam StashHashPolicy Compile-time one-time stash hash sizing and public
+/// batch-size crossover policy.
 template <typename T, const int Z = 2, const int stashSize = 33,
           typename PositionType = uint64_t, typename UidType = uint64_t,
           const uint64_t page_size = 4096, const bool check_freshness = true,
           int evict_freq = 2, int evict_group = 2,
-          bool evict_on_read = true>
+          bool evict_on_read = true,
+          typename StashHashPolicy = BatchStashHashPolicy<>>
 struct ORAM {
   using Stash = Bucket<T, stashSize, PositionType, UidType>;
   using Block_ = Block<T, PositionType, UidType>;
@@ -46,6 +82,11 @@ struct ORAM {
 
   using HeapTree_ = HeapTree<TreeNode_, PositionType, page_size,
                              divRoundUp(evict_freq, evict_group)>;
+
+  using StashHash_ = ODSL::OneTimeStashHash<
+      Block_, UidType, stashSize, StashHashPolicy::MainBucketSize,
+      StashHashPolicy::MainBucketCount, StashHashPolicy::OverflowBucketSize,
+      StashHashPolicy::Candidates>;
 
  private:
   HeapTree_ tree;  // underlying tree structure
@@ -837,12 +878,68 @@ struct ORAM {
    * @param pos The positions of the blocks
    * @param uid The uids of the blocks
    * @param out The output blocks
-   *
    */
   void BatchReadAndRemove(uint64_t batchSize, PositionType* pos,
                           const UidType* uid, T* out) {
+    BatchReadAndRemove(batchSize, pos, uid, out,
+                       BatchStashAccessMode::Automatic);
+  }
+
+  /**
+   * @brief Read a batch with an explicit stash access implementation.
+   *
+   * @param stashAccessMode Select the legacy scan, the one-time hash, or the
+   * automatic crossover policy. Forcing a mode is intended for tests
+   * and performance comparisons.
+   */
+  void BatchReadAndRemove(uint64_t batchSize, PositionType* pos,
+                          const UidType* uid, T* out,
+                          BatchStashAccessMode stashAccessMode) {
     // mask duplicate positions
     deDuplicatePoses(batchSize, pos, uid);
+
+    std::unique_ptr<StashHash_> stashHash;
+    bool useStashHash = false;
+    if constexpr (StashHashPolicy::Enabled) {
+      const bool batchAboveCrossover =
+          batchSize >= StashHashPolicy::MinBatchSize;
+      const bool payloadAboveCrossover =
+          sizeof(T) >= StashHashPolicy::MinPayloadBytes;
+      const bool tryStashHash =
+          stashAccessMode == BatchStashAccessMode::OneTimeHash ||
+          (stashAccessMode == BatchStashAccessMode::Automatic &&
+           batchAboveCrossover && payloadAboveCrossover);
+      if (tryStashHash) {
+        stashHash = std::make_unique<StashHash_>();
+        useStashHash = stashHash->Build(path.data());
+        if (useStashHash) {
+          stashHash->PrepareBatch(uid, static_cast<size_t>(batchSize));
+        }
+      }
+    }
+
+    // This callable is shared by the cached and DISK_IO paths. The equality
+    // test for firstOccurrence is secret; the hash helper uses it only for an
+    // oblivious selection between the real and duplicate-probe buckets.
+    auto readAndRemoveFromStash = [&](uint64_t i) {
+      if (useStashHash) {
+        bool firstOccurrence = true;
+        if (i > 0) {
+          firstOccurrence = uid[i] != uid[i - 1];
+        }
+        stashHash->ReadAndRemovePrepared(uid[i], i, firstOccurrence, out[i]);
+      } else {
+        ReadElementAndRemoveFromPath(path.begin(), path.begin() + stashSize,
+                                     uid[i], out[i]);
+      }
+    };
+
+    auto restoreStash = [&]() {
+      if (useStashHash) {
+        stashHash->Restore();
+        useStashHash = false;
+      }
+    };
 
 // read and remove
 #ifdef DISK_IO
@@ -865,8 +962,7 @@ struct ORAM {
         treeAccessor.FlushRead();
 
         for (uint32_t j = 0; j < prefetchBatchSize; ++j, ++i) {
-          ReadElementAndRemoveFromPath(path.begin(), path.begin() + stashSize,
-                                       uid[i], out[i]);
+          readAndRemoveFromStash(i);
           uint64_t expectedNonce;
           if constexpr (check_freshness) {
             expectedNonce = rootNonce++;
@@ -884,6 +980,7 @@ struct ORAM {
         }
         treeAccessor.FlushWrite();
       }
+      restoreStash();
       duplicateVal(batchSize, out, uid);
       return;
     }
@@ -892,8 +989,7 @@ struct ORAM {
     // read and remove
     for (uint64_t i = 0; i < batchSize; ++i) {
       int pathDepth = tree.GetNodeIdxArr(&nodeIdxArr[0], pos[i]);
-      ReadElementAndRemoveFromPath(path.begin(), path.begin() + stashSize,
-                                   uid[i], out[i]);
+      readAndRemoveFromStash(i);
 
       uint64_t expectedNonce;
       if constexpr (check_freshness) {
@@ -910,6 +1006,7 @@ struct ORAM {
       }
     }
 
+    restoreStash();
     // propagate duplicate values
     duplicateVal(batchSize, out, uid);
   }
