@@ -18,8 +18,9 @@ namespace detail {
  * @tparam T The type of the data
  * @tparam IdentifierType The type of unique and randomized path identifiers
  * stored in each ORAM level.
+ * @tparam stashSize The stash size used by each underlying Circuit ORAM.
  */
-template <typename T, typename IdentifierType>
+template <typename T, typename IdentifierType, const int stashSize = 33>
 struct RecursiveORAMImpl {
  private:
   using UidType = IdentifierType;
@@ -70,12 +71,13 @@ struct RecursiveORAMImpl {
   };
 
   using InternalORAM =
-      AdaptiveORAM::ORAM<InternalNode, PositionIdentifier, UidType>;
+      AdaptiveORAM::ORAM<InternalNode, PositionIdentifier, UidType, stashSize>;
 
   // Stores the position maps. internalOrams[0] is the smallest position map.
   std::vector<InternalORAM> internalOrams;
 
-  using LeafORAM = AdaptiveORAM::ORAM<LeafNode, PositionIdentifier, UidType>;
+  using LeafORAM =
+      AdaptiveORAM::ORAM<LeafNode, PositionIdentifier, UidType, stashSize>;
   LeafORAM leafOram;  // Stores the actual data
   // The size of all the orams. oramSizes[0] is the size of the smallest oram.
   // oramSizes.back() is the size of the leaf oram.
@@ -678,12 +680,13 @@ struct RecursiveORAMImpl {
  * whenever the ORAM has fewer than 2^32 elements. Larger ORAMs use uint64_t.
  *
  * @tparam T The type of the data.
+ * @tparam stashSize The stash size used by each underlying Circuit ORAM.
  */
-template <typename T>
+template <typename T, const int stashSize = 33>
 struct RecursiveORAM {
  private:
-  using CompactImpl = detail::RecursiveORAMImpl<T, uint32_t>;
-  using WideImpl = detail::RecursiveORAMImpl<T, uint64_t>;
+  using CompactImpl = detail::RecursiveORAMImpl<T, uint32_t, stashSize>;
+  using WideImpl = detail::RecursiveORAMImpl<T, uint64_t, stashSize>;
 
   std::unique_ptr<CompactImpl> compactImpl;
   std::unique_ptr<WideImpl> wideImpl;

@@ -24,7 +24,12 @@ namespace ODSL {
 template <typename K, typename V, typename PositionType = uint64_t>
 struct ParOMap {
  private:
-  using BaseMap = OHashMap<K, V, FULL_OBLIVIOUS, PositionType, true>;
+  // Batched reads do not evict on the read path. Use the larger bound sized
+  // for that access schedule in every recursive ORAM belonging to a shard.
+  static constexpr int shardedOramStashSize = 46;
+  using BaseMap =
+      OHashMap<K, V, FULL_OBLIVIOUS, PositionType, true, true,
+               shardedOramStashSize>;
 
   struct KVPair {
     K key;
