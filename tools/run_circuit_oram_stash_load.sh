@@ -5,9 +5,19 @@ set -euo pipefail
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$repo_root"
 
-test_binary="${CIRCUIT_ORAM_TEST_BINARY:-$repo_root/build/tests/test_oram}"
+default_test_binary="$repo_root/build/tests/test_oram"
+test_binary="${CIRCUIT_ORAM_TEST_BINARY:-$default_test_binary}"
 warmup_windows="${STASH_LOAD_WARMUP_WINDOWS:-100000}"
 window_count="${STASH_LOAD_WINDOWS:-4450000000}"
+
+# The stash-load variants are selected in tests/oram.cpp and most of the ORAM
+# implementation is header-only.  An existing executable can therefore be
+# stale even when the runner itself has not changed.  Keep custom binaries
+# caller-managed, but always bring the repository's default target up to date.
+if [[ "$test_binary" == "$default_test_binary" ]]; then
+  echo "Building Circuit ORAM test binary"
+  cmake --build "$repo_root/build" --target test_oram --parallel
+fi
 
 if [[ ! -x "$test_binary" ]]; then
   echo "Test binary not found or not executable: $test_binary" >&2

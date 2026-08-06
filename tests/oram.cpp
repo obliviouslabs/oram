@@ -120,53 +120,26 @@ TEST(CircuitORAM, BatchUpdate) {
   }
 }
 
-TEST(CircuitORAM, BatchReadWriteUsesAccessedPathEviction) {
-  using CurrentORAM = ODSL::CircuitORAM::ORAM<
-      uint64_t, 2, 20, uint32_t, uint32_t, 4096, false, 2, 2, true>;
-  constexpr uint32_t memSize = 128;
-  constexpr uint32_t positionCount = memSize / 2;
+TEST(CircuitORAM, BatchEvictionScheduleIsBalanced) {
+  using Schedule =
+      ODSL::CircuitORAM::detail::ReverseLexicographicBatchSchedule<uint32_t>;
+  for (uint32_t pathCount : {63, 64}) {
+    uint32_t counter = 0;
+    std::vector<uint32_t> evictionCounts(pathCount, 0);
 
-  CurrentORAM scalar(memSize);
-  CurrentORAM batched(memSize);
-  std::vector<uint32_t> scalarPositions(memSize);
-  std::vector<uint32_t> batchedPositions(memSize);
-
-  for (uint32_t uid = 0; uid < memSize; ++uid) {
-    uint32_t position = (uid * 17) % positionCount;
-    scalarPositions[uid] = scalar.Write(uid, uid * 3, position);
-    batchedPositions[uid] = batched.Write(uid, uid * 3, position);
-  }
-
-  const std::vector<bool> writeBackFlags(1, true);
-  for (uint32_t uid = 0; uid < memSize; ++uid) {
-    uint32_t newPosition = (uid * 29 + 1) % positionCount;
-    uint64_t scalarValue;
-    uint64_t batchedValue;
-
-    scalarPositions[uid] =
-        scalar.Read(scalarPositions[uid], uid, scalarValue, newPosition);
-
-    uint32_t readPosition = batchedPositions[uid];
-    uint32_t batchUid = uid;
-    batched.BatchReadAndRemove(
-        1, &readPosition, &batchUid, &batchedValue,
-        ODSL::CircuitORAM::BatchStashAccessMode::LegacyScan);
-    batched.BatchWriteBack(1, &batchUid, &newPosition, &batchedValue,
-                           writeBackFlags);
-    batchedPositions[uid] = newPosition;
-
-    ASSERT_EQ(batchedValue, scalarValue);
-    const auto& scalarStash = scalar.GetStash();
-    const auto& batchedStash = batched.GetStash();
-    for (int slot = 0; slot < 20; ++slot) {
-      ASSERT_EQ(batchedStash.blocks[slot].uid,
-                scalarStash.blocks[slot].uid);
-      if (!scalarStash.blocks[slot].IsDummy()) {
-        ASSERT_EQ(batchedStash.blocks[slot].position,
-                  scalarStash.blocks[slot].position);
-        ASSERT_EQ(batchedStash.blocks[slot].data,
-                  scalarStash.blocks[slot].data);
+    for (uint32_t i = 0; i < pathCount; ++i) {
+      uint32_t windowBegin = Schedule::BeginWindow(counter, pathCount, 3);
+      uint32_t firstPath = Schedule::Path(windowBegin, 0, pathCount);
+      uint32_t secondPath = Schedule::Path(windowBegin, 1, pathCount);
+      ++evictionCounts[firstPath];
+      evictionCounts[secondPath] += 2;
+      if (pathCount % 2 == 0) {
+        ASSERT_NE(firstPath % 2, secondPath % 2);
       }
+    }
+
+    for (uint32_t count : evictionCounts) {
+      ASSERT_EQ(count, 3);
     }
   }
 }
@@ -445,8 +418,9 @@ TEST(CircuitORAM, StashLoad) {
           uint32_t oldpos = posMap[idx];
           uint32_t pos = randomPosition(rng);
           if constexpr (batchedAccess) {
-            // BatchWriteBack must use oldpos for the one read-path eviction;
-            // the following two evictions use the deterministic counter path.
+            // BatchReadAndRemove accesses oldpos, but deferred writeback does
+            // not revisit it. It evicts deterministic path c once and c+1
+            // twice, then advances past the three logical eviction slots.
             uint32_t uid = idx;
             oramForThread.BatchReadAndRemove(1, &oldpos, &uid, &val);
             oramForThread.BatchWriteBack(1, &uid, &pos, &val,

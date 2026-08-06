@@ -18,6 +18,60 @@ enum class BatchStashAccessMode {
   OneTimeHash,
 };
 
+namespace detail {
+
+/**
+ * A batch writeback consumes a fixed number of slots in the deterministic
+ * eviction sequence. Grouped evictions share one physical path, but the next
+ * window advances by the total eviction count so the doubled path does not
+ * remain pinned to one root subtree.
+ */
+template <typename PositionType>
+struct ReverseLexicographicBatchSchedule {
+  static PositionType GreatestCommonDivisor(PositionType lhs,
+                                            PositionType rhs) {
+    while (rhs != 0) {
+      PositionType remainder = lhs % rhs;
+      lhs = rhs;
+      rhs = remainder;
+    }
+    return lhs;
+  }
+
+  static PositionType WindowStride(PositionType pathCount,
+                                   PositionType evictionCount) {
+    if (pathCount <= 1) {
+      return 1;
+    }
+    PositionType stride = evictionCount % pathCount;
+    if (stride == 0) {
+      stride = 1;
+    }
+    while (GreatestCommonDivisor(stride, pathCount) != 1) {
+      stride = (stride + 1) % pathCount;
+      if (stride == 0) {
+        stride = 1;
+      }
+    }
+    return stride;
+  }
+
+  static PositionType BeginWindow(PositionType& counter,
+                                  PositionType pathCount,
+                                  PositionType evictionCount) {
+    PositionType windowBegin = counter;
+    counter += WindowStride(pathCount, evictionCount);
+    return windowBegin;
+  }
+
+  static PositionType Path(PositionType windowBegin, int pathOffset,
+                           PositionType pathCount) {
+    return (windowBegin + static_cast<PositionType>(pathOffset)) % pathCount;
+  }
+};
+
+}  // namespace detail
+
 /**
  * Compile-time sizing and crossover policy for batch stash hashing.
  *
@@ -59,8 +113,9 @@ struct BatchStashHashPolicy {
 /// @tparam evict_group The number of evictions to perform for each position.
 /// Experiment shows that performing two evictions on one path is not much worse
 /// than performing two evictions on two paths.
-/// @tparam evict_on_read Whether to perform the partial eviction on the
-/// accessed path after a read/update.
+/// @tparam evict_on_read Whether scalar operations perform the partial
+/// eviction on the accessed path after a read/update. Batch writeback uses
+/// only deterministic paths because the accessed paths are no longer cached.
 /// @tparam StashHashPolicy Compile-time one-time stash hash sizing and public
 /// batch-size crossover policy.
 template <typename T, const int Z = 2, const int stashSize = 33,
@@ -88,6 +143,21 @@ struct ORAM {
       StashHashPolicy::MainBucketCount, StashHashPolicy::OverflowBucketSize,
       StashHashPolicy::Candidates>;
 
+  static constexpr int batchPathCount =
+      1 + divRoundUp(evict_freq, evict_group);
+
+  static constexpr int BatchEvictionCountForPath(int pathOffset) {
+    if (pathOffset == 0) {
+      return 1;
+    }
+    if constexpr (evict_freq % evict_group != 0) {
+      if (pathOffset == batchPathCount - 1) {
+        return evict_freq % evict_group;
+      }
+    }
+    return evict_group;
+  }
+
  private:
   HeapTree_ tree;  // underlying tree structure
 
@@ -101,10 +171,10 @@ struct ORAM {
   // first stashSize blocks are the stash
 
   // BatchReadAndRemove and BatchWriteBack are intentionally split so callers
-  // can update a whole batch between the two operations.  Retain the
-  // de-duplicated read paths so batch writeback can perform the same
-  // read-path eviction as a scalar access.
-  std::vector<PositionType> pendingBatchReadPositions;
+  // can update a whole batch between the two operations.  Batch writeback
+  // validates the pairing, but deliberately does not retain or revisit the
+  // accessed paths.
+  uint64_t pendingBatchReadSize = 0;
   bool hasPendingBatchRead = false;
 
 #ifdef DISK_IO
@@ -374,6 +444,51 @@ struct ORAM {
       --retry;
       pos = (evictCounter++) % _size;
       pathDepth = readPathAndGetNodeIdxArr(pos, nodeIdxArr);
+    }
+  }
+
+  /**
+   * @brief Write a batch block using only deterministic eviction paths.
+   *
+   * The first path in the window receives the block and one eviction.  The
+   * remaining paths receive the configured reverse-lexicographic evictions.
+   * For the default (evict_freq=2, evict_group=2), window c therefore evicts
+   * c once and c+1 twice. The next call starts at c+3 (or the next coprime
+   * stride for a non-power-of-two tree), balancing every path over a full
+   * counter cycle while reading only two paths per writeback.
+   */
+  INLINE void writeBatchBlockWithRetry(const Block_& newBlock,
+                                       int retry = 10) {
+    PositionType nodeIdxArr[64];
+    while (true) {
+      PositionType windowBegin =
+          detail::ReverseLexicographicBatchSchedule<
+              PositionType>::BeginWindow(evictCounter, _size,
+                                         1 + evict_freq);
+      bool success = false;
+      for (int pathOffset = 0; pathOffset < batchPathCount; ++pathOffset) {
+        PositionType pos =
+            detail::ReverseLexicographicBatchSchedule<PositionType>::Path(
+                windowBegin, pathOffset, _size);
+        int pathDepth = readPathAndGetNodeIdxArr(pos, nodeIdxArr);
+        if (pathOffset == 0) {
+          success = WriteNewBlockToPath(
+              path.begin(), path.begin() + stashSize + Z, newBlock);
+        }
+        int numEvictions = BatchEvictionCountForPath(pathOffset);
+        for (int i = 0; i < numEvictions; ++i) {
+          evictPath(pos, pathDepth);
+        }
+        writeBackPath(pos, pathDepth, nodeIdxArr);
+      }
+      if (success) {
+        break;
+      }
+      PERFCTR_INCREMENT(CIRCUITORAM_OVERFLOW);
+      if (!retry) {
+        throw std::runtime_error("ORAM overflows");
+      }
+      --retry;
     }
   }
 
@@ -906,10 +1021,7 @@ struct ORAM {
     // mask duplicate positions
     deDuplicatePoses(batchSize, pos, uid);
 
-    pendingBatchReadPositions.clear();
-    if (batchSize != 0) {
-      pendingBatchReadPositions.assign(pos, pos + batchSize);
-    }
+    pendingBatchReadSize = batchSize;
     hasPendingBatchRead = true;
 
     std::unique_ptr<StashHash_> stashHash;
@@ -1039,8 +1151,7 @@ struct ORAM {
   void BatchWriteBack(uint64_t batchSize, const UidType* uid,
                       const PositionType* newPos, const T* in,
                       const std::vector<bool>& writeBackFlags) {
-    if (!hasPendingBatchRead ||
-        pendingBatchReadPositions.size() != batchSize) {
+    if (!hasPendingBatchRead || pendingBatchReadSize != batchSize) {
       throw std::runtime_error(
           "Circuit ORAM batch writeback has no matching batch read");
     }
@@ -1051,30 +1162,26 @@ struct ORAM {
       // freshness should only be checked when some data is out of the EPC
       typename HeapTree_::BatchAccessor treeAccessor(tree);
       constexpr uint32_t maxPrefetchBatchSize = 8;
-      constexpr int numPathPerAccess = 1 + divRoundUp(evict_freq, evict_group);
-      constexpr uint32_t maxPathCount = maxPrefetchBatchSize * numPathPerAccess;
+      constexpr uint32_t maxPathCount = maxPrefetchBatchSize * batchPathCount;
       PositionType nodeIdxArrs[maxPathCount][64];
       int pathDepths[maxPathCount];
       uint32_t prefetchReceipts[maxPathCount] = {0};
       for (uint64_t i = 0; i < batchSize;) {
-        uint64_t prefetchEvictCounter = evictCounter;
+        PositionType prefetchEvictCounter = evictCounter;
+        PositionType windowStride =
+            detail::ReverseLexicographicBatchSchedule<
+                PositionType>::WindowStride(_size, 1 + evict_freq);
         uint32_t prefetchBatchSize =
             (uint32_t)std::min((uint64_t)maxPrefetchBatchSize, batchSize - i);
 
         for (uint32_t pathOffset = 0;
-             pathOffset < prefetchBatchSize * numPathPerAccess; ++pathOffset) {
-          uint32_t batchOffset = pathOffset / numPathPerAccess;
-          uint32_t pathOffsetInAccess = pathOffset % numPathPerAccess;
-          PositionType p;
-          if constexpr (evict_on_read) {
-            if (pathOffsetInAccess == 0) {
-              p = pendingBatchReadPositions[i + batchOffset];
-            } else {
-              p = prefetchEvictCounter++ % _size;
-            }
-          } else {
-            p = prefetchEvictCounter++ % _size;
-          }
+             pathOffset < prefetchBatchSize * batchPathCount; ++pathOffset) {
+          uint32_t batchOffset = pathOffset / batchPathCount;
+          uint32_t pathOffsetInAccess = pathOffset % batchPathCount;
+          PositionType p =
+              detail::ReverseLexicographicBatchSchedule<PositionType>::Path(
+                  prefetchEvictCounter + batchOffset * windowStride,
+                  pathOffsetInAccess, _size);
           pathDepths[pathOffset] = treeAccessor.GetNodeIdxArrAndPrefetch(
               nodeIdxArrs[pathOffset], p, prefetchReceipts[pathOffset]);
         }
@@ -1088,37 +1195,25 @@ struct ORAM {
           }
           obliMove(writeBack, toWrite.uid, uid[i]);
           bool success = false;
-          for (int k = 0; k < numPathPerAccess; ++k, ++pathOffset) {
+          PositionType windowBegin =
+              detail::ReverseLexicographicBatchSchedule<
+                  PositionType>::BeginWindow(evictCounter, _size,
+                                             1 + evict_freq);
+          for (int k = 0; k < batchPathCount; ++k, ++pathOffset) {
             int pathDepth = pathDepths[pathOffset];
-            PositionType p;
-            if constexpr (evict_on_read) {
-              if (k == 0) {
-                p = pendingBatchReadPositions[i];
-              } else {
-                p = evictCounter++ % _size;
-              }
-            } else {
-              p = evictCounter++ % _size;
-            }
+            PositionType p =
+                detail::ReverseLexicographicBatchSchedule<PositionType>::Path(
+                    windowBegin, k, _size);
             readPathFromAccessor(treeAccessor, p, pathDepth,
                                  nodeIdxArrs[pathOffset],
                                  prefetchReceipts[pathOffset]);
             if (k == 0) {
               success = WriteNewBlockToPath(
                   path.begin(), path.begin() + stashSize + Z, toWrite);
-              if constexpr (evict_on_read) {
-                evictPath(p, pathDepth);
-              }
-            } else {
-              int numEvictions = evict_group;
-              if constexpr (evict_freq % evict_group != 0) {
-                if (k == numPathPerAccess - 1) {
-                  numEvictions = evict_freq % evict_group;
-                }
-              }
-              for (int h = 0; h < numEvictions; ++h) {
-                evictPath(p, pathDepth);
-              }
+            }
+            int numEvictions = BatchEvictionCountForPath(k);
+            for (int h = 0; h < numEvictions; ++h) {
+              evictPath(p, pathDepth);
             }
 
             writePathToAccessor(treeAccessor, p, pathDepth,
@@ -1133,19 +1228,11 @@ struct ORAM {
         treeAccessor.FlushWrite();
       }
       hasPendingBatchRead = false;
-      pendingBatchReadPositions.clear();
+      pendingBatchReadSize = 0;
       return;
     }
 #endif
-    PositionType nodeIdxArr[64];
     for (uint64_t i = 0; i < batchSize; ++i) {
-      PositionType p;
-      if constexpr (evict_on_read) {
-        p = pendingBatchReadPositions[i];
-      } else {
-        p = evictCounter++ % _size;
-      }
-      int pathDepth = readPathAndGetNodeIdxArr(p, nodeIdxArr);
       Block_ toWrite = {in[i], newPos[i], DUMMY<UidType>()};
       bool writeBack = writeBackFlags[i];
       if (i > 0) {
@@ -1153,11 +1240,10 @@ struct ORAM {
         writeBack &= (uid[i] != uid[i - 1]);
       }
       obliMove(writeBack, toWrite.uid, uid[i]);
-      writeBlockWithRetry<evict_freq, evict_on_read>(toWrite, p, pathDepth,
-                                                     nodeIdxArr);
+      writeBatchBlockWithRetry(toWrite);
     }
     hasPendingBatchRead = false;
-    pendingBatchReadPositions.clear();
+    pendingBatchReadSize = 0;
   }
 
   /**

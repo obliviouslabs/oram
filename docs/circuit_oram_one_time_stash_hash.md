@@ -20,10 +20,15 @@ table must be built obliviously, use a fresh key for every batch, handle
 duplicate requests without revealing equality, and be obliviously converted
 back to the normal flat stash before `BatchReadAndRemove` returns.
 
-The intended batch scheme performs no eviction on the read path and performs
-two deterministic evictions on two different paths. The matching checked-in
-trace is `circuit_oram_stash_original_no_read_two_paths.log`. Its fitted tail
-gives a provisional 46-slot stash bound at `2^-64` per query, rather than 33.
+The intended batch scheme performs no eviction on the read path. During
+writeback it evicts deterministic path `c` once while inserting and path
+`c+1` twice, then advances past the three logical eviction slots. This gives
+three evictions over two reverse-lexicographic paths without pinning the double
+eviction to one subtree. For non-power-of-two path counts, the implementation
+uses the next stride coprime to the path count so every path is still visited.
+The physical stash bound must be refitted from the
+`batched_current` trace for this schedule; the existing 46-slot value comes
+from the older two-eviction proxy and remains provisional.
 
 The hash table is built only once per batch. For a batch of `q` queries, a
 `2^-64` per-query goal permits this batch event probability to be as large as
@@ -86,13 +91,15 @@ scheme being sized.
 Size the batch optimization for this access schedule:
 
 - do not evict the requested read path;
-- perform two deterministic evictions per logical query;
-- use two different deterministic paths (`evict_freq=2`, `evict_group=1`,
-  `evict_on_read=false`).
+- perform three deterministic evictions per logical query;
+- evict path `c` once and path `c+1` twice (`evict_freq=2`,
+  `evict_group=2`), then advance `c` by three (or the next coprime stride for
+  a non-power-of-two path count).
 
-In `tests/oram.cpp`, this is the `OriginalORAM` configuration. Its checked-in
-log has 142,400,000,000 samples, a maximum observed load of 23, and the fitted
-tail
+In `tests/oram.cpp`, this is the `batched_current` variant. The older
+`OriginalORAM` trace has only two deterministic evictions per access. It has
+142,400,000,000 samples, a maximum observed load of 23, and the fitted tail
+below, but it is not a trace of the final batch schedule.
 
 ```text
 log2 Pr[L >= k] = -1.3311364218*k - 3.4137756687
@@ -127,19 +134,11 @@ so its capacity should still be selected from the per-query overflow goal. The
 more relaxed batch-event budget applies specifically to the one hash-table
 construction shared by the batch.
 
-Before implementation, verify that the actual batch writeback performs exactly
-this two-distinct-path schedule and add stash-load instrumentation at real
-batch boundaries. The existing log is the correct experimental proxy for the
-stated schedule, but it is not a trace of the full batched recursive-ORAM call
-path.
-
-The batch writeback path now propagates `evict_on_read` consistently. When it
-is enabled, `BatchReadAndRemove` retains the de-duplicated requested paths and
-`BatchWriteBack` uses each one for the first partial eviction, followed by the
-configured deterministic evictions. When it is disabled, the insertion path
-is still read and written but is not evicted; only the subsequent deterministic
-paths are evicted. The in-memory and `DISK_IO` branches implement the same
-schedule.
+The batch writeback path deliberately ignores `evict_on_read`, which controls
+scalar accesses only. `BatchReadAndRemove` does not retain the requested
+paths. `BatchWriteBack` uses the deterministic window for insertion
+and eviction in both the in-memory and `DISK_IO` branches. Refit the physical
+stash bound from a long `batched_current` run before relying on it.
 
 ## Proposed table
 
@@ -438,9 +437,12 @@ histogram is a proof.
 
 ### Sanity check from the checked-in trace
 
-Use `logs/circuit_oram_stash_original_no_read_two_paths.log`, which matches no
-read-path eviction and two deterministic evictions on different paths. The
-following table fixes `S=46`, `b=4`, `g=4`, and `r=1`.
+The historical calculation uses
+`logs/circuit_oram_stash_original_no_read_two_paths.log`, which has no
+read-path eviction and two deterministic evictions on different paths. It
+does not match the final three-eviction sliding-window batch schedule. The
+following table fixes `S=46`, `b=4`, `g=4`, and `r=1` and must be refreshed
+from the new `batched_current` trace.
 
 Three estimates are shown:
 
