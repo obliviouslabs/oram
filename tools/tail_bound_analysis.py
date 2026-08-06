@@ -44,15 +44,15 @@ def tail_points(counts):
 def label_for(log_file):
     stem = Path(log_file).stem.lower()
     if "current_partial_read_two_same" in stem:
-        return "Our Implementation"
+        return "Ours (sequential workload)"
     if "batched_current" in stem:
-        return "Batched current implementation"
+        return "Ours (batched workload)"
     if "original_no_read_two_paths" in stem:
         return "Original Circuit ORAM"
-    if "no_read_two_paths" in stem:
-        return "No read-path eviction, two deterministic paths"
-    if "partial_read_two_paths" in stem:
-        return "Ours w/o repeating paths"
+    # if "no_read_two_paths" in stem:
+    #     return "No read-path eviction, two deterministic paths"
+    # if "partial_read_two_paths" in stem:
+    #     return "Ours w/o repeating paths"
     if "random_eviction" in stem:
         return "Random"
     if "crowdedness" in stem:
