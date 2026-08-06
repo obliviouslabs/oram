@@ -120,6 +120,57 @@ TEST(CircuitORAM, BatchUpdate) {
   }
 }
 
+TEST(CircuitORAM, BatchReadWriteUsesAccessedPathEviction) {
+  using CurrentORAM = ODSL::CircuitORAM::ORAM<
+      uint64_t, 2, 20, uint32_t, uint32_t, 4096, false, 2, 2, true>;
+  constexpr uint32_t memSize = 128;
+  constexpr uint32_t positionCount = memSize / 2;
+
+  CurrentORAM scalar(memSize);
+  CurrentORAM batched(memSize);
+  std::vector<uint32_t> scalarPositions(memSize);
+  std::vector<uint32_t> batchedPositions(memSize);
+
+  for (uint32_t uid = 0; uid < memSize; ++uid) {
+    uint32_t position = (uid * 17) % positionCount;
+    scalarPositions[uid] = scalar.Write(uid, uid * 3, position);
+    batchedPositions[uid] = batched.Write(uid, uid * 3, position);
+  }
+
+  const std::vector<bool> writeBackFlags(1, true);
+  for (uint32_t uid = 0; uid < memSize; ++uid) {
+    uint32_t newPosition = (uid * 29 + 1) % positionCount;
+    uint64_t scalarValue;
+    uint64_t batchedValue;
+
+    scalarPositions[uid] =
+        scalar.Read(scalarPositions[uid], uid, scalarValue, newPosition);
+
+    uint32_t readPosition = batchedPositions[uid];
+    uint32_t batchUid = uid;
+    batched.BatchReadAndRemove(
+        1, &readPosition, &batchUid, &batchedValue,
+        ODSL::CircuitORAM::BatchStashAccessMode::LegacyScan);
+    batched.BatchWriteBack(1, &batchUid, &newPosition, &batchedValue,
+                           writeBackFlags);
+    batchedPositions[uid] = newPosition;
+
+    ASSERT_EQ(batchedValue, scalarValue);
+    const auto& scalarStash = scalar.GetStash();
+    const auto& batchedStash = batched.GetStash();
+    for (int slot = 0; slot < 20; ++slot) {
+      ASSERT_EQ(batchedStash.blocks[slot].uid,
+                scalarStash.blocks[slot].uid);
+      if (!scalarStash.blocks[slot].IsDummy()) {
+        ASSERT_EQ(batchedStash.blocks[slot].position,
+                  scalarStash.blocks[slot].position);
+        ASSERT_EQ(batchedStash.blocks[slot].data,
+                  scalarStash.blocks[slot].data);
+      }
+    }
+  }
+}
+
 template <const int stashSize = 20>
 void testBatchUpdateLargeCustomStashSize() {
   if (EM::Backend::g_DefaultBackend) {
@@ -358,8 +409,8 @@ TEST(CircuitORAM, StashLoad) {
   };
   size_t warmupWindowCount =
       getWindowCount("STASH_LOAD_WARMUP_WINDOWS", 100'000ULL);
-  // Calibrated from the three 1e8-window runs: about eight hours total when
-  // all three variants are run sequentially on the 32-thread test setup.
+  // Calibrated from the long-window runs: about ten hours total when all four
+  // variants are run sequentially on the 32-thread test setup.
   size_t windowCount =
       getWindowCount("STASH_LOAD_WINDOWS", 4'450'000'000ULL);
   size_t windowSize = 1;
@@ -370,7 +421,7 @@ TEST(CircuitORAM, StashLoad) {
     variant = value;
   }
 
-  auto runStashLoad = [&]<typename ORAMType>() {
+  auto runStashLoad = [&]<typename ORAMType, bool batchedAccess = false>() {
     std::vector<std::vector<uint64_t>> oramElementDistribute(
         numOrams, std::vector<uint64_t>(stashSize + 1));
 
@@ -383,6 +434,7 @@ TEST(CircuitORAM, StashLoad) {
       for (uint32_t i = 0; i < elementCount; ++i) {
         posMap[i] = oramForThread.Write(i, 0, randomPosition(rng));
       }
+      const std::vector<bool> batchWriteBackFlags(1, true);
 
       auto& elementDistribute = oramElementDistribute[oramIndex];
       for (size_t i = 0; i < warmupWindowCount + windowCount; ++i) {
@@ -391,8 +443,17 @@ TEST(CircuitORAM, StashLoad) {
           int val;
           uint32_t idx = rng() % memSize;
           uint32_t oldpos = posMap[idx];
-          uint32_t pos =
-              oramForThread.Read(oldpos, idx, val, randomPosition(rng));
+          uint32_t pos = randomPosition(rng);
+          if constexpr (batchedAccess) {
+            // BatchWriteBack must use oldpos for the one read-path eviction;
+            // the following two evictions use the deterministic counter path.
+            uint32_t uid = idx;
+            oramForThread.BatchReadAndRemove(1, &oldpos, &uid, &val);
+            oramForThread.BatchWriteBack(1, &uid, &pos, &val,
+                                         batchWriteBackFlags);
+          } else {
+            pos = oramForThread.Read(oldpos, idx, val, pos);
+          }
           posMap[idx] = pos;
 
           int stashLoad = 0;
@@ -422,21 +483,25 @@ TEST(CircuitORAM, StashLoad) {
 
   using CurrentORAM = ODSL::CircuitORAM::ORAM<
       int, Z, stashSize, uint32_t, uint32_t, 4096, false, 2, 2, true>;
-  using OriginalORAM = ODSL::CircuitORAM::ORAM<
+  // No eviction on the accessed/read path, followed by two single evictions
+  // on consecutive deterministic paths.
+  using NoReadTwoDeterministicPathsORAM = ODSL::CircuitORAM::ORAM<
       int, Z, stashSize, uint32_t, uint32_t, 4096, false, 2, 1, false>;
   using PartialTwoPathORAM = ODSL::CircuitORAM::ORAM<
       int, Z, stashSize, uint32_t, uint32_t, 4096, false, 2, 1, true>;
 
   if (variant == "current") {
     runStashLoad.template operator()<CurrentORAM>();
-  } else if (variant == "original") {
-    runStashLoad.template operator()<OriginalORAM>();
+  } else if (variant == "batched_current") {
+    runStashLoad.template operator()<CurrentORAM, true>();
+  } else if (variant == "original" || variant == "no_read_two_paths") {
+    runStashLoad.template operator()<NoReadTwoDeterministicPathsORAM>();
   } else if (variant == "partial_two_paths") {
     runStashLoad.template operator()<PartialTwoPathORAM>();
   } else {
     throw std::runtime_error(
-        "CIRCUIT_ORAM_STASH_LOAD_VARIANT must be current, original, or "
-        "partial_two_paths");
+        "CIRCUIT_ORAM_STASH_LOAD_VARIANT must be current, batched_current, "
+        "original, no_read_two_paths, or partial_two_paths");
   }
 }
 

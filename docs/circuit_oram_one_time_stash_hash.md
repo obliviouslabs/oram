@@ -133,16 +133,13 @@ batch boundaries. The existing log is the correct experimental proxy for the
 stated schedule, but it is not a trace of the full batched recursive-ORAM call
 path.
 
-There is a concrete code-audit item here. The in-memory `BatchWriteBack` calls
-`writeBlockWithRetry` without overriding that helper's
-`_evict_on_read=true` default, while the `DISK_IO` branch unconditionally
-calls `evictPath` on the insertion path. With `evict_freq=2` and
-`evict_group=1`, this appears to perform an insertion-path eviction in
-addition to the two deterministic evictions. For the scheme analyzed here,
-the insertion path may be read/written to place the block but must not be
-evicted; only the two subsequent distinct deterministic paths are evicted.
-Resolve this mismatch before treating a batch-boundary trace as validation of
-the fitted distribution.
+The batch writeback path now propagates `evict_on_read` consistently. When it
+is enabled, `BatchReadAndRemove` retains the de-duplicated requested paths and
+`BatchWriteBack` uses each one for the first partial eviction, followed by the
+configured deterministic evictions. When it is disabled, the insertion path
+is still read and written but is not evicted; only the subsequent deterministic
+paths are evicted. The in-memory and `DISK_IO` branches implement the same
+schedule.
 
 ## Proposed table
 

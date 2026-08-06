@@ -18,6 +18,7 @@ mkdir -p logs
 
 declare -a variants=(
   "current:circuit_oram_stash_current_partial_read_two_same.log"
+  "batched_current:circuit_oram_stash_batched_current.log"
   "original:circuit_oram_stash_original_no_read_two_paths.log"
   "partial_two_paths:circuit_oram_stash_partial_read_two_paths.log"
 )
