@@ -79,3 +79,4 @@ applications/rustexample/BearSSL/
 
 tools/test-sgx/SGX-hardware
 mvp-pox-node/
+logs/
