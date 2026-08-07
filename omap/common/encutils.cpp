@@ -1,4 +1,5 @@
 #include <stdexcept>
+#include <system_error>
 #include <utility>
 #ifdef ENCLAVE_MODE_ENCLAVE
 // #include "../Enclave.h"
@@ -10,6 +11,10 @@
 #ifndef ENCLAVE_MODE
 #include "bearssl_aead.h"
 #include "bearssl_hash.h"
+#endif
+#ifndef ENCLAVE_MODE_ENCLAVE
+#include <cerrno>
+#include <sys/random.h>
 #endif
 
 #include "common/encutils.hpp"
@@ -210,22 +215,22 @@ uint8_t RandGen::rand1() {
 }
 
 void read_rand(uint8_t *output, size_t size) {
-  FILE *fp = fopen("/dev/urandom", "rb");
-  if (fp == NULL) {
-    perror("Failed to open /dev/urandom");
-    return;  // Failure
+  size_t offset = 0;
+  while (offset < size) {
+    const ssize_t result =
+        getrandom(output + offset, size - offset, 0 /* blocking */);
+    if (result > 0) {
+      offset += static_cast<size_t>(result);
+      continue;
+    }
+    if (result < 0 && errno == EINTR) {
+      continue;
+    }
+    if (result == 0) {
+      throw std::runtime_error("getrandom returned no data");
+    }
+    throw std::system_error(errno, std::generic_category(), "getrandom");
   }
-
-  size_t read = fread(output, 1, size, fp);
-  fclose(fp);
-
-  if (read != size) {
-    perror("Failed to read enough bytes");
-    // Handle the error, not enough data was read
-    return;  // Failure
-  }
-
-  return;  // Success
 }
 
 #else

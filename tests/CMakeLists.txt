@@ -53,8 +53,34 @@ target_link_libraries(
   OpenMP::OpenMP_CXX
 )
 
+add_executable(
+  test_one_time_stash_hash
+  one_time_stash_hash.cpp
+)
+target_compile_definitions(test_one_time_stash_hash PRIVATE BOOST_STACKTRACE_USE_ADDR2LINE)
+target_link_libraries(
+  test_one_time_stash_hash
+  dl
+  gtest_main
+  common
+  OpenMP::OpenMP_CXX
+)
+
+# Standalone benchmark; intentionally not registered with CTest.
+add_executable(
+  benchmark_stash_hash
+  stash_hash_benchmark.cpp
+)
+target_link_libraries(
+  benchmark_stash_hash
+  dl
+  common
+  OpenMP::OpenMP_CXX
+)
+
 include(GoogleTest)
 gtest_discover_tests(test_basic)
 gtest_discover_tests(test_oram)
+gtest_discover_tests(test_one_time_stash_hash)
 gtest_discover_tests(test_cuckoo)
 gtest_discover_tests(test_par_omap)

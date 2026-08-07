@@ -12,16 +12,17 @@
  */
 namespace ODSL::AdaptiveORAM {
 template <typename T, typename PositionType = uint64_t,
-          typename UidType = uint64_t>
+          typename UidType = uint64_t, const int stashSize = 33>
 struct ORAM {
   using LinearORAM_ = LinearORAM::ORAM<T, UidType>;
   // cached oram means the entire oram is cached in the enclave, so we don't
   // need to add checks for freshness
-  // The measured Circuit ORAM tail requires 32 entries after accounting for
-  // all recursive position-map levels. Keep 33 as a one-entry safety margin.
+  // Keep the stash size explicit here because recursive ORAM users may need a
+  // larger bound for a different access schedule.
   using CachedORAM_ =
-      CircuitORAM::ORAM<T, 2, 33, PositionType, UidType, 4096, false>;
-  using ORAM_ = CircuitORAM::ORAM<T, 2, 33, PositionType, UidType, 4096, true>;
+      CircuitORAM::ORAM<T, 2, stashSize, PositionType, UidType, 4096, false>;
+  using ORAM_ =
+      CircuitORAM::ORAM<T, 2, stashSize, PositionType, UidType, 4096, true>;
 
   LinearORAM_* linearOram = NULL;
   CachedORAM_* cachedTreeOram = NULL;

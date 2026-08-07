@@ -363,11 +363,12 @@ enum ObliviousLevel { NON_OBLIVIOUS, PAGE_OBLIVIOUS, FULL_OBLIVIOUS };
  * @tparam parallel_init whether to initialize the two hash tables in parallel
  * @tparam use_crowdedness whether to use crowdedness metadata for eviction
  * instead of random eviction
+ * @tparam oram_stash_size the stash size used by recursive ORAM tables
  */
 template <typename K, typename V,
           const ObliviousLevel isOblivious = FULL_OBLIVIOUS,
           typename PositionType = uint64_t, const bool parallel_init = true,
-          const bool use_crowdedness = true>
+          const bool use_crowdedness = true, const int oram_stash_size = 33>
 struct OHashMap {
   static constexpr bool useCrowdedness = use_crowdedness;
 
@@ -377,9 +378,12 @@ struct OHashMap {
   static constexpr double loadFactor = 0.7;
   // number of slots in each bucket
   static constexpr short bucketSize = 2;
-  // Maximum number of elements in the stash. The measured tail fit gives 21
-  // entries for the one-third per-request budget of 2^-64 / 3.
-  static constexpr int stash_max_size = 21;
+  // Maximum number of elements in the stash. Union bound over 32
+  // position-map recursion levels (for N = 2^32) + 1 data ORAM + 1 cuckoo
+  // stash (+ 1 load balancer when batched) budgets this stash 2^-64 / 35;
+  // the tail fit from Cuckoo.ReplaceCountDistriObliviousCrowdednessAccurate
+  // (super_accurate.log) gives 23 entries.
+  static constexpr int stash_max_size = 23;
   // Choose the least-crowded matching stash entry during oblivious retries when
   // crowdedness metadata is available.
   static constexpr bool popLeastCrowdedFromStash = false;  // useCrowdedness;
@@ -394,7 +398,7 @@ struct OHashMap {
   // for oblivious hash map, we use recursive ORAM
   using ObliviousTableType =
       std::conditional_t<isOblivious == FULL_OBLIVIOUS,
-                         RecursiveORAM<BucketType, PositionType>,
+                         RecursiveORAM<BucketType, oram_stash_size>,
                          PageORAM<BucketType, PositionType>>;
   // for non-oblivious hash map, we cache the front of the vector, for the
   // remaining data store it encrypted and authenticated in external memory,

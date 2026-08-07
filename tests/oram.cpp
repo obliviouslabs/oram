@@ -120,6 +120,90 @@ TEST(CircuitORAM, BatchUpdate) {
   }
 }
 
+TEST(CircuitORAM, BatchEvictionScheduleIsBalanced) {
+  using Schedule =
+      ODSL::CircuitORAM::detail::ReverseLexicographicBatchSchedule<uint32_t>;
+  // 63, 99, 1001, and 32769 are odd and divisible by the default eviction
+  // count of 3, which forces WindowStride to search past its default
+  // candidate. That search previously had no bias against even strides.
+  for (uint32_t pathCount : {63, 64, 65, 99, 130, 260, 390, 1001, 32769}) {
+    uint32_t counter = 0;
+    std::vector<uint32_t> evictionCounts(pathCount, 0);
+
+    for (uint32_t i = 0; i < pathCount; ++i) {
+      uint32_t windowBegin = Schedule::BeginWindow(counter, pathCount, 3);
+      uint32_t firstPath = Schedule::Path(windowBegin, 0, pathCount);
+      uint32_t secondPath = Schedule::Path(windowBegin, 1, pathCount);
+      ++evictionCounts[firstPath];
+      evictionCounts[secondPath] += 2;
+      if (pathCount % 2 == 0) {
+        ASSERT_NE(firstPath % 2, secondPath % 2);
+      }
+    }
+
+    for (uint32_t count : evictionCounts) {
+      ASSERT_EQ(count, 3);
+    }
+  }
+}
+
+// Regression test for a bug where WindowStride's search for a stride
+// coprime with pathCount could land on an even candidate (e.g. pathCount=63
+// picks stride=4). Since the root-level tree split is selected by the
+// lowest bit of the leaf index (see HeapTree::GetNodeIdxArr), an even
+// stride leaves that bit unchanged from one window to the next, pinning
+// thousands of consecutive windows to a single root subtree and starving
+// the other half of deterministic evictions. An odd stride is required to
+// keep the root split alternating every window.
+TEST(CircuitORAM, BatchEvictionScheduleStrideIsOdd) {
+  using Schedule =
+      ODSL::CircuitORAM::detail::ReverseLexicographicBatchSchedule<uint32_t>;
+  for (uint32_t evictionCount : {2, 3, 4, 5}) {
+    for (uint32_t pathCount = 2; pathCount <= 5000; ++pathCount) {
+      uint32_t stride = Schedule::WindowStride(pathCount, evictionCount);
+      ASSERT_EQ(stride % 2, 1u)
+          << "pathCount=" << pathCount << " evictionCount=" << evictionCount;
+    }
+    for (uint32_t pathCount : {32769u, 98307u, 131067u}) {
+      uint32_t stride = Schedule::WindowStride(pathCount, evictionCount);
+      ASSERT_EQ(stride % 2, 1u)
+          << "pathCount=" << pathCount << " evictionCount=" << evictionCount;
+    }
+  }
+}
+
+// Directly checks that the root-level split does not stay pinned to one
+// side of the tree for long stretches, which is the property that
+// BatchEvictionScheduleStrideIsOdd's oddness check is meant to guarantee.
+// Bounds the longest run of consecutive windows landing on the same root
+// parity over one full coprime cycle.
+TEST(CircuitORAM, BatchEvictionScheduleDoesNotStarveRootSubtree) {
+  using Schedule =
+      ODSL::CircuitORAM::detail::ReverseLexicographicBatchSchedule<uint32_t>;
+  for (uint32_t evictionCount : {2, 3, 4, 5}) {
+    for (uint32_t pathCount :
+        {9u, 27u, 33u, 63u, 99u, 1001u, 32769u, 98307u}) {
+      uint32_t counter = 0;
+      uint32_t longestRun = 0;
+      uint32_t currentRun = 0;
+      int lastParity = -1;
+      for (uint32_t i = 0; i < pathCount; ++i) {
+        uint32_t windowBegin =
+            Schedule::BeginWindow(counter, pathCount, evictionCount);
+        int parity = static_cast<int>(windowBegin % 2);
+        currentRun = (parity == lastParity) ? currentRun + 1 : 1;
+        lastParity = parity;
+        longestRun = std::max(longestRun, currentRun);
+      }
+      // An odd stride can only repeat a parity across a modular wrap, never
+      // twice in a row otherwise, so runs longer than 2 indicate the root
+      // subtree is being starved.
+      ASSERT_LE(longestRun, 2u)
+          << "pathCount=" << pathCount << " evictionCount=" << evictionCount;
+    }
+  }
+}
+
 template <const int stashSize = 20>
 void testBatchUpdateLargeCustomStashSize() {
   if (EM::Backend::g_DefaultBackend) {
@@ -346,6 +430,46 @@ TEST(CircuitORAM, OverflowHandling) {
   }
 }
 
+// Batch-access counterpart to OverflowHandling above. BatchReadAndRemove /
+// BatchWriteBack go through ReverseLexicographicBatchSchedule instead of the
+// scalar path's read-path eviction. WindowStride previously could select an
+// even stride for pathCounts (size / Z, rounded up) that are odd and a
+// multiple of the eviction count, which pins the deterministic schedule to
+// one root subtree for thousands of consecutive writebacks and starves the
+// other half of the tree (see BatchEvictionScheduleStrideIsOdd and
+// BatchEvictionScheduleDoesNotStarveRootSubtree above). RecursiveORAM and
+// ParOMap build Circuit ORAMs of exactly these shapes at every recursion
+// level / shard, so this checks the production default stash size (33)
+// against a mix of small, large, power-of-two-adjacent, and
+// odd-multiple-of-three sizes, instead of relying only on the single large
+// power-of-two tree that logs/circuit_oram_stash_batched_current.log was
+// measured on.
+TEST(CircuitORAM, BatchOverflowHandling) {
+  using TestORAM = ODSL::CircuitORAM::ORAM<int, 2, 33, uint32_t, uint32_t>;
+  for (int size : {2, 3, 5, 7, 9, 33, 40, 55, 127, 129, 543, 678, 1023, 1025,
+                   2000, 71429, 126, 198, 522, 2002, 65538}) {
+    TestORAM oram(size);
+    std::vector<uint32_t> posMap(size);
+    std::vector<int> valMap(size, 0);
+    for (uint32_t i = 0; i < (uint32_t)size; ++i) {
+      posMap[i] = oram.Write(i, 0);
+    }
+    const std::vector<bool> writeBackFlags(1, true);
+    int opCount = 2e5;
+    for (int r = 0; r < opCount; ++r) {
+      uint32_t idx = UniformRandom(size - 1);
+      uint32_t oldPos = posMap[idx];
+      uint32_t newPos = oram.GetRandPos();
+      int val;
+      oram.BatchReadAndRemove(1, &oldPos, &idx, &val);
+      ASSERT_EQ(val, valMap[idx]);
+      val = ++valMap[idx];
+      oram.BatchWriteBack(1, &idx, &newPos, &val, writeBackFlags);
+      posMap[idx] = newPos;
+    }
+  }
+}
+
 TEST(CircuitORAM, StashLoad) {
   size_t memSize = 1UL << 16;
   static constexpr int Z = 2;
@@ -356,57 +480,102 @@ TEST(CircuitORAM, StashLoad) {
     return value == nullptr ? defaultValue
                             : static_cast<size_t>(std::strtoull(value, nullptr, 10));
   };
-  size_t warmupWindowCount = getWindowCount("STASH_LOAD_WARMUP_WINDOWS", 1e5);
-  size_t windowCount = getWindowCount("STASH_LOAD_WINDOWS", 1e8);
+  size_t warmupWindowCount =
+      getWindowCount("STASH_LOAD_WARMUP_WINDOWS", 100'000ULL);
+  // Calibrated from the long-window runs: about ten hours total when all four
+  // variants are run sequentially on the 32-thread test setup.
+  size_t windowCount =
+      getWindowCount("STASH_LOAD_WINDOWS", 4'450'000'000ULL);
   size_t windowSize = 1;
   double overloadFactor = 1.0;
   size_t elementCount = memSize * overloadFactor;
-  std::vector<std::vector<uint64_t>> oramElementDistribute(
-      numOrams, std::vector<uint64_t>(stashSize + 1));
+  std::string variant = "current";
+  if (const char* value = std::getenv("CIRCUIT_ORAM_STASH_LOAD_VARIANT")) {
+    variant = value;
+  }
+
+  auto runStashLoad = [&]<typename ORAMType, bool batchedAccess = false>() {
+    std::vector<std::vector<uint64_t>> oramElementDistribute(
+        numOrams, std::vector<uint64_t>(stashSize + 1));
 
 #pragma omp parallel for num_threads(numOrams) schedule(static)
-  for (int oramIndex = 0; oramIndex < numOrams; ++oramIndex) {
-    ODSL::CircuitORAM::ORAM<int, Z, stashSize, uint32_t, uint32_t, 4096, false>
-        oramForThread(memSize);
-    std::mt19937 rng(oramIndex + 1);
-    std::uniform_int_distribution<uint32_t> randomPosition(0, memSize / Z - 1);
-    std::vector<uint32_t> posMap(elementCount);
-    for (uint32_t i = 0; i < elementCount; ++i) {
-      posMap[i] = oramForThread.Write(i, 0, randomPosition(rng));
-    }
+    for (int oramIndex = 0; oramIndex < numOrams; ++oramIndex) {
+      ORAMType oramForThread(memSize);
+      std::mt19937 rng(oramIndex + 1);
+      std::uniform_int_distribution<uint32_t> randomPosition(0, memSize / Z - 1);
+      std::vector<uint32_t> posMap(elementCount);
+      for (uint32_t i = 0; i < elementCount; ++i) {
+        posMap[i] = oramForThread.Write(i, 0, randomPosition(rng));
+      }
+      const std::vector<bool> batchWriteBackFlags(1, true);
 
-    auto& elementDistribute = oramElementDistribute[oramIndex];
-    for (size_t i = 0; i < warmupWindowCount + windowCount; ++i) {
-      int windowMaxStashLoad = 0;
-      for (size_t j = 0; j < windowSize; ++j) {
-        int val;
-        uint32_t idx = rng() % memSize;
-        uint32_t oldpos = posMap[idx];
-        uint32_t pos = oramForThread.Read(oldpos, idx, val, randomPosition(rng));
-        posMap[idx] = pos;
-
-        int stashLoad = 0;
-        for (int k = 0; k < stashSize; ++k) {
-          if (!oramForThread.GetStash().blocks[k].IsDummy()) {
-            ++stashLoad;
+      auto& elementDistribute = oramElementDistribute[oramIndex];
+      for (size_t i = 0; i < warmupWindowCount + windowCount; ++i) {
+        int windowMaxStashLoad = 0;
+        for (size_t j = 0; j < windowSize; ++j) {
+          int val;
+          uint32_t idx = rng() % memSize;
+          uint32_t oldpos = posMap[idx];
+          uint32_t pos = randomPosition(rng);
+          if constexpr (batchedAccess) {
+            // BatchReadAndRemove accesses oldpos, but deferred writeback does
+            // not revisit it. It evicts deterministic path c once and c+1
+            // twice, then advances past the three logical eviction slots.
+            uint32_t uid = idx;
+            oramForThread.BatchReadAndRemove(1, &oldpos, &uid, &val);
+            oramForThread.BatchWriteBack(1, &uid, &pos, &val,
+                                         batchWriteBackFlags);
+          } else {
+            pos = oramForThread.Read(oldpos, idx, val, pos);
           }
-        }
-        windowMaxStashLoad = std::max(windowMaxStashLoad, stashLoad);
-      }
-      if (i >= warmupWindowCount) {
-        ++elementDistribute[windowMaxStashLoad];
-      }
-    }
-  }
+          posMap[idx] = pos;
 
-  std::vector<uint64_t> elementDistribute(stashSize + 1);
-  for (const auto& oramDistribution : oramElementDistribute) {
-    for (size_t load = 0; load < elementDistribute.size(); ++load) {
-      elementDistribute[load] += oramDistribution[load];
+          int stashLoad = 0;
+          for (int k = 0; k < stashSize; ++k) {
+            if (!oramForThread.GetStash().blocks[k].IsDummy()) {
+              ++stashLoad;
+            }
+          }
+          windowMaxStashLoad = std::max(windowMaxStashLoad, stashLoad);
+        }
+        if (i >= warmupWindowCount) {
+          ++elementDistribute[windowMaxStashLoad];
+        }
+      }
     }
-  }
-  for (int i = 0; i <= stashSize; ++i) {
-    printf("%d %lu\n", i, elementDistribute[i]);
+
+    std::vector<uint64_t> elementDistribute(stashSize + 1);
+    for (const auto& oramDistribution : oramElementDistribute) {
+      for (size_t load = 0; load < elementDistribute.size(); ++load) {
+        elementDistribute[load] += oramDistribution[load];
+      }
+    }
+    for (int i = 0; i <= stashSize; ++i) {
+      printf("%d %lu\n", i, elementDistribute[i]);
+    }
+  };
+
+  using CurrentORAM = ODSL::CircuitORAM::ORAM<
+      int, Z, stashSize, uint32_t, uint32_t, 4096, false, 2, 2, true>;
+  // No eviction on the accessed/read path, followed by two single evictions
+  // on consecutive deterministic paths.
+  using NoReadTwoDeterministicPathsORAM = ODSL::CircuitORAM::ORAM<
+      int, Z, stashSize, uint32_t, uint32_t, 4096, false, 2, 1, false>;
+  using PartialTwoPathORAM = ODSL::CircuitORAM::ORAM<
+      int, Z, stashSize, uint32_t, uint32_t, 4096, false, 2, 1, true>;
+
+  if (variant == "current") {
+    runStashLoad.template operator()<CurrentORAM>();
+  } else if (variant == "batched_current") {
+    runStashLoad.template operator()<CurrentORAM, true>();
+  } else if (variant == "original" || variant == "no_read_two_paths") {
+    runStashLoad.template operator()<NoReadTwoDeterministicPathsORAM>();
+  } else if (variant == "partial_two_paths") {
+    runStashLoad.template operator()<PartialTwoPathORAM>();
+  } else {
+    throw std::runtime_error(
+        "CIRCUIT_ORAM_STASH_LOAD_VARIANT must be current, batched_current, "
+        "original, no_read_two_paths, or partial_two_paths");
   }
 }
 
@@ -737,7 +906,7 @@ TEST(RecursiveORAM, testMixed) {
 TEST(RecursiveORAM, testBatchAccessDefer) {
   for (uint64_t size = 1000; size < 12345; size = size * 3 / 2) {
     StdVector<uint64_t> ref(size);
-    ODSL::RecursiveORAM<uint64_t, uint64_t> oram(size, MAX_CACHE_SIZE);
+    ODSL::RecursiveORAM<uint64_t> oram(size, MAX_CACHE_SIZE);
     for (uint64_t i = 0; i < size; i++) {
       ref[i] = UniformRandom();
     }
@@ -779,7 +948,7 @@ TEST(RecursiveORAM, testBatchAccessDefer) {
 TEST(RecursiveORAM, testBatchAccessDeferInitDefault) {
   for (uint64_t size = 1234; size < 12345; size = size * 3 / 2) {
     StdVector<uint64_t> ref(size);
-    ODSL::RecursiveORAM<uint64_t, uint64_t> oram(size, MAX_CACHE_SIZE);
+    ODSL::RecursiveORAM<uint64_t> oram(size, MAX_CACHE_SIZE);
     for (uint64_t i = 0; i < size; i++) {
       ref[i] = 54321;
     }
@@ -826,7 +995,7 @@ TEST(RecursiveORAM, testBatchAccessDeferLarge) {
   size_t BackendSize = 2e9;
   EM::Backend::g_DefaultBackend =
       new EM::Backend::MemServerBackend(BackendSize);
-  ODSL::RecursiveORAM<TestElement, uint32_t> oram(size, 1UL << 24);
+  ODSL::RecursiveORAM<TestElement> oram(size, 1UL << 24);
   for (uint32_t i = 0; i < size; i++) {
     ref[i] = UniformRandom();
   }

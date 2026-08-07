@@ -1,11 +1,14 @@
 #pragma once
 
+#include <memory>
+
 #include "adaptive_oram.hpp"
 
 /// @brief This file contains the definition of an oram with recursive position
 /// maps.
 
 namespace ODSL {
+namespace detail {
 
 /**
  * @brief Recursive ORAM stores the position map recursively. Each position map
@@ -13,16 +16,18 @@ namespace ODSL {
  * ram.
  *
  * @tparam T The type of the data
- * @tparam PositionType The type of the position, default to uint64_t. If the
- * oram is not very large (< 4e9 elements), however, it is faster to use
- * uint32_t.
+ * @tparam IdentifierType The type of unique and randomized path identifiers
+ * stored in each ORAM level.
+ * @tparam stashSize The stash size used by each underlying Circuit ORAM.
  */
-template <typename T, typename PositionType = uint64_t>
-struct RecursiveORAM {
+template <typename T, typename IdentifierType, const int stashSize = 33>
+struct RecursiveORAMImpl {
  private:
-  typedef PositionType UidType;
+  using UidType = IdentifierType;
+  using PositionIdentifier = IdentifierType;
   // Each internal node (i.e. position map node) has fan_out children
-  static constexpr short fan_out = std::max(64 / (int)sizeof(PositionType), 2);
+  static constexpr short fan_out =
+      std::max(64 / (int)sizeof(PositionIdentifier), 2);
   bool isInitDefault = false;
 
   /**
@@ -31,7 +36,7 @@ struct RecursiveORAM {
    *
    */
   struct InternalNode {
-    PositionType children[fan_out];
+    PositionIdentifier children[fan_out];
 #ifndef ENCLAVE_MODE
     friend std::ostream& operator<<(std::ostream& os,
                                     const InternalNode& node) {
@@ -65,16 +70,18 @@ struct RecursiveORAM {
 #endif
   };
 
-  using InternalORAM = AdaptiveORAM::ORAM<InternalNode, PositionType, UidType>;
+  using InternalORAM =
+      AdaptiveORAM::ORAM<InternalNode, PositionIdentifier, UidType, stashSize>;
 
   // Stores the position maps. internalOrams[0] is the smallest position map.
   std::vector<InternalORAM> internalOrams;
 
-  using LeafORAM = AdaptiveORAM::ORAM<LeafNode, PositionType, UidType>;
+  using LeafORAM =
+      AdaptiveORAM::ORAM<LeafNode, PositionIdentifier, UidType, stashSize>;
   LeafORAM leafOram;  // Stores the actual data
   // The size of all the orams. oramSizes[0] is the size of the smallest oram.
   // oramSizes.back() is the size of the leaf oram.
-  std::vector<PositionType> oramSizes;
+  std::vector<uint64_t> oramSizes;
 
   // A global buffer to store the uids at each ORAM level, so that we don't need
   // to allocate memory for each access
@@ -82,7 +89,7 @@ struct RecursiveORAM {
   // A global buffer to store the indices within the node at each ORAM level.
   std::vector<short> indices;
   // The size of the recursive ORAM
-  PositionType _size;
+  uint64_t _size;
   // The lock to protect the ORAM
   Lock _lock;
   // Whether the ORAM has been initialized
@@ -95,11 +102,11 @@ struct RecursiveORAM {
    * @tparam Reader The type of the reader
    * @param reader The reader to read the data from
    * @param level The ORAM level of the root of the subtree.
-   * @return PositionType The position of the root of the subtree in the oram it
-   * belongs to
+   * @return PositionIdentifier The position of the root of the subtree in the
+   * ORAM it belongs to
    */
   template <typename Reader>
-  PositionType initFromReaderHelper(Reader& reader, int level = 0) {
+  PositionIdentifier initFromReaderHelper(Reader& reader, int level = 0) {
     if (level == (int)oramSizes.size() - 1) {
       LeafNode leafNode;
       for (short i = 0; i < chunk_size; ++i) {
@@ -125,7 +132,7 @@ struct RecursiveORAM {
 
   LeafNode defaultLeafNode;
 
-  PositionType initDefaultHelper(uint64_t& remain, int level = 0) {
+  PositionIdentifier initDefaultHelper(uint64_t& remain, int level = 0) {
     if (level == (int)oramSizes.size() - 1) {
       // UidType uid = leafOram.GetNextUid();
       // decrement remain by chunk_size until zero
@@ -144,14 +151,14 @@ struct RecursiveORAM {
   }
 
  public:
-  RecursiveORAM() {}
+  RecursiveORAMImpl() {}
 
   /**
    * @brief Construct a new Recursive ORAM of given size
    *
    * @param size The size of the ORAM
    */
-  explicit RecursiveORAM(PositionType size) { SetSize(size); }
+  explicit RecursiveORAMImpl(uint64_t size) { SetSize(size); }
 
   /**
    * @brief Construct a new Recursive ORAM of given size and available cache
@@ -160,7 +167,7 @@ struct RecursiveORAM {
    * @param size The size of the ORAM
    * @param cacheBytes The available cache size in bytes
    */
-  RecursiveORAM(PositionType size, size_t cacheBytes) {
+  RecursiveORAMImpl(uint64_t size, size_t cacheBytes) {
     SetSize(size, cacheBytes);
   }
 
@@ -173,12 +180,12 @@ struct RecursiveORAM {
    * @param size The size of the ORAM
    * @param cacheBytes The available cache size in bytes
    */
-  void SetSize(PositionType size, size_t cacheBytes = DEFAULT_HEAP_SIZE) {
+  void SetSize(uint64_t size, size_t cacheBytes = DEFAULT_HEAP_SIZE) {
     _size = size;
-    PositionType leafOramSize = divRoundUp(size, chunk_size);
+    uint64_t leafOramSize = divRoundUp(size, chunk_size);
     int numLevel = 0;
-    PositionType internalSize = divRoundUp(leafOramSize, fan_out);
-    for (PositionType oramSize = internalSize;;
+    uint64_t internalSize = divRoundUp(leafOramSize, fan_out);
+    for (uint64_t oramSize = internalSize;;
          oramSize = divRoundUp(oramSize, fan_out)) {
       oramSizes.push_back(oramSize);
       ++numLevel;
@@ -193,7 +200,7 @@ struct RecursiveORAM {
     // consume all its budget, so we can tune the budget for the larger ORAMs
     // according to the amount of cache size remained.
     size_t remainCacheBytes = cacheBytes;
-    for (PositionType oramSize : oramSizes) {
+    for (uint64_t oramSize : oramSizes) {
       size_t levelCacheBytes = remainCacheBytes / (numLevel + 1);
 
       internalOrams.emplace_back(oramSize, levelCacheBytes);
@@ -241,7 +248,7 @@ struct RecursiveORAM {
     if (reader.size() != _size) {
       throw std::runtime_error("Reader size does not match oram size");
     }
-    for (PositionType i = 0; i < oramSizes[0]; ++i) {
+    for (uint64_t i = 0; i < oramSizes[0]; ++i) {
       initFromReaderHelper(reader);
     }
   }
@@ -258,7 +265,7 @@ struct RecursiveORAM {
     if (leafOram.isLinear) {
       // naive initialization for linear ORAM
       EM::VirtualVector::VirtualReader<T> reader(
-          _size, [&](PositionType) { return defaultValue; });
+          _size, [&](uint64_t) { return defaultValue; });
       InitFromReader(reader);
       return;
     }
@@ -284,11 +291,12 @@ struct RecursiveORAM {
    */
   template <class Func>
     requires UpdateFunction<Func, T>
-  void Access(UidType address, const Func& accessor) {
+  void Access(uint64_t address, const Func& accessor) {
     Critical section(_lock);
     Assert(hasInited);
+    Assert(address < _size);
     // first calculate the uid at each ORAM level, and the index within the node
-    UidType uid = address / chunk_size;
+    UidType uid = static_cast<UidType>(address / chunk_size);
     short index = address % chunk_size;
     for (int level = (int)oramSizes.size() - 1; level >= 0; --level) {
       uids[level] = uid;
@@ -296,20 +304,20 @@ struct RecursiveORAM {
       index = uid % fan_out;
       uid /= fan_out;
     }
-    PositionType pos = 0;
-    PositionType newPos = 0;
+    PositionIdentifier pos = 0;
+    PositionIdentifier newPos = 0;
     for (int level = 0; level < (int)oramSizes.size() - 1; ++level) {
-      PositionType nextPos = 0;
+      PositionIdentifier nextPos = 0;
       // here we pre-calculate the next position, so that we can update the
       // position map in one go
-      PositionType nextNewPos =
+      PositionIdentifier nextNewPos =
           level == (int)oramSizes.size() - 2
               ? leafOram.GetRandPos()
               : internalOrams[level + 1]
                     .GetRandPos();  // UniformRandom(oramSizes[level
                                     // + 1] - 1);
       auto updateFunc = [&](InternalNode& node) -> bool {
-        PositionType localNextPos = 0;
+        PositionIdentifier localNextPos = 0;
         for (short i = 0; i < fan_out; ++i) {
           bool match = i == indices[level];
           obliMove(match, localNextPos, node.children[i]);
@@ -359,7 +367,7 @@ struct RecursiveORAM {
    */
   struct WriteBackBuffer {
     UidType* uids = NULL;                // uids at each level
-    PositionType* newPoses = NULL;       // new positions at each level
+    PositionIdentifier* newPoses = NULL;  // new positions at each level
     InternalNode* internalNodes = NULL;  // nodes at each internal level
     LeafNode* leafNodes = NULL;          // nodes at the leaf level
     uint8_t* buffer = NULL;              // start of the buffer
@@ -381,7 +389,7 @@ struct RecursiveORAM {
       offset += sizeof(UidType) * allBatchSize;
       offset = (offset + 7) / 8 * 8;  // align to 8 bytes
       uint64_t newPosOffset = offset;
-      offset += sizeof(PositionType) * allBatchSize;
+      offset += sizeof(PositionIdentifier) * allBatchSize;
       offset = (offset + 7) / 8 * 8;  // align to 8 bytes
       uint64_t internalNodeOffset = offset;
       offset += sizeof(InternalNode) * batchSize * (numLevel - 1);
@@ -396,14 +404,15 @@ struct RecursiveORAM {
         bufferSize = offset;
       }
       uids = reinterpret_cast<UidType*>(buffer + uidOffset);
-      newPoses = reinterpret_cast<PositionType*>(buffer + newPosOffset);
+      newPoses =
+          reinterpret_cast<PositionIdentifier*>(buffer + newPosOffset);
       internalNodes =
           reinterpret_cast<InternalNode*>(buffer + internalNodeOffset);
       leafNodes = reinterpret_cast<LeafNode*>(buffer + leafNodeOffset);
       this->numLevel = numLevel;
       this->batchSize = batchSize;
       memset(newPoses, 0,
-             sizeof(PositionType) *
+             sizeof(PositionIdentifier) *
                  batchSize);  // first level of new pos is always 0
       if (defaultLeafNode != NULL) {
         // copy the default leaf node to all leaf nodes
@@ -415,7 +424,7 @@ struct RecursiveORAM {
 
     INLINE UidType* GetUids(int level) { return uids + level * batchSize; }
 
-    INLINE PositionType* GetNewPoses(int level) {
+    INLINE PositionIdentifier* GetNewPoses(int level) {
       return newPoses + level * batchSize;
     }
 
@@ -449,9 +458,9 @@ struct RecursiveORAM {
    * @param accessor The accessor function.
    * @param writeBackBuffer The write back buffer to store the updated data.
    */
-  template <class Func>
+  template <typename AddressType, class Func>
     requires BatchUpdateFunction<Func, T>
-  void BatchAccessDeferWriteBack(const std::vector<UidType>& address,
+  void BatchAccessDeferWriteBack(const std::vector<AddressType>& address,
                                  const Func& accessor,
                                  WriteBackBuffer& writeBackBuffer) {
     // the overall implementation is similar to single access
@@ -466,7 +475,8 @@ struct RecursiveORAM {
     }
     std::vector<short> indicesCache(numLevel * batchSize);
     for (size_t i = 0; i < address.size(); ++i) {
-      UidType uid = address[i] / chunk_size;
+      Assert(static_cast<uint64_t>(address[i]) < _size);
+      UidType uid = static_cast<UidType>(address[i] / chunk_size);
       short index = address[i] % chunk_size;
       for (int level = (int)oramSizes.size() - 1; level >= 0; --level) {
         writeBackBuffer.GetUids(level)[i] = uid;
@@ -476,11 +486,12 @@ struct RecursiveORAM {
       }
     }
 
-    std::vector<PositionType> pos(address.size(), 0);
-    std::vector<PositionType> nextPos(address.size());
+    std::vector<PositionIdentifier> pos(address.size(), 0);
+    std::vector<PositionIdentifier> nextPos(address.size());
 
     for (int level = 0; level < (int)oramSizes.size() - 1; ++level) {
-      PositionType* nextNewPos = writeBackBuffer.GetNewPoses(level + 1);
+      PositionIdentifier* nextNewPos =
+          writeBackBuffer.GetNewPoses(level + 1);
       InternalNode* node = writeBackBuffer.GetInternalNodes(level);
       UidType* uid = writeBackBuffer.GetUids(level);
       // for (size_t i = 0; i < address.size(); ++i) {
@@ -600,9 +611,9 @@ struct RecursiveORAM {
    * @param address The addresses to access, must be sorted.
    * @param accessor The accessor function.
    */
-  template <class Func>
+  template <typename AddressType, class Func>
     requires BatchUpdateFunction<Func, T>
-  void BatchAccessDeferWriteBack(const std::vector<UidType>& address,
+  void BatchAccessDeferWriteBack(const std::vector<AddressType>& address,
                                  const Func& accessor) {
     BatchAccessDeferWriteBack(address, accessor, oramWriteBackBuffer);
   }
@@ -613,7 +624,7 @@ struct RecursiveORAM {
    * @param address The address to read
    * @param out The output data
    */
-  void Read(UidType address, T& out) {
+  void Read(uint64_t address, T& out) {
     Access(address, [&](const T& data) { out = data; });
   }
 
@@ -623,7 +634,7 @@ struct RecursiveORAM {
    * @param address The address to write
    * @param in The input data
    */
-  void Write(UidType address, const T& in) {
+  void Write(uint64_t address, const T& in) {
     Access(address, [&](T& data) { data = in; });
   }
 
@@ -636,7 +647,8 @@ struct RecursiveORAM {
    * @param out The output data
    * @param writeBackBuffer The write back buffer to store the updated data
    */
-  void BatchReadDeferWriteBack(const std::vector<UidType>& address,
+  template <typename AddressType>
+  void BatchReadDeferWriteBack(const std::vector<AddressType>& address,
                                std::vector<T>& out,
                                WriteBackBuffer& writeBackBuffer) {
     BatchAccessDeferWriteBack(
@@ -652,9 +664,119 @@ struct RecursiveORAM {
    * @param address The addresses to read from. Must be sorted.
    * @param out The output data
    */
-  void BatchReadDeferWriteBack(const std::vector<UidType>& address,
+  template <typename AddressType>
+  void BatchReadDeferWriteBack(const std::vector<AddressType>& address,
                                std::vector<T>& out) {
     BatchReadDeferWriteBack(address, out, oramWriteBackBuffer);
+  }
+};
+}  // namespace detail
+
+/**
+ * @brief Recursive ORAM with automatically compact path identifiers.
+ *
+ * Logical addresses use uint64_t at the public interface. Unique identifiers
+ * and randomized path identifiers are implementation details and use uint32_t
+ * whenever the ORAM has fewer than 2^32 elements. Larger ORAMs use uint64_t.
+ *
+ * @tparam T The type of the data.
+ * @tparam stashSize The stash size used by each underlying Circuit ORAM.
+ */
+template <typename T, const int stashSize = 33>
+struct RecursiveORAM {
+ private:
+  using CompactImpl = detail::RecursiveORAMImpl<T, uint32_t, stashSize>;
+  using WideImpl = detail::RecursiveORAMImpl<T, uint64_t, stashSize>;
+
+  std::unique_ptr<CompactImpl> compactImpl;
+  std::unique_ptr<WideImpl> wideImpl;
+
+  template <class Func>
+  decltype(auto) withImpl(Func&& func) {
+    if (compactImpl) {
+      return std::forward<Func>(func)(*compactImpl);
+    }
+    if (wideImpl) {
+      return std::forward<Func>(func)(*wideImpl);
+    }
+    throw std::runtime_error("RecursiveORAM size has not been set");
+  }
+
+  template <class Func>
+  decltype(auto) withImpl(Func&& func) const {
+    if (compactImpl) {
+      return std::forward<Func>(func)(*compactImpl);
+    }
+    if (wideImpl) {
+      return std::forward<Func>(func)(*wideImpl);
+    }
+    throw std::runtime_error("RecursiveORAM size has not been set");
+  }
+
+ public:
+  RecursiveORAM() = default;
+
+  explicit RecursiveORAM(uint64_t size) { SetSize(size); }
+
+  RecursiveORAM(uint64_t size, size_t cacheBytes) {
+    SetSize(size, cacheBytes);
+  }
+
+  void SetSize(uint64_t size, size_t cacheBytes = DEFAULT_HEAP_SIZE) {
+    if (compactImpl || wideImpl) {
+      throw std::runtime_error("SetSize can only be called on empty oram");
+    }
+    if (size < (uint64_t{1} << 32)) {
+      compactImpl = std::make_unique<CompactImpl>(size, cacheBytes);
+    } else {
+      wideImpl = std::make_unique<WideImpl>(size, cacheBytes);
+    }
+  }
+
+  uint64_t GetMemoryUsage() const {
+    return withImpl([](const auto& impl) { return impl.GetMemoryUsage(); });
+  }
+
+  template <typename Reader>
+    requires Readable<Reader, T>
+  void InitFromReader(Reader& reader) {
+    withImpl([&](auto& impl) { impl.InitFromReader(reader); });
+  }
+
+  void InitDefault(const T& defaultValue) {
+    withImpl([&](auto& impl) { impl.InitDefault(defaultValue); });
+  }
+
+  template <class Func>
+    requires UpdateFunction<Func, T>
+  void Access(uint64_t address, const Func& accessor) {
+    withImpl([&](auto& impl) { impl.Access(address, accessor); });
+  }
+
+  template <typename AddressType, class Func>
+    requires BatchUpdateFunction<Func, T>
+  void BatchAccessDeferWriteBack(const std::vector<AddressType>& address,
+                                 const Func& accessor) {
+    withImpl([&](auto& impl) {
+      impl.BatchAccessDeferWriteBack(address, accessor);
+    });
+  }
+
+  void WriteBack() { withImpl([](auto& impl) { impl.WriteBack(); }); }
+
+  void Read(uint64_t address, T& out) {
+    withImpl([&](auto& impl) { impl.Read(address, out); });
+  }
+
+  void Write(uint64_t address, const T& in) {
+    withImpl([&](auto& impl) { impl.Write(address, in); });
+  }
+
+  template <typename AddressType>
+  void BatchReadDeferWriteBack(const std::vector<AddressType>& address,
+                               std::vector<T>& out) {
+    withImpl(
+        [&](auto& impl) { impl.BatchReadDeferWriteBack(address, out); });
   }
 };
 }  // namespace ODSL
