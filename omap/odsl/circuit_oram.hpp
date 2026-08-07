@@ -47,7 +47,19 @@ struct ReverseLexicographicBatchSchedule {
     if (stride == 0) {
       stride = 1;
     }
-    while (GreatestCommonDivisor(stride, pathCount) != 1) {
+    // An even stride leaves the root-level split (the lowest bit of the leaf
+    // index, see HeapTree::GetNodeIdxArr) unchanged from one window to the
+    // next, so every window keeps landing on the same half of the tree until
+    // the counter wraps around pathCount. For an odd pathCount that is a
+    // multiple of evictionCount, the smallest candidate coprime to pathCount
+    // is often even (e.g. pathCount=63 picks stride=4), which pins tens of
+    // thousands of consecutive windows to one root subtree and starves the
+    // other half of deterministic evictions. Requiring an odd stride keeps
+    // the root split alternating every window, matching the balance the
+    // default stride of evictionCount (odd, since evictionCount=1+evict_freq
+    // is odd for the default evict_freq=2) already provides.
+    while (stride % 2 == 0 ||
+          GreatestCommonDivisor(stride, pathCount) != 1) {
       stride = (stride + 1) % pathCount;
       if (stride == 0) {
         stride = 1;
