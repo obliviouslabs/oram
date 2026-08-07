@@ -123,7 +123,10 @@ TEST(CircuitORAM, BatchUpdate) {
 TEST(CircuitORAM, BatchEvictionScheduleIsBalanced) {
   using Schedule =
       ODSL::CircuitORAM::detail::ReverseLexicographicBatchSchedule<uint32_t>;
-  for (uint32_t pathCount : {63, 64}) {
+  // 63, 99, 1001, and 32769 are odd and divisible by the default eviction
+  // count of 3, which forces WindowStride to search past its default
+  // candidate. That search previously had no bias against even strides.
+  for (uint32_t pathCount : {63, 64, 65, 99, 130, 260, 390, 1001, 32769}) {
     uint32_t counter = 0;
     std::vector<uint32_t> evictionCounts(pathCount, 0);
 
@@ -140,6 +143,63 @@ TEST(CircuitORAM, BatchEvictionScheduleIsBalanced) {
 
     for (uint32_t count : evictionCounts) {
       ASSERT_EQ(count, 3);
+    }
+  }
+}
+
+// Regression test for a bug where WindowStride's search for a stride
+// coprime with pathCount could land on an even candidate (e.g. pathCount=63
+// picks stride=4). Since the root-level tree split is selected by the
+// lowest bit of the leaf index (see HeapTree::GetNodeIdxArr), an even
+// stride leaves that bit unchanged from one window to the next, pinning
+// thousands of consecutive windows to a single root subtree and starving
+// the other half of deterministic evictions. An odd stride is required to
+// keep the root split alternating every window.
+TEST(CircuitORAM, BatchEvictionScheduleStrideIsOdd) {
+  using Schedule =
+      ODSL::CircuitORAM::detail::ReverseLexicographicBatchSchedule<uint32_t>;
+  for (uint32_t evictionCount : {2, 3, 4, 5}) {
+    for (uint32_t pathCount = 2; pathCount <= 5000; ++pathCount) {
+      uint32_t stride = Schedule::WindowStride(pathCount, evictionCount);
+      ASSERT_EQ(stride % 2, 1u)
+          << "pathCount=" << pathCount << " evictionCount=" << evictionCount;
+    }
+    for (uint32_t pathCount : {32769u, 98307u, 131067u}) {
+      uint32_t stride = Schedule::WindowStride(pathCount, evictionCount);
+      ASSERT_EQ(stride % 2, 1u)
+          << "pathCount=" << pathCount << " evictionCount=" << evictionCount;
+    }
+  }
+}
+
+// Directly checks that the root-level split does not stay pinned to one
+// side of the tree for long stretches, which is the property that
+// BatchEvictionScheduleStrideIsOdd's oddness check is meant to guarantee.
+// Bounds the longest run of consecutive windows landing on the same root
+// parity over one full coprime cycle.
+TEST(CircuitORAM, BatchEvictionScheduleDoesNotStarveRootSubtree) {
+  using Schedule =
+      ODSL::CircuitORAM::detail::ReverseLexicographicBatchSchedule<uint32_t>;
+  for (uint32_t evictionCount : {2, 3, 4, 5}) {
+    for (uint32_t pathCount :
+        {9u, 27u, 33u, 63u, 99u, 1001u, 32769u, 98307u}) {
+      uint32_t counter = 0;
+      uint32_t longestRun = 0;
+      uint32_t currentRun = 0;
+      int lastParity = -1;
+      for (uint32_t i = 0; i < pathCount; ++i) {
+        uint32_t windowBegin =
+            Schedule::BeginWindow(counter, pathCount, evictionCount);
+        int parity = static_cast<int>(windowBegin % 2);
+        currentRun = (parity == lastParity) ? currentRun + 1 : 1;
+        lastParity = parity;
+        longestRun = std::max(longestRun, currentRun);
+      }
+      // An odd stride can only repeat a parity across a modular wrap, never
+      // twice in a row otherwise, so runs longer than 2 indicate the root
+      // subtree is being starved.
+      ASSERT_LE(longestRun, 2u)
+          << "pathCount=" << pathCount << " evictionCount=" << evictionCount;
     }
   }
 }
@@ -366,6 +426,46 @@ TEST(CircuitORAM, OverflowHandling) {
         default:
           break;
       }
+    }
+  }
+}
+
+// Batch-access counterpart to OverflowHandling above. BatchReadAndRemove /
+// BatchWriteBack go through ReverseLexicographicBatchSchedule instead of the
+// scalar path's read-path eviction. WindowStride previously could select an
+// even stride for pathCounts (size / Z, rounded up) that are odd and a
+// multiple of the eviction count, which pins the deterministic schedule to
+// one root subtree for thousands of consecutive writebacks and starves the
+// other half of the tree (see BatchEvictionScheduleStrideIsOdd and
+// BatchEvictionScheduleDoesNotStarveRootSubtree above). RecursiveORAM and
+// ParOMap build Circuit ORAMs of exactly these shapes at every recursion
+// level / shard, so this checks the production default stash size (33)
+// against a mix of small, large, power-of-two-adjacent, and
+// odd-multiple-of-three sizes, instead of relying only on the single large
+// power-of-two tree that logs/circuit_oram_stash_batched_current.log was
+// measured on.
+TEST(CircuitORAM, BatchOverflowHandling) {
+  using TestORAM = ODSL::CircuitORAM::ORAM<int, 2, 33, uint32_t, uint32_t>;
+  for (int size : {2, 3, 5, 7, 9, 33, 40, 55, 127, 129, 543, 678, 1023, 1025,
+                   2000, 71429, 126, 198, 522, 2002, 65538}) {
+    TestORAM oram(size);
+    std::vector<uint32_t> posMap(size);
+    std::vector<int> valMap(size, 0);
+    for (uint32_t i = 0; i < (uint32_t)size; ++i) {
+      posMap[i] = oram.Write(i, 0);
+    }
+    const std::vector<bool> writeBackFlags(1, true);
+    int opCount = 2e5;
+    for (int r = 0; r < opCount; ++r) {
+      uint32_t idx = UniformRandom(size - 1);
+      uint32_t oldPos = posMap[idx];
+      uint32_t newPos = oram.GetRandPos();
+      int val;
+      oram.BatchReadAndRemove(1, &oldPos, &idx, &val);
+      ASSERT_EQ(val, valMap[idx]);
+      val = ++valMap[idx];
+      oram.BatchWriteBack(1, &idx, &newPos, &val, writeBackFlags);
+      posMap[idx] = newPos;
     }
   }
 }
