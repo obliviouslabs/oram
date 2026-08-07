@@ -378,9 +378,12 @@ struct OHashMap {
   static constexpr double loadFactor = 0.7;
   // number of slots in each bucket
   static constexpr short bucketSize = 2;
-  // Maximum number of elements in the stash. The measured tail fit gives 21
-  // entries for the one-third per-request budget of 2^-64 / 3.
-  static constexpr int stash_max_size = 21;
+  // Maximum number of elements in the stash. Union bound over 32
+  // position-map recursion levels (for N = 2^32) + 1 data ORAM + 1 cuckoo
+  // stash (+ 1 load balancer when batched) budgets this stash 2^-64 / 35;
+  // the tail fit from Cuckoo.ReplaceCountDistriObliviousCrowdednessAccurate
+  // (super_accurate.log) gives 23 entries.
+  static constexpr int stash_max_size = 23;
   // Choose the least-crowded matching stash entry during oblivious retries when
   // crowdedness metadata is available.
   static constexpr bool popLeastCrowdedFromStash = false;  // useCrowdedness;

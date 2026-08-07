@@ -24,9 +24,12 @@ namespace ODSL {
 template <typename K, typename V, typename PositionType = uint64_t>
 struct ParOMap {
  private:
-  // Batched reads do not evict on the read path. Use the larger bound sized
-  // for that access schedule in every recursive ORAM belonging to a shard.
-  static constexpr int shardedOramStashSize = 46;
+  // Batched reads do not evict on the read path. Use the bound sized for
+  // that access schedule in every recursive ORAM belonging to a shard: union
+  // bound over 32 position-map recursion levels (for N = 2^32) + 1 data
+  // ORAM + 1 cuckoo stash + 1 load balancer = 35 components, each budgeted
+  // 2^-64 / 35 from the batched tail fit (logs/circuit_oram_stash_batched_current.log).
+  static constexpr int shardedOramStashSize = 31;
   using BaseMap =
       OHashMap<K, V, FULL_OBLIVIOUS, PositionType, true, true,
                shardedOramStashSize>;
