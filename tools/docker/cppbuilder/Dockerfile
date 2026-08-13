@@ -44,9 +44,17 @@ RUN unzip 'scc-3.0.0-x86_64-unknown-linux.zip' -d /
 RUN chmod +x /scc
 
 RUN mkdir /dockerfiles
-RUN cd /dockerfiles && wget https://download.01.org/intel-sgx/latest/linux-latest/distro/ubuntu22.04-server/sgx_linux_x64_sdk_2.23.100.2.bin \
+RUN cd /dockerfiles && wget https://download.01.org/intel-sgx/sgx-linux/2.23/distro/ubuntu22.04-server/sgx_linux_x64_sdk_2.23.100.2.bin \
 && chmod +x ./* \
 && echo yes | ./sgx_linux_x64_sdk_2.23.100.2.bin
+
+# The SGX SDK's libc++ still calls std::uncaught_exception(), but its Linux
+# compatibility header hides that declaration when compiling as C++20.
+# libsgx_tcxx provides the function, so keep its declaration available.
+RUN sed -i 's/#  elif __cplusplus <= 201703L/#  elif __cplusplus >= 201103L/' \
+        /dockerfiles/sgxsdk/include/stdc++/linux/exception \
+&& grep -q '#  elif __cplusplus >= 201103L' \
+        /dockerfiles/sgxsdk/include/stdc++/linux/exception
 RUN echo "source /dockerfiles/sgxsdk/environment" > /startsgxenv.sh
 RUN chmod +x /startsgxenv.sh
 
