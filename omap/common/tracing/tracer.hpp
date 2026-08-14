@@ -1,16 +1,16 @@
 #pragma once
-#include <chrono>
-#include <iostream>
-#include <algorithm>
-#include <cassert>
-#include <string>
-#include <type_traits>
-#include <csignal>
-#include <cstring>
 
 #include "common/defs.hpp"
 
 #ifndef ENCLAVE_MODE
+  #include <chrono>
+  #include <iostream>
+  #include <algorithm>
+  #include <cassert>
+  #include <string>
+  #include <type_traits>
+  #include <csignal>
+  #include <cstring>
   #include <boost/stacktrace.hpp>
 
   extern bool g_disableTracing;

@@ -25,8 +25,6 @@ concept BackendServer = requires(
   { fs.Read(indexType, indexType, u8p) };
 };
 
-#define SERVER_SIZE (1 << 16)
-
 struct ServerBackend : EM::LargeBlockAllocator {
   // Read and Write bytes, contains an allocator.
   //

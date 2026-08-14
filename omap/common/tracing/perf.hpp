@@ -1,7 +1,7 @@
 #pragma once
-#include <iostream>
 
 #ifndef ENCLAVE_MODE
+  #include <iostream>
 // #define ENABLE_PERF_COUNTERS 1
 #endif
 
