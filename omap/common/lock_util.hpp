@@ -32,6 +32,7 @@ struct Mutex {
 
 #else
 #include <atomic>
+#include <mutex>
 // TTASSpinlock
 struct Lock {
  public:
